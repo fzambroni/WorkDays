@@ -522,26 +522,34 @@ While 1
 				$WeekDayNum = _DateToDayOfWeek($SelDate_slipt[1], $SelDate_slipt[2], $SelDate_slipt[3])
 
 				If GUICtrlRead($Checkbox_calendtarTag) = "1" Then
-					$holidayName = InputBox("Calendar Tag", "Give a tag name for this event on " & $SelDate & ":", GUICtrlRead($Input_Tip), "", -1, -1, Default, Default, 0, $Form_WorkDays)
+					$holidayName = InputBox("Calendar Tag", "Give a tag name for this ON SITE event on " & $SelDate & ":", GUICtrlRead($Input_Tip), "", -1, -1, Default, Default, 0, $Form_WorkDays)
 					If Not @error Then
 ;~ 						$holidayName = StringReplace($holidayName, "-", "=")
 ;~ 						RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "O" & $holidayName)
 ;~ 						_Update($SelDate)
-					Else
+Else
 						$holidayName = ""
 					EndIf
-				Else
+					Else
 					$holidayName = ""
 ;~ 					RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "O" & $holidayName)
 ;~ 					_Update($SelDate)
 				EndIf
 
+
+
+
+
+
+
+
+
+
 				If $WeekDayNum = "1" Or $WeekDayNum = "7" Then
 					RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "W" & $holidayName)
 					_Update($SelDate)
 				Else
-					RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "B" & $holidayName)
-;~ 					RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "")
+					RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "")
 					_Update($SelDate)
 				EndIf
 			EndIf
@@ -794,7 +802,6 @@ Func _Update($SelDate)
 	EndIf
 	$WeekDayNum = _DateToDayOfWeek($Data_year, $Data_month, $Data_day)
 	$WeekDayName = _DateDayOfWeek($WeekDayNum, 1)
-	If $Data_Register = "B" then $Data_Register = ""
 	GUICtrlSetData($Inputs[$Data_day][$Data_month], $Data_Register)
 	GUICtrlSetTip($Inputs[$Data_day][$Data_month], $WeekDayName & " - " & $Data_year & "/" & $Data_month & "/" & $Data_day & $tip)
 
@@ -1802,8 +1809,6 @@ Func _ReadINI($Year)
 
 				GUICtrlSetTip($Inputs[$i][$J], $WeekDayName & " - " & $Year & "/" & $X & "/" & $n & $tip)
 
-				If $Status = "B" then $Status = ""
-
 				GUICtrlSetData($Inputs[$i][$J], $Status)
 				If $Status = "W" Then
 					GUICtrlSetBkColor($Inputs[$i][$J], $Color_bk_Weekend) ; Weekend
@@ -2450,12 +2455,12 @@ EndFunc   ;==>_CreateBackup
 
 
 Func _Interpolate($v1, $v2, $ratio)
-	Return Round($v1 + ($v2 - $v1) * $ratio)
-EndFunc   ;==>_Interpolate
+    Return Round($v1 + ($v2 - $v1) * $ratio)
+EndFunc
 
 Func _GetColorGradient($value)
-	; Limita o valor mínimo
-	If $value < 0.1 Then
+    ; Limita o valor mínimo
+   If $value < 0.1 Then
 		If $value = 0 Then
 			$value = 0
 		Else
@@ -2463,50 +2468,50 @@ Func _GetColorGradient($value)
 		EndIf
 	EndIf
 
-	; Verde escuro fixo para valores acima de 3.0
-	If $value > 3.0 Then
-		Return "0x" & StringFormat("%02X%02X%02X", 0, 200, 0)
-	EndIf
+    ; Verde escuro fixo para valores acima de 3.0
+    If $value > 3.0 Then
+        Return "0x" & StringFormat("%02X%02X%02X", 0, 200, 0)
+    EndIf
 
-	If $value = 0 Then
-		Return "0x" & StringFormat("%02X%02X%02X", 255, 255, 255)
-	EndIf
+	 If $value = 0 Then
+        Return "0x" & StringFormat("%02X%02X%02X", 255, 255, 255)
+    EndIf
 
-	; Define os pontos de controle (valor, RGB)
-	Local $points[5][4] = [ _
-			[0.1, 255, 0, 0], _       ; Vermelho
-			[1.0, 255, 128, 0], _     ; Laranja-avermelhado
-			[2.0, 200, 165, 0], _     ; Laranja
-			[2.5, 173, 255, 47], _    ; Amarelo-esverdeado
-			[3.0, 0, 255, 0] _        ; Verde claro
-			]
+    ; Define os pontos de controle (valor, RGB)
+    Local $points[5][4] = [ _
+        [0.1, 255, 0, 0], _           ; Vermelho
+        [1.0, 255, 128, 0], _         ; Laranja-avermelhado
+        [2.0, 200, 165, 0], _         ; Laranja
+        [2.5, 173, 255, 47], _        ; Amarelo-esverdeado
+        [3.0, 0, 255, 0] _            ; Verde claro
+    ]
 
-	; Procura os dois pontos entre os quais o valor se encontra
-	Local $i
-	For $i = 0 To UBound($points) - 2
-		If $value >= $points[$i][0] And $value <= $points[$i + 1][0] Then
-			ExitLoop
-		EndIf
-	Next
+    ; Procura os dois pontos entre os quais o valor se encontra
+    Local $i
+    For $i = 0 To UBound($points) - 2
+        If $value >= $points[$i][0] And $value <= $points[$i + 1][0] Then
+            ExitLoop
+        EndIf
+    Next
 
-	Local $v1 = $points[$i][0]
-	Local $r1 = $points[$i][1]
-	Local $g1 = $points[$i][2]
-	Local $b1 = $points[$i][3]
+    Local $v1 = $points[$i][0]
+    Local $r1 = $points[$i][1]
+    Local $g1 = $points[$i][2]
+    Local $b1 = $points[$i][3]
 
-	Local $v2 = $points[$i + 1][0]
-	Local $r2 = $points[$i + 1][1]
-	Local $g2 = $points[$i + 1][2]
-	Local $b2 = $points[$i + 1][3]
+    Local $v2 = $points[$i + 1][0]
+    Local $r2 = $points[$i + 1][1]
+    Local $g2 = $points[$i + 1][2]
+    Local $b2 = $points[$i + 1][3]
 
-	; Calcula a razão de interpolação entre os dois pontos
-	Local $ratio = ($value - $v1) / ($v2 - $v1)
+    ; Calcula a razão de interpolação entre os dois pontos
+    Local $ratio = ($value - $v1) / ($v2 - $v1)
 
-	; Interpola cada canal de cor
-	Local $r = _Interpolate($r1, $r2, $ratio)
-	Local $g = _Interpolate($g1, $g2, $ratio)
-	Local $b = _Interpolate($b1, $b2, $ratio)
+    ; Interpola cada canal de cor
+    Local $r = _Interpolate($r1, $r2, $ratio)
+    Local $g = _Interpolate($g1, $g2, $ratio)
+    Local $b = _Interpolate($b1, $b2, $ratio)
 
-	; Retorna em formato hexadecimal
-	Return "0x" & StringFormat("%02X%02X%02X", $r, $g, $b)
-EndFunc   ;==>_GetColorGradient
+    ; Retorna em formato hexadecimal
+    Return "0x" & StringFormat("%02X%02X%02X", $r, $g, $b)
+EndFunc
