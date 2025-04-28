@@ -337,14 +337,6 @@ _CheckQuarter()
 
 _AutoBKP()
 
-$SelDate = GUICtrlRead($Calendar)
-$SelDate_slipt = StringSplit($SelDate, "/")
-
-$Status1 = RegRead($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3])
-$Status = StringTrimLeft($Status1, 1)
-
-GUICtrlSetData($Input_Tip,$Status)
-
 GUISetState(@SW_SHOW)
 
 
@@ -686,7 +678,7 @@ Func _CheckDate($DateToCheck, $NewStatus)
 	EndIf
 
 
-	If $DateToCheck_Value <> "" And $DateToCheck_Value <> "B" And StringLeft($DateToCheck_Value, 1) <> $NewStatus Then
+	If $DateToCheck_Value <> "" And StringLeft($DateToCheck_Value, 1) <> $NewStatus Then
 		If Not IsDeclared("iMsgBoxAnswer") Then Local $iMsgBoxAnswer
 		$iMsgBoxAnswer = MsgBox(262436, "Replace current value", "You're about to replace the current status for the selected date. " & @CRLF & @CRLF & "Current Status: " & _Label(StringLeft($DateToCheck_Value, 1)) & @CRLF & "New Status: " & _Label($NewStatus) & @CRLF & @CRLF & "Do you want to continue?")
 		Select
@@ -781,7 +773,7 @@ Func _RestoreBackup()
 EndFunc   ;==>_RestoreBackup
 
 Func _Update($SelDate)
-ConsoleWrite("aqui 2" & @CRLF)
+
 	$SelDate_splited = StringSplit($SelDate, "/")
 	$Data_year = Number($SelDate_splited[1])
 	$Data_month = Number($SelDate_splited[2])
@@ -802,14 +794,7 @@ ConsoleWrite("aqui 2" & @CRLF)
 	EndIf
 	$WeekDayNum = _DateToDayOfWeek($Data_year, $Data_month, $Data_day)
 	$WeekDayName = _DateDayOfWeek($WeekDayNum, 1)
-	If $Data_Register = "B" Then
-		If $tip <> "" Then
-			$Data_Register = "   "
-		Else
-			$Data_Register = ""
-		EndIf
-	EndIf
-
+	If $Data_Register = "B" Then $Data_Register = ""
 	GUICtrlSetData($Inputs[$Data_day][$Data_month], $Data_Register)
 	GUICtrlSetTip($Inputs[$Data_day][$Data_month], $WeekDayName & " - " & $Data_year & "/" & $Data_month & "/" & $Data_day & $tip)
 	If $tip <> "" Then
@@ -829,7 +814,7 @@ ConsoleWrite("aqui 2" & @CRLF)
 
 
 	If $Data_Register = "W" Then
-		GUICtrlSetBkColor($Inputs[$Data_day][$Data_month], $Color_bk_Weekend) ; Weekend
+		GUICtrlSetBkColor($Inputs[$Data_day][$Data_month], $Color_bk_Weekend)             ; Weekend
 		$Font_Weekend = $Black
 		If $Picker_Font_Weekend_Read = 1 Then
 			$Font_Weekend = $White
@@ -890,6 +875,7 @@ ConsoleWrite("aqui 2" & @CRLF)
 
 	If $Data_year & "/" & $Data_month & "/" & $Data_day = @YEAR & "/" & @MON & "/" & @MDAY Then
 
+;~ 		GUICtrlSetColor($Inputs[$Data_day][$Data_month], 0xFF0000)
 		If $tip <> "" Then
 			GUICtrlSetFont($Inputs[$Data_day][$Data_month], 9, 900, 6, "", 2)
 		Else
@@ -1185,7 +1171,7 @@ Func _ReadStatistics($Year)
 		Else
 			$n = $i
 		EndIf
-
+;~ 		$LabelMonth[$i] = GUICtrlCreateLabel($n, 8 + ($i * 35), 216, 30, 25, $SS_CENTER)
 	Next
 	$C = 0
 	$Skip = 0
@@ -1621,19 +1607,59 @@ Func _ReadStatistics($Year)
 
 	GUICtrlSetData($Input_RT_q1, $Ratio_R_Q1) ; ## Ration ##
 	GUICtrlSetBkColor($Input_RT_q1, _GetColorGradient($Ratio_R_Q1))
-
+	#cs
+	If $Ratio_R_Q1 > 3 Or $Ratio_R_Q1 = 3 Then
+		GUICtrlSetBkColor($Input_RT_q1, 0x00CC66)
+	Else
+		If $Ratio_R_Q1 = 0 Then
+			GUICtrlSetBkColor($Input_RT_q1, 0xFFFFFF)
+		Else
+			GUICtrlSetBkColor($Input_RT_q1, 0xFF9933)
+		EndIf
+	EndIf
+	#ce
 
 	GUICtrlSetData($Input_RT_q2, $Ratio_R_Q2)
 	GUICtrlSetBkColor($Input_RT_q2, _GetColorGradient($Ratio_R_Q2))
-
+	#cs
+	If $Ratio_R_Q2 > 3 Or $Ratio_R_Q2 = 3 Then
+		GUICtrlSetBkColor($Input_RT_q2, 0x00CC66)
+	Else
+		If $Ratio_R_Q2 = 0 Then
+			GUICtrlSetBkColor($Input_RT_q2, 0xFFFFFF)
+		Else
+			GUICtrlSetBkColor($Input_RT_q2, 0xFF9933)
+		EndIf
+	EndIf
+	#ce
 
 	GUICtrlSetData($Input_RT_q3, $Ratio_R_Q3)
 	GUICtrlSetBkColor($Input_RT_q3, _GetColorGradient($Ratio_R_Q3))
-
+	#cs
+	If $Ratio_R_Q3 > 3 Or $Ratio_R_Q3 = 3 Then
+		GUICtrlSetBkColor($Input_RT_q3, 0x00CC66)
+	Else
+		If $Ratio_R_Q3 = 0 Then
+			GUICtrlSetBkColor($Input_RT_q3, 0xFFFFFF)
+		Else
+			GUICtrlSetBkColor($Input_RT_q3, 0xFF9933)
+		EndIf
+	EndIf
+	#ce
 
 	GUICtrlSetData($Input_RT_q4, $Ratio_R_Q4)
 	GUICtrlSetBkColor($Input_RT_q4, _GetColorGradient($Ratio_R_Q4))
-
+	#cs
+	If $Ratio_R_Q4 > 3 Or $Ratio_R_Q4 = 3 Then
+		GUICtrlSetBkColor($Input_RT_q4, 0x00CC66)
+	Else
+		If $Ratio_R_Q4 = 0 Then
+			GUICtrlSetBkColor($Input_RT_q4, 0xFFFFFF)
+		Else
+			GUICtrlSetBkColor($Input_RT_q4, 0xFF9933)
+		EndIf
+	EndIf
+	#ce
 
 	$Ratio_Q1 = Round(($Counta_R_Onsite_Quarter_Q1 / ($Counta_WD_Quarter_Q1 / 5)), 2)
 	$Ratio_Q2 = Round(($Counta_R_Onsite_Quarter_Q2 / ($Counta_WD_Quarter_Q2 / 5)), 2)
@@ -1650,43 +1676,66 @@ Func _ReadStatistics($Year)
 		If @MON = "01" Or @MON = "02" Or @MON = "03" Then
 			GUICtrlSetData($Input_RaTio_q1, $Ratio_Q1)
 			GUICtrlSetBkColor($Input_RaTio_q1, _GetColorGradient($Ratio_Q1))
+			#cs
+			If $Ratio_Q1 > 3 Or $Ratio_Q1 = 3 Then
+				GUICtrlSetBkColor($Input_RaTio_q1, 0x00CC66)
+			Else
 
+				GUICtrlSetBkColor($Input_RaTio_q1, 0xFF9933)
+			EndIf
+			#ce
 		EndIf
 
 		If @MON = "04" Or @MON = "05" Or @MON = "06" Then
 			GUICtrlSetData($Input_RaTio_q2, $Ratio_Q2)
 			GUICtrlSetBkColor($Input_RaTio_q2, _GetColorGradient($Ratio_Q2))
-
+			#cs
+			If $Ratio_Q2 > 3 Or $Ratio_Q2 = 3 Then
+				GUICtrlSetBkColor($Input_RaTio_q2, 0x00CC66)
+			Else
+				GUICtrlSetBkColor($Input_RaTio_q2, 0xFF9933)
+			EndIf
+			#ce
 
 		EndIf
 
 		If @MON = "07" Or @MON = "08" Or @MON = "09" Then
 			GUICtrlSetData($Input_RaTio_q3, $Ratio_Q3)
 			GUICtrlSetBkColor($Input_RaTio_q3, _GetColorGradient($Ratio_Q3))
+			#cs
+			If $Ratio_Q3 > 3 Or $Ratio_Q3 = 3 Then
+				GUICtrlSetBkColor($Input_RaTio_q3, 0x00CC66)
+			Else
+				GUICtrlSetBkColor($Input_RaTio_q3, 0xFF9933)
+			EndIf
+			#ce
 
 		EndIf
 
 		If @MON = "10" Or @MON = "11" Or @MON = "12" Then
 			GUICtrlSetData($Input_RaTio_q4, $Ratio_Q4)
 			GUICtrlSetBkColor($Input_RaTio_q4, _GetColorGradient($Ratio_Q4))
-
+			#cs
+			If $Ratio_Q4 > 3 Or $Ratio_Q4 = 3 Then
+				GUICtrlSetBkColor($Input_RaTio_q4, 0x00CC66)
+			Else
+				GUICtrlSetBkColor($Input_RaTio_q4, 0xFF9933)
+			EndIf
+			#ce
 		EndIf
 	EndIf
 
+;~ 	MsgBox(262144, "", "$Counta_TD_Quarter_Q1: " & $Counta_TD_Quarter_Q1 & @CRLF & "$Counta_WD_Quarter_Q1: " & $Counta_WD_Quarter_Q1 & @CRLF & "$Counta_R_Onsite_Quarter_Q1: " & $Counta_R_Onsite_Quarter_Q1 & @CRLF & "Ratio_Q1: " & Round(($Counta_R_Onsite_Quarter_Q1 / ($Counta_WD_Quarter_Q1 / 5)), 2))
+;~ 	MsgBox(262144, "", "$Counta_TD_Quarter_Q2: " & $Counta_TD_Quarter_Q2 & @CRLF & "$Counta_WD_Quarter_Q2: " & $Counta_WD_Quarter_Q2 & @CRLF & "$Counta_R_Onsite_Quarter_Q2: " & $Counta_R_Onsite_Quarter_Q2 & @CRLF & "Ratio_Q2: " & Round(($Counta_R_Onsite_Quarter_Q2 / ($Counta_WD_Quarter_Q2 / 5)), 2))
+;~ 	MsgBox(262144, "", "$Counta_TD_Quarter_Q3: " & $Counta_TD_Quarter_Q3 & @CRLF & "$Counta_WD_Quarter_Q3: " & $Counta_WD_Quarter_Q3 & @CRLF & "$Counta_R_Onsite_Quarter_Q3: " & $Counta_R_Onsite_Quarter_Q3 & @CRLF & "Ratio_Q3: " & Round(($Counta_R_Onsite_Quarter_Q3 / ($Counta_WD_Quarter_Q3 / 5)), 2))
+;~ 	MsgBox(262144, "", "$Counta_TD_Quarter_Q4: " & $Counta_TD_Quarter_Q4 & @CRLF & "$Counta_WD_Quarter_Q4: " & $Counta_WD_Quarter_Q4 & @CRLF & "$Counta_R_Onsite_Quarter_Q4: " & $Counta_R_Onsite_Quarter_Q4 & @CRLF & "Ratio_Q4: " & Round(($Counta_R_Onsite_Quarter_Q4 / ($Counta_WD_Quarter_Q4 / 5)), 2))
 	Return
 
 EndFunc   ;==>_ReadStatistics
 
 Func _ReadINI($Year)
 
-;~ 	MsgBox(262144,"",$Year)
-
-;~ 	ConsoleWrite("Passei aqui" & @CRLF)
-
-	GUICtrlSetData($Input_Tip, "")
-
 	_ClearScreen()
-
 
 	_ReadStatistics($Year)
 
@@ -1744,7 +1793,6 @@ Func _ReadINI($Year)
 			EndIf
 
 			If _DateIsValid($Year & "/" & $X & "/" & $i) = 1 Then
-				$Inputs[$i][$J] = GUICtrlCreateButton("", 8 + ($i * 35), 216 + $Skip + ($J * 25), 34, 25, BitOR($ES_READONLY, $ES_CENTER, $BS_FLAT, $BS_BOTTOM))
 
 				$WeekDayNum = _DateToDayOfWeek($Year, $X, $i)
 				$WeekDayName = _DateDayOfWeek($WeekDayNum, 1)
@@ -1752,22 +1800,32 @@ Func _ReadINI($Year)
 				$Status = StringLeft($Status1, 1)
 				If StringLen($Status1) > 1 Then
 					$tip = " - " & StringTrimLeft($Status1, 1)
+
+					$Inputs[$i][$J] = GUICtrlCreateButton("", 8 + ($i * 35), 216 + $Skip + ($J * 25), 34, 25, BitOR($ES_READONLY, $ES_CENTER, $BS_FLAT, $BS_BOTTOM))
 					GUICtrlSetFont($Inputs[$i][$J], 9, 900, 6, "", 2)
-;~ 					GUICtrlSetData($Input_Tip, StringTrimLeft($Status1, 1))
+					GUICtrlSetData($Input_Tip, StringTrimLeft($Status1, 1))
+					ConsoleWrite($tip & @CRLF)
 				Else
 					$tip = ""
+
+					$Inputs[$i][$J] = GUICtrlCreateButton("", 8 + ($i * 35), 216 + $Skip + ($J * 25), 34, 25, BitOR($ES_READONLY, $ES_CENTER, $BS_FLAT))
 					GUICtrlSetFont($Inputs[$i][$J], 9, 100, 0, "", 2)
-;~ 					GUICtrlSetData($Input_Tip, $tip)
+					GUICtrlSetData($Input_Tip, $tip)
 				EndIf
+
+
+
+
+
 
 				GUICtrlSetTip($Inputs[$i][$J], $WeekDayName & " - " & $Year & "/" & $X & "/" & $n & $tip)
 
 				If $Status = "B" Then
 					If $tip <> "" Then
-						$Status = "   "
+					$Status = " "
 					Else
-						$Status = ""
-					EndIf
+					$Status = ""
+				EndIf
 				EndIf
 
 
@@ -1839,7 +1897,7 @@ Func _ReadINI($Year)
 
 				EndIf
 
-				If $Status = "" or $Status = "   " Then
+				If $Status = "" Then
 					GUICtrlSetBkColor($Inputs[$i][$J], $Color_bk_Blank) ; Weekend
 
 					$Font_Blank = $Black
@@ -1863,6 +1921,15 @@ Func _ReadINI($Year)
 
 				If $Year & "/" & $X & "/" & $n = @YEAR & "/" & @MON & "/" & @MDAY Then
 
+;~ 					GUICtrlSetColor($Inputs[$i][$J], 0xFFCCCC) ;Today
+;~ 					GUICtrlSetFont($Inputs[$i][$J], 9, 900, "", "", 2)
+
+					If $tip <> "" Then
+						GUICtrlSetFont($Inputs[$i][$J], 9, 900, 6, "", 2)
+					Else
+						GUICtrlSetFont($Inputs[$i][$J], 9, 100, 0, "", 2)
+					EndIf
+
 					GUICtrlSetTip($Inputs[$i][$J], $WeekDayName & " - " & $Year & "/" & $X & "/" & $n & " - TODAY" & $tip)
 					If $Status = "" Then
 						$Status = "X"
@@ -1876,8 +1943,6 @@ Func _ReadINI($Year)
 			EndIf
 		Next
 
-
-
 		$C += 1
 		If $C > 2 Then
 			$C = 0
@@ -1885,6 +1950,7 @@ Func _ReadINI($Year)
 		EndIf
 
 	Next
+
 
 	Return
 
