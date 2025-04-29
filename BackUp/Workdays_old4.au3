@@ -343,7 +343,7 @@ $SelDate_slipt = StringSplit($SelDate, "/")
 $Status1 = RegRead($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3])
 $Status = StringTrimLeft($Status1, 1)
 
-GUICtrlSetData($Input_Tip, $Status)
+GUICtrlSetData($Input_Tip,$Status)
 
 GUISetState(@SW_SHOW)
 
@@ -501,10 +501,13 @@ While 1
 			$SelDate_slipt = StringSplit($SelDate, "/")
 			_ReadINI($SelDate_slipt[1])
 			$SelDate = GUICtrlRead($Calendar)
-			$SelDate_slipt = StringSplit($SelDate, "/")
-			$Status1 = RegRead($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3])
-			$Status = StringTrimLeft($Status1, 1)
-			GUICtrlSetData($Input_Tip, $Status)
+$SelDate_slipt = StringSplit($SelDate, "/")
+
+$Status1 = RegRead($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3])
+$Status = StringTrimLeft($Status1, 1)
+
+GUICtrlSetData($Input_Tip,$Status)
+
 
 		Case $Button_OnSite
 			$SelDate = GUICtrlRead($Calendar)
@@ -530,20 +533,30 @@ While 1
 			$CheckDate_Return = _CheckDate($SelDate, "")
 			If $CheckDate_Return = 0 Then
 				$SelDate_slipt = StringSplit($SelDate, "/")
+
 				$WeekDayNum = _DateToDayOfWeek($SelDate_slipt[1], $SelDate_slipt[2], $SelDate_slipt[3])
+
 				If GUICtrlRead($Checkbox_calendtarTag) = "1" Then
 					$holidayName = InputBox("Calendar Tag", "Give a tag name for this event on " & $SelDate & ":", GUICtrlRead($Input_Tip), "", -1, -1, Default, Default, 0, $Form_WorkDays)
-					If @error Then
+					If Not @error Then
+;~ 						$holidayName = StringReplace($holidayName, "-", "=")
+;~ 						RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "O" & $holidayName)
+;~ 						_Update($SelDate)
+					Else
 						$holidayName = ""
 					EndIf
 				Else
 					$holidayName = ""
+;~ 					RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "O" & $holidayName)
+;~ 					_Update($SelDate)
 				EndIf
+
 				If $WeekDayNum = "1" Or $WeekDayNum = "7" Then
 					RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "W" & $holidayName)
 					_Update($SelDate)
 				Else
 					RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "B" & $holidayName)
+;~ 					RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "")
 					_Update($SelDate)
 				EndIf
 			EndIf
@@ -565,7 +578,6 @@ While 1
 					_Update($SelDate)
 				EndIf
 			EndIf
-
 		Case $Button_Travel
 			$SelDate = GUICtrlRead($Calendar)
 			$CheckDate_Return = _CheckDate($SelDate, "T")
@@ -638,6 +650,7 @@ While 1
 				EndIf
 			EndIf
 
+
 		Case $Button_Weekend
 			$SelDate = GUICtrlRead($Calendar)
 			$CheckDate_Return = _CheckDate($SelDate, "W")
@@ -662,6 +675,7 @@ While 1
 
 	EndSwitch
 
+
 WEnd
 
 Func _CheckDate($DateToCheck, $NewStatus)
@@ -677,6 +691,7 @@ Func _CheckDate($DateToCheck, $NewStatus)
 			$NewStatus = "W"
 		EndIf
 	EndIf
+
 
 	If $DateToCheck_Value <> "" And $DateToCheck_Value <> "B" And StringLeft($DateToCheck_Value, 1) <> $NewStatus Then
 		If Not IsDeclared("iMsgBoxAnswer") Then Local $iMsgBoxAnswer
@@ -819,6 +834,7 @@ Func _Update($SelDate)
 		GUICtrlSetColor($Inputs[$Data_day][$Data_month], $Font_Travel)
 	EndIf
 
+
 	If $Data_Register = "W" Then
 		GUICtrlSetBkColor($Inputs[$Data_day][$Data_month], $Color_bk_Weekend) ; Weekend
 		$Font_Weekend = $Black
@@ -844,6 +860,7 @@ Func _Update($SelDate)
 			$Font_Remote = $White
 		EndIf
 		GUICtrlSetColor($Inputs[$Data_day][$Data_month], $Font_Remote)
+
 	EndIf
 
 	If $Data_Register = "P" Then
@@ -877,6 +894,7 @@ Func _Update($SelDate)
 		GUICtrlSetBkColor($Inputs[$Data_day][$Data_month], $Color_bk_Blank) ; Blank
 	EndIf
 
+
 	If $Data_year & "/" & $Data_month & "/" & $Data_day = @YEAR & "/" & @MON & "/" & @MDAY Then
 
 		If $tip <> "" Then
@@ -898,7 +916,6 @@ Func _Update($SelDate)
 EndFunc   ;==>_Update
 
 Func _AutoBKP()
-
 	$BKPDB = @ScriptDir & "\autosave.db"
 	If Not FileExists($BKPDB) Then
 		_CreateBackup($BKPDB)
@@ -922,9 +939,11 @@ Func _ImportHolidays()
 		MsgBox(262160, "Import", "Oops! Something went wrong. Please try again." & @CRLF & "Error code: " & @error)
 	Else
 		$FileHolidays_hwd = FileOpen($HolidaysFile, 0)
-		If $FileHolidays_hwd <> -1 Then
+		If $FileHolidays_hwd = -1 Then
 
-		While 1
+		Else
+
+			While 1
 				$HolidaysLine = FileReadLine($FileHolidays_hwd)
 				If @error = -1 Then ExitLoop
 				If @error = 1 Then
@@ -938,7 +957,9 @@ Func _ImportHolidays()
 						If @error Then
 							$HolidaysError = $HolidaysError & $HolidaysLine & @CRLF
 						Else
+
 							If $HolidaysLineSplited[2] = "O" Or $HolidaysLineSplited[2] = "R" Or $HolidaysLineSplited[2] = "B" Or $HolidaysLineSplited[2] = "T" Or $HolidaysLineSplited[2] = "P" Or $HolidaysLineSplited[2] = "H" Or $HolidaysLineSplited[2] = "S" Then
+
 								$RegError = RegWrite($DB & "\" & $HolidaysDateSplited[1] & "\" & $HolidaysDateSplited[2], $HolidaysDateSplited[3], "REG_SZ", $HolidaysLineSplited[2] & $HolidaysLineSplited[3])
 								$ImportCount += 1
 							Else
@@ -997,6 +1018,7 @@ Func _ResetDatabase($step = "0")
 		$iMsgBoxAnswer = MsgBox(262452, "Reset Database", "**Warning!** " & @CRLF & "Are you sure you want to permanently delete all data from the database? This action cannot be undone.")
 		Select
 			Case $iMsgBoxAnswer = 6 ;Yes
+
 				RegDelete($sKey)
 				If @error Then
 					MsgBox(262160, "Reset Database", "Oops! Something went wrong. Please try again." & @CRLF & "Error code: " & @error)
@@ -1011,11 +1033,13 @@ Func _ResetDatabase($step = "0")
 
 		EndSelect
 	Else
+
 		RegDelete($sKey)
 		If @error Then
 			MsgBox(262160, "Reset Database", "Oops! Something went wrong. Please try again." & @CRLF & "Error code: " & @error)
 			Return 0
 		Else
+;~ 				MsgBox(262208, "Reset Database", "**Success!** The command was executed successfully. All data has been removed.")
 			Return 1
 		EndIf
 
@@ -1043,6 +1067,8 @@ Func _CalendarRead()
 	GUICtrlSetState($Label_Ratio_q2, $gui_hide)
 	GUICtrlSetState($Label_Ratio_q3, $gui_hide)
 	GUICtrlSetState($Label_Ratio_q4, $gui_hide)
+
+
 
 	GUICtrlSetState($Input_RaTio_q1, $gui_hide)
 	GUICtrlSetState($Input_RaTio_q2, $gui_hide)
@@ -1159,12 +1185,14 @@ Func _ReadStatistics($Year)
 	Next
 
 	; Criar Inputs para cabeçalhos (dias do mês)
+;~ 	$LabelMonth[0] = GUICtrlCreateLabel("", 8, 216, 50, 20)
 	For $i = 1 To 31
 		If $i < 10 Then
 			$n = "0" & $i
 		Else
 			$n = $i
 		EndIf
+
 	Next
 	$C = 0
 	$Skip = 0
@@ -1176,6 +1204,7 @@ Func _ReadStatistics($Year)
 		EndIf
 
 		For $i = 1 To 31
+;~
 			If $i < 10 Then
 				$n = "0" & $i
 			Else
@@ -1278,9 +1307,9 @@ Func _ReadStatistics($Year)
 
 				If $Status = "O" Then
 					If $J = "01" Or $J = "02" Or $J = "03" Then
-						If $WeekDayNum <> 1 And $WeekDayNum <> 7 Then
+						If $WeekDayNum <> 1 and $WeekDayNum <> 7 Then
 
-							$Counta_WD_q1 += 1
+						$Counta_WD_q1 += 1
 						EndIf
 						$Counta_R_Onsite_q1 += 1
 
@@ -1301,8 +1330,8 @@ Func _ReadStatistics($Year)
 					EndIf
 
 					If $J = "04" Or $J = "05" Or $J = "06" Then
-						If $WeekDayNum <> 1 And $WeekDayNum <> 7 Then
-							$Counta_WD_q2 += 1
+						If $WeekDayNum <> 1 and $WeekDayNum <> 7 Then
+						$Counta_WD_q2 += 1
 						EndIf
 						$Counta_R_Onsite_q2 += 1
 
@@ -1323,8 +1352,8 @@ Func _ReadStatistics($Year)
 					EndIf
 
 					If $J = "07" Or $J = "08" Or $J = "09" Then
-						If $WeekDayNum <> 1 And $WeekDayNum <> 7 Then
-							$Counta_WD_q3 += 1
+						If $WeekDayNum <> 1 and $WeekDayNum <> 7 Then
+						$Counta_WD_q3 += 1
 						EndIf
 						$Counta_R_Onsite_q3 += 1
 
@@ -1344,8 +1373,8 @@ Func _ReadStatistics($Year)
 					EndIf
 
 					If $J = "10" Or $J = "11" Or $J = "12" Then
-						If $WeekDayNum <> 1 And $WeekDayNum <> 7 Then
-							$Counta_WD_q4 += 1
+						If $WeekDayNum <> 1 and $WeekDayNum <> 7 Then
+						$Counta_WD_q4 += 1
 						EndIf
 						$Counta_R_Onsite_q4 += 1
 						If $Year = @YEAR Then
@@ -1365,8 +1394,8 @@ Func _ReadStatistics($Year)
 				EndIf
 				If $Status = "R" Then
 					If $J = "01" Or $J = "02" Or $J = "03" Then
-						If $WeekDayNum <> 1 And $WeekDayNum <> 7 Then
-							$Counta_WD_q1 += 1
+						If $WeekDayNum <> 1 and $WeekDayNum <> 7 Then
+						$Counta_WD_q1 += 1
 						EndIf
 
 						If $Year = @YEAR Then
@@ -1382,8 +1411,8 @@ Func _ReadStatistics($Year)
 						EndIf
 					EndIf
 					If $J = "04" Or $J = "05" Or $J = "06" Then
-						If $WeekDayNum <> 1 And $WeekDayNum <> 7 Then
-							$Counta_WD_q2 += 1
+						If $WeekDayNum <> 1 and $WeekDayNum <> 7 Then
+						$Counta_WD_q2 += 1
 						EndIf
 						If $Year = @YEAR Then
 							If $X = @MON Then
@@ -1398,8 +1427,8 @@ Func _ReadStatistics($Year)
 						EndIf
 					EndIf
 					If $J = "07" Or $J = "08" Or $J = "09" Then
-						If $WeekDayNum <> 1 And $WeekDayNum <> 7 Then
-							$Counta_WD_q3 += 1
+						If $WeekDayNum <> 1 and $WeekDayNum <> 7 Then
+						$Counta_WD_q3 += 1
 						EndIf
 						If $Year = @YEAR Then
 							If $X = @MON Then
@@ -1414,8 +1443,8 @@ Func _ReadStatistics($Year)
 						EndIf
 					EndIf
 					If $J = "10" Or $J = "11" Or $J = "12" Then
-						If $WeekDayNum <> 1 And $WeekDayNum <> 7 Then
-							$Counta_WD_q4 += 1
+						If $WeekDayNum <> 1 and $WeekDayNum <> 7 Then
+						$Counta_WD_q4 += 1
 						EndIf
 						If $Year = @YEAR Then
 							If $X = @MON Then
@@ -1432,8 +1461,8 @@ Func _ReadStatistics($Year)
 				EndIf
 				If $Status = "T" Then
 					If $J = "01" Or $J = "02" Or $J = "03" Then
-						If $WeekDayNum <> 1 And $WeekDayNum <> 7 Then
-							$Counta_WD_q1 += 1
+						If $WeekDayNum <> 1 and $WeekDayNum <> 7 Then
+						$Counta_WD_q1 += 1
 						EndIf
 						$Counta_R_Onsite_q1 += 1
 						If $Year = @YEAR Then
@@ -1451,8 +1480,8 @@ Func _ReadStatistics($Year)
 						EndIf
 					EndIf
 					If $J = "04" Or $J = "05" Or $J = "06" Then
-						If $WeekDayNum <> 1 And $WeekDayNum <> 7 Then
-							$Counta_WD_q2 += 1
+						If $WeekDayNum <> 1 and $WeekDayNum <> 7 Then
+						$Counta_WD_q2 += 1
 						EndIf
 						$Counta_R_Onsite_q2 += 1
 						If $Year = @YEAR Then
@@ -1471,8 +1500,8 @@ Func _ReadStatistics($Year)
 					EndIf
 
 					If $J = "07" Or $J = "08" Or $J = "09" Then
-						If $WeekDayNum <> 1 And $WeekDayNum <> 7 Then
-							$Counta_WD_q3 += 1
+						If $WeekDayNum <> 1 and $WeekDayNum <> 7 Then
+						$Counta_WD_q3 += 1
 						EndIf
 						$Counta_R_Onsite_q3 += 1
 						If $Year = @YEAR Then
@@ -1492,8 +1521,8 @@ Func _ReadStatistics($Year)
 					EndIf
 
 					If $J = "10" Or $J = "11" Or $J = "12" Then
-						If $WeekDayNum <> 1 And $WeekDayNum <> 7 Then
-							$Counta_WD_q4 += 1
+						If $WeekDayNum <> 1 and $WeekDayNum <> 7 Then
+						$Counta_WD_q4 += 1
 						EndIf
 						$Counta_R_Onsite_q4 += 1
 
@@ -1512,10 +1541,10 @@ Func _ReadStatistics($Year)
 						EndIf
 					EndIf
 				EndIf
-				If $Status = "" Or $Status = "B" Then
+				If $Status = "" or $Status = "B" Then
 					If $J = "01" Or $J = "02" Or $J = "03" Then
-						If $WeekDayNum <> 1 And $WeekDayNum <> 7 Then
-							$Counta_WD_q1 += 1
+						If $WeekDayNum <> 1 and $WeekDayNum <> 7 Then
+						$Counta_WD_q1 += 1
 						EndIf
 
 						If $Year = @YEAR Then
@@ -1532,8 +1561,8 @@ Func _ReadStatistics($Year)
 					EndIf
 
 					If $J = "04" Or $J = "05" Or $J = "06" Then
-						If $WeekDayNum <> 1 And $WeekDayNum <> 7 Then
-							$Counta_WD_q2 += 1
+						If $WeekDayNum <> 1 and $WeekDayNum <> 7 Then
+						$Counta_WD_q2 += 1
 						EndIf
 
 						If $Year = @YEAR Then
@@ -1551,8 +1580,8 @@ Func _ReadStatistics($Year)
 					EndIf
 
 					If $J = "07" Or $J = "08" Or $J = "09" Then
-						If $WeekDayNum <> 1 And $WeekDayNum <> 7 Then
-							$Counta_WD_q3 += 1
+						If $WeekDayNum <> 1 and $WeekDayNum <> 7 Then
+						$Counta_WD_q3 += 1
 						EndIf
 
 						If $Year = @YEAR Then
@@ -1570,8 +1599,8 @@ Func _ReadStatistics($Year)
 					EndIf
 
 					If $J = "10" Or $J = "11" Or $J = "12" Then
-						If $WeekDayNum <> 1 And $WeekDayNum <> 7 Then
-							$Counta_WD_q4 += 1
+						If $WeekDayNum <> 1 and $WeekDayNum <> 7 Then
+						$Counta_WD_q4 += 1
 						EndIf
 
 						If $Year = @YEAR Then
@@ -1858,7 +1887,7 @@ Func _ReadINI($Year)
 
 				EndIf
 
-				If $Status = "" Or $Status = "   " Then
+				If $Status = "" or $Status = "   " Then
 					GUICtrlSetBkColor($Inputs[$i][$J], $Color_bk_Blank) ; Weekend
 
 					$Font_Blank = $Black
