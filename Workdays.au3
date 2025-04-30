@@ -1,7 +1,7 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=calendar.ico
 #AutoIt3Wrapper_Res_Description=Work Day management
-#AutoIt3Wrapper_Res_Fileversion=1.0.1.7
+#AutoIt3Wrapper_Res_Fileversion=1.0.1.8
 #AutoIt3Wrapper_Res_ProductName=Work Days
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 #cs ----------------------------------------------------------------------------
@@ -37,12 +37,13 @@ Opt("TrayAutoPause", 0)
 #include <ColorPicker.au3>
 #include <WinAPI.au3>
 
-Global $About = "1.0.1.3 - Custom colors and bug fixes" & @CRLF & "1.0.1.4 - Code polishing and new custom color palette" & @CRLF & "1.0.1.5 - Bug Fixes and improvements" & @CRLF & "1.0.1.6 - Bug Fixes and improvements" & @CRLF & "1.0.1.7 - KPI Bug Fixes"
+Global $About = "1.0.1.3 - Custom colors and bug fixes" & @CRLF & "1.0.1.4 - Code polishing and new custom color palette" & @CRLF & "1.0.1.5 - Bug Fixes and improvements" & @CRLF & "1.0.1.6 - Bug Fixes and improvements" & @CRLF & "1.0.1.7 - KPI Bug Fixes" & @CRLF & "1.0.1.8 - Today custom color option"
 
 Global $IniSection[999][999]
 Global $LabelMonth[99999]
 Global $LabelMonthX[99999]
 Global $Inputs[32][32]
+Global $TodayLabel[32][32]
 
 Global $Year = @YEAR
 Global $Ratio_Q1 = 0
@@ -85,6 +86,8 @@ If @error Then $Color_bk_Blank = 0xFFFFFF
 Global $Color_bk_Weekend = RegRead($DB, "Color_Weekend")
 If @error Then $Color_bk_Weekend = 0xA0A0A0
 
+Global $Color_bk_Today = RegRead($DB, "Color_Today")
+If @error Then $Color_bk_Today = 0xFF0000
 
 Global $Picker_Font_OnSite_Read = RegRead($DB, "Font_OnSite")
 Global $Font_OnSite = $Black
@@ -319,12 +322,13 @@ GUICtrlSetState($Input_RaTio_q4, $gui_hide)
 GUICtrlCreateGroup("", -99, -99, 1, 1)
 
 
-GUICtrlCreateGroup("", 10, 315, 1120, 9)
+GUICtrlCreateGroup("", 10, 303, 1120, 9)
 GUICtrlSetColor(-1, 0x0000FF)
-GUICtrlCreateGroup("", 10, 400, 1120, 9)
+GUICtrlCreateGroup("", 10, 388, 1120, 9)
 GUICtrlSetColor(-1, 0x0000FF)
-GUICtrlCreateGroup("", 10, 485, 1120, 9)
+GUICtrlCreateGroup("", 10, 473, 1120, 9)
 GUICtrlSetColor(-1, 0x0000FF)
+
 $StatusBar1 = _GUICtrlStatusBar_Create($Form_WorkDays)
 
 $sMessage = "Developed by Fabricio Zambroni - VERSION: " & FileGetVersion(@ScriptFullPath) & " - Today: " & @YEAR & "/" & @MON & "/" & @MDAY
@@ -408,6 +412,9 @@ While 1
 
 				$Color_bk_Weekend = RegRead($DB, "Color_Weekend")
 				If @error Then $Color_bk_Weekend = 0xA0A0A0
+
+				$Color_bk_Today = RegRead($DB, "Color_Today")
+				If @error Then $Color_bk_Today = 0xA0A0A0
 
 				GUICtrlSetBkColor($Button_OnSite, $Color_bk_OnSite)
 				GUICtrlSetBkColor($Button_Remote, $Color_bk_Remote)
@@ -773,6 +780,7 @@ Func _RestoreBackup()
 EndFunc   ;==>_RestoreBackup
 
 Func _Update($SelDate)
+;~ 	MsgBox(262144,"","oi")
 
 	$SelDate_splited = StringSplit($SelDate, "/")
 	$Data_year = Number($SelDate_splited[1])
@@ -890,7 +898,7 @@ Func _Update($SelDate)
 			$Data_Register = "X"
 			GUICtrlSetColor($Inputs[$Data_day][$Data_month], 0xFF0000)             ; today
 		EndIf
-		GUICtrlSetData($Inputs[$Data_day][$Data_month], "| " & $Data_Register & " |")
+;~ 		GUICtrlSetData($Inputs[$Data_day][$Data_month], "| " & $Data_Register & " |")
 	EndIf
 
 	_ReadStatistics($Data_year)
@@ -1070,6 +1078,7 @@ Func _ClearScreen()
 	For $J = 1 To 12
 		For $i = 1 To 31
 			GUICtrlDelete($Inputs[$i][$J])
+			GUICtrlDelete($TodayLabel[$i][$J])
 		Next
 	Next
 
@@ -1698,10 +1707,6 @@ EndFunc   ;==>_ReadStatistics
 
 Func _ReadINI($Year)
 
-;~ 	MsgBox(262144,"",$Year)
-
-;~ 	ConsoleWrite("Passei aqui" & @CRLF)
-
 	GUICtrlSetData($Input_Tip, "")
 
 	_ClearScreen()
@@ -1716,14 +1721,15 @@ Func _ReadINI($Year)
 	Next
 
 	; Criar Inputs para cabeçalhos (dias do mês)
-	$LabelMonth[0] = GUICtrlCreateLabel("", 8, 216, 50, 20)
+;~ 	$LabelMonth[0] = GUICtrlCreateLabel("", 8, 216, 20, 20)
 	For $i = 1 To 31
 		If $i < 10 Then
 			$n = "0" & $i
 		Else
 			$n = $i
 		EndIf
-		$LabelMonth[$i] = GUICtrlCreateLabel($n, 8 + ($i * 35), 216, 30, 25, $SS_CENTER)
+		$LabelMonth[$i] = GUICtrlCreateLabel($n, 5 + ($i * 35), 216, 20, 20, $SS_CENTER)
+;~ 		$LabelMonth[$i] = GUICtrlCreateLabel($n, 8 + ($i * 35), 225, 20, 25, $SS_CENTER)
 	Next
 	$C = 0
 	$Skip = 0
@@ -1751,7 +1757,7 @@ Func _ReadINI($Year)
 		If @error Then ContinueLoop ; Se a seção não existir, pula para o próximo mês
 
 		; Month
-		$LabelMonthX[$J] = GUICtrlCreateLabel($Return, 8, 216 + $Skip + ($J * 25), 50, 20)
+		$LabelMonthX[$J] = GUICtrlCreateLabel($Return, 8, 208 + $Skip + ($J * 25), 20, 20,$SS_CENTER);,$SS_BLACKRECT)
 
 		;Days
 		For $i = 1 To 31
@@ -1763,7 +1769,12 @@ Func _ReadINI($Year)
 			EndIf
 
 			If _DateIsValid($Year & "/" & $X & "/" & $i) = 1 Then
-				$Inputs[$i][$J] = GUICtrlCreateButton("", 8 + ($i * 35), 216 + $Skip + ($J * 25), 34, 25, BitOR($ES_READONLY, $ES_CENTER, $BS_FLAT, $BS_BOTTOM))
+				$TodayLabel[$i][$J] = GUICtrlCreateLabel("", -2 + ($i * 35), 203 + $Skip + ($J * 25), 35, 26);,$SS_BLACKFRAME)
+				GUICtrlSetBkColor($TodayLabel[$i][$J],$Color_bk_Today)
+				GUICtrlSetState($TodayLabel[$i][$J],$gui_disable)
+				GUICtrlSetState($TodayLabel[$i][$J],$gui_hide)
+				$Inputs[$i][$J] = GUICtrlCreateButton("", 0 + ($i * 35), 205 + $Skip + ($J * 25), 30, 22, BitOR($ES_READONLY, $ES_CENTER, $BS_FLAT, $BS_BOTTOM))
+;~ 				$Inputs[$i][$J] = GUICtrlCreateButton("", 5 + ($i * 35), 220 + $Skip + ($J * 25), 34, 24, BitOR($ES_READONLY, $ES_CENTER, $BS_FLAT, $BS_BOTTOM))
 
 				$WeekDayNum = _DateToDayOfWeek($Year, $X, $i)
 				$WeekDayName = _DateDayOfWeek($WeekDayNum, 1)
@@ -1883,12 +1894,12 @@ Func _ReadINI($Year)
 				If $Year & "/" & $X & "/" & $n = @YEAR & "/" & @MON & "/" & @MDAY Then
 
 					GUICtrlSetTip($Inputs[$i][$J], $WeekDayName & " - " & $Year & "/" & $X & "/" & $n & " - TODAY" & $tip)
-					If $Status = "" Then
-						$Status = "X"
-						GUICtrlSetColor($Inputs[$i][$J], 0xFF0000) ; today
-					EndIf
+;~ 					If $Status = "" Then
+;~ 						$Status = "X"
+;~ 						GUICtrlSetColor($Inputs[$i][$J], 0xFF0000) ; today
+;~ 					EndIf
+					GUICtrlSetState($TodayLabel[$i][$J],$gui_show)
 
-					GUICtrlSetData($Inputs[$i][$J], "| " & $Status & " |")
 
 				EndIf
 
@@ -2097,7 +2108,7 @@ Func _BKColorPallet()
 			0xC0DCC0, 0xA6CAF0, 0xFFFBF0, 0xA0A0A4]
 
 
-	$Form_Colors = GUICreate('Colors', 210, 330, -1, -1, $DS_MODALFRAME, $WS_EX_TOPMOST)
+	$Form_Colors = GUICreate('Colors', 220, 350, -1, -1, $DS_MODALFRAME, $WS_EX_TOPMOST)
 	GUICtrlSetBkColor(-1, 0x50CA1B)
 
 	GUICtrlCreateLabel("On Site:", 10, 15)
@@ -2108,25 +2119,26 @@ Func _BKColorPallet()
 	GUICtrlCreateLabel("Sick:", 10, 165)
 	GUICtrlCreateLabel("Blank:", 10, 195)
 	GUICtrlCreateLabel("Weekend:", 10, 225)
+	GUICtrlCreateLabel("Today:", 10, 255)
 
-	$Picker_OnSite = _GUIColorPicker_Create('', 60, 10, 60, 23, $Color_bk_OnSite, BitOR($CP_FLAG_CHOOSERBUTTON, $CP_FLAG_ARROWSTYLE, $CP_FLAG_MOUSEWHEEL), $aPalette, 4, 5, 0, '', 'More...')
+	$Picker_OnSite = _GUIColorPicker_Create('', 65, 10, 60, 23, $Color_bk_OnSite, BitOR($CP_FLAG_CHOOSERBUTTON, $CP_FLAG_ARROWSTYLE, $CP_FLAG_MOUSEWHEEL), $aPalette, 4, 5, 0, '', 'More...')
+	$Picker_Remote = _GUIColorPicker_Create('', 65, 40, 60, 23, $Color_bk_Remote, BitOR($CP_FLAG_CHOOSERBUTTON, $CP_FLAG_ARROWSTYLE, $CP_FLAG_MOUSEWHEEL), $aPalette, 4, 5, 0, '', 'More...')
+	$Picker_Holiday = _GUIColorPicker_Create('', 65, 70, 60, 23, $Color_bk_holiday, BitOR($CP_FLAG_CHOOSERBUTTON, $CP_FLAG_ARROWSTYLE, $CP_FLAG_MOUSEWHEEL), $aPalette, 4, 5, 0, '', 'More...')
+	$Picker_PTO = _GUIColorPicker_Create('', 65, 100, 60, 23, $Color_bk_PTO, BitOR($CP_FLAG_CHOOSERBUTTON, $CP_FLAG_ARROWSTYLE, $CP_FLAG_MOUSEWHEEL), $aPalette, 4, 5, 0, '', 'More...')
+	$Picker_Travel = _GUIColorPicker_Create('', 65, 130, 60, 23, $Color_bk_Travel, BitOR($CP_FLAG_CHOOSERBUTTON, $CP_FLAG_ARROWSTYLE, $CP_FLAG_MOUSEWHEEL), $aPalette, 4, 5, 0, '', 'More...')
+	$Picker_Sick = _GUIColorPicker_Create('', 65, 160, 60, 23, $Color_bk_Sick, BitOR($CP_FLAG_CHOOSERBUTTON, $CP_FLAG_ARROWSTYLE, $CP_FLAG_MOUSEWHEEL), $aPalette, 4, 5, 0, '', 'More...')
+	$Picker_Blank = _GUIColorPicker_Create('', 65, 190, 60, 23, $Color_bk_Blank, BitOR($CP_FLAG_CHOOSERBUTTON, $CP_FLAG_ARROWSTYLE, $CP_FLAG_MOUSEWHEEL), $aPalette, 4, 5, 0, '', 'More...')
+	$Picker_Weekend = _GUIColorPicker_Create('', 65, 220, 60, 23, $Color_bk_Weekend, BitOR($CP_FLAG_CHOOSERBUTTON, $CP_FLAG_ARROWSTYLE, $CP_FLAG_MOUSEWHEEL), $aPalette, 4, 5, 0, '', 'More...')
+	$Picker_Today = _GUIColorPicker_Create('', 65, 250, 60, 23, $Color_bk_Today, BitOR($CP_FLAG_CHOOSERBUTTON, $CP_FLAG_ARROWSTYLE, $CP_FLAG_MOUSEWHEEL), $aPalette, 4, 5, 0, '', 'More...')
 
-	$Picker_Remote = _GUIColorPicker_Create('', 60, 40, 60, 23, $Color_bk_Remote, BitOR($CP_FLAG_CHOOSERBUTTON, $CP_FLAG_ARROWSTYLE, $CP_FLAG_MOUSEWHEEL), $aPalette, 4, 5, 0, '', 'More...')
-	$Picker_Holiday = _GUIColorPicker_Create('', 60, 70, 60, 23, $Color_bk_holiday, BitOR($CP_FLAG_CHOOSERBUTTON, $CP_FLAG_ARROWSTYLE, $CP_FLAG_MOUSEWHEEL), $aPalette, 4, 5, 0, '', 'More...')
-	$Picker_PTO = _GUIColorPicker_Create('', 60, 100, 60, 23, $Color_bk_PTO, BitOR($CP_FLAG_CHOOSERBUTTON, $CP_FLAG_ARROWSTYLE, $CP_FLAG_MOUSEWHEEL), $aPalette, 4, 5, 0, '', 'More...')
-	$Picker_Travel = _GUIColorPicker_Create('', 60, 130, 60, 23, $Color_bk_Travel, BitOR($CP_FLAG_CHOOSERBUTTON, $CP_FLAG_ARROWSTYLE, $CP_FLAG_MOUSEWHEEL), $aPalette, 4, 5, 0, '', 'More...')
-	$Picker_Sick = _GUIColorPicker_Create('', 60, 160, 60, 23, $Color_bk_Sick, BitOR($CP_FLAG_CHOOSERBUTTON, $CP_FLAG_ARROWSTYLE, $CP_FLAG_MOUSEWHEEL), $aPalette, 4, 5, 0, '', 'More...')
-	$Picker_Blank = _GUIColorPicker_Create('', 60, 190, 60, 23, $Color_bk_Blank, BitOR($CP_FLAG_CHOOSERBUTTON, $CP_FLAG_ARROWSTYLE, $CP_FLAG_MOUSEWHEEL), $aPalette, 4, 5, 0, '', 'More...')
-	$Picker_Weekend = _GUIColorPicker_Create('', 60, 220, 60, 23, $Color_bk_Weekend, BitOR($CP_FLAG_CHOOSERBUTTON, $CP_FLAG_ARROWSTYLE, $CP_FLAG_MOUSEWHEEL), $aPalette, 4, 5, 0, '', 'More...')
-
-	$Picker_Font_OnSite = GUICtrlCreateCheckbox("White Font", 120, 10)
-	$Picker_Font_Remote = GUICtrlCreateCheckbox("White Font", 120, 40)
-	$Picker_Font_Holiday = GUICtrlCreateCheckbox("White Font", 120, 70)
-	$Picker_Font_PTO = GUICtrlCreateCheckbox("White Font", 120, 100)
-	$Picker_Font_Travel = GUICtrlCreateCheckbox("White Font", 120, 130)
-	$Picker_Font_Sick = GUICtrlCreateCheckbox("White Font", 120, 160)
-	$Picker_Font_Blank = GUICtrlCreateCheckbox("White Font", 120, 190)
-	$Picker_Font_Weekend = GUICtrlCreateCheckbox("White Font", 120, 220)
+	$Picker_Font_OnSite = GUICtrlCreateCheckbox("White Font", 130, 10)
+	$Picker_Font_Remote = GUICtrlCreateCheckbox("White Font", 130, 40)
+	$Picker_Font_Holiday = GUICtrlCreateCheckbox("White Font", 130, 70)
+	$Picker_Font_PTO = GUICtrlCreateCheckbox("White Font", 130, 100)
+	$Picker_Font_Travel = GUICtrlCreateCheckbox("White Font", 130, 130)
+	$Picker_Font_Sick = GUICtrlCreateCheckbox("White Font", 130, 160)
+	$Picker_Font_Blank = GUICtrlCreateCheckbox("White Font", 130, 190)
+	$Picker_Font_Weekend = GUICtrlCreateCheckbox("White Font", 130, 220)
 
 	GUICtrlSetState($Picker_Font_OnSite, $Picker_Font_OnSite_Read)
 	GUICtrlSetState($Picker_Font_Remote, $Picker_Font_Remote_Read)
@@ -2137,10 +2149,10 @@ Func _BKColorPallet()
 	GUICtrlSetState($Picker_Font_Blank, $Picker_Font_Blank_Read)
 	GUICtrlSetState($Picker_Font_Weekend, $Picker_Font_Weekend_Read)
 
-	$Original_Color_1 = $Color_bk_OnSite & $Color_bk_Remote & $Color_bk_holiday & $Color_bk_PTO & $Color_bk_Travel & $Color_bk_Sick & $Color_bk_Blank & $Color_bk_Weekend & $Picker_Font_OnSite_Read & $Picker_Font_Remote_Read & $Picker_Font_Holiday_Read & $Picker_Font_PTO_Read & $Picker_Font_Travel_Read & $Picker_Font_Sick_Read & $Picker_Font_Blank_Read & $Picker_Font_Weekend_Read
+	$Original_Color_1 = $Color_bk_OnSite & $Color_bk_Remote & $Color_bk_holiday & $Color_bk_PTO & $Color_bk_Travel & $Color_bk_Sick & $Color_bk_Blank & $Color_bk_Weekend & $Color_bk_Today & $Picker_Font_OnSite_Read & $Picker_Font_Remote_Read & $Picker_Font_Holiday_Read & $Picker_Font_PTO_Read & $Picker_Font_Travel_Read & $Picker_Font_Sick_Read & $Picker_Font_Blank_Read & $Picker_Font_Weekend_Read
 ;~ 	ConsoleWrite($Original_Color_1 & @CRLF)
 
-	$Colors_Close = GUICtrlCreateButton("Close", 80, 260, 70, 30)
+	$Colors_Close = GUICtrlCreateButton("Close", 80, 285, 70, 30)
 
 	GUISetState()
 
@@ -2156,6 +2168,7 @@ Func _BKColorPallet()
 				$Picker_Color_Sick = _GUIColorPicker_GetColor($Picker_Sick)
 				$Picker_Color_Blank = _GUIColorPicker_GetColor($Picker_Blank)
 				$Picker_Color_Weekend = _GUIColorPicker_GetColor($Picker_Weekend)
+				$Picker_Color_Today = _GUIColorPicker_GetColor($Picker_Today)
 
 				RegWrite($DB, "Color_OnSite", "REG_SZ", $Picker_Color_OnSite)
 				RegWrite($DB, "Color_Remote", "REG_SZ", $Picker_Color_Remote)
@@ -2165,6 +2178,7 @@ Func _BKColorPallet()
 				RegWrite($DB, "Color_Sick", "REG_SZ", $Picker_Color_Sick)
 				RegWrite($DB, "Color_Blank", "REG_SZ", $Picker_Color_Blank)
 				RegWrite($DB, "Color_Weekend", "REG_SZ", $Picker_Color_Weekend)
+				RegWrite($DB, "Color_Today", "REG_SZ", $Picker_Color_Today)
 
 				$Picker_Font_OnSite_Read = GUICtrlRead($Picker_Font_OnSite)
 				$Picker_Font_Remote_Read = GUICtrlRead($Picker_Font_Remote)
@@ -2244,7 +2258,7 @@ Func _BKColorPallet()
 				GUICtrlSetColor($Button_Blank, $Font_Blank)
 				GUICtrlSetColor($Button_Weekend, $Font_Weekend)
 
-				$Original_Color_2 = $Picker_Color_OnSite & $Picker_Color_Remote & $Picker_Color_Holiday & $Picker_Color_PTO & $Picker_Color_Travel & $Picker_Color_Sick & $Picker_Color_Blank & $Picker_Color_Weekend & $Picker_Font_OnSite_Read & $Picker_Font_Remote_Read & $Picker_Font_Holiday_Read & $Picker_Font_PTO_Read & $Picker_Font_Travel_Read & $Picker_Font_Sick_Read & $Picker_Font_Blank_Read & $Picker_Font_Weekend_Read
+				$Original_Color_2 = $Picker_Color_OnSite & $Picker_Color_Remote & $Picker_Color_Holiday & $Picker_Color_PTO & $Picker_Color_Travel & $Picker_Color_Sick & $Picker_Color_Blank & $Picker_Color_Weekend & $Picker_Color_Today & $Picker_Font_OnSite_Read & $Picker_Font_Remote_Read & $Picker_Font_Holiday_Read & $Picker_Font_PTO_Read & $Picker_Font_Travel_Read & $Picker_Font_Sick_Read & $Picker_Font_Blank_Read & $Picker_Font_Weekend_Read
 
 ;~ 				ConsoleWrite($Original_Color_2 & @CRLF)
 
@@ -2293,6 +2307,9 @@ Func _ReadColors()
 
 	Global $Color_bk_Weekend = RegRead($DB, "Color_Weekend")
 	If @error Then $Color_bk_Weekend = 0xA0A0A0
+
+    Global $Color_bk_Today = RegRead($DB, "Color_Today")
+	If @error Then $Color_bk_Today = 0xFF000000
 
 
 	Global $Picker_Font_OnSite_Read = RegRead($DB, "Font_OnSite")
@@ -2365,7 +2382,6 @@ Func _ReadColors()
 
 EndFunc   ;==>_ReadColors
 
-
 Func _CreateBackup($DBBKP = "")
 
 	Local $sRegPath = $DB & "\"
@@ -2431,7 +2447,6 @@ Func _CreateBackup($DBBKP = "")
 	Return
 
 EndFunc   ;==>_CreateBackup
-
 
 Func _Interpolate($v1, $v2, $ratio)
 	Return Round($v1 + ($v2 - $v1) * $ratio)
