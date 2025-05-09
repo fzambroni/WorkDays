@@ -1,7 +1,7 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=calendar.ico
 #AutoIt3Wrapper_Res_Description=Work Day management
-#AutoIt3Wrapper_Res_Fileversion=1.0.1.8
+#AutoIt3Wrapper_Res_Fileversion=1.0.1.9
 #AutoIt3Wrapper_Res_ProductName=Work Days
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 #cs ----------------------------------------------------------------------------
@@ -36,14 +36,20 @@ Opt("TrayAutoPause", 0)
 #include <ColorChooser.au3>
 #include <ColorPicker.au3>
 #include <WinAPI.au3>
+#include "GenerateWorkdaysReportHTML.au3"
 
-Global $About = "1.0.1.3 - Custom colors and bug fixes" & @CRLF & "1.0.1.4 - Code polishing and new custom color palette" & @CRLF & "1.0.1.5 - Bug Fixes and improvements" & @CRLF & "1.0.1.6 - Bug Fixes and improvements" & @CRLF & "1.0.1.7 - KPI Bug Fixes" & @CRLF & "1.0.1.8 - Today custom color option"
+Global $About = "1.0.1.3 - Custom colors and bug fixes" & @CRLF & "1.0.1.4 - Code polishing and new custom color palette" & @CRLF & "1.0.1.5 - Bug Fixes and improvements" & @CRLF & "1.0.1.6 - Bug Fixes and improvements" & @CRLF & "1.0.1.7 - KPI Bug Fixes" & @CRLF & "1.0.1.8 - Today custom color option" & @CRLF & "1.0.1.9 - Report Functionality"
 
 Global $IniSection[999][999]
 Global $LabelMonth[99999]
 Global $LabelMonthX[99999]
 Global $Inputs[32][32]
 Global $TodayLabel[32][32]
+Global $DBpMenu_Delete_Year[20]
+Global $DBpMenu_Delete_Date[15]
+
+Global $DBpMenu_Report_Year[20]
+Global $DBpMenu_Report_Date[15]
 
 Global $Year = @YEAR
 Global $Ratio_Q1 = 0
@@ -55,8 +61,7 @@ Global $White = 0xFFFFFF
 Global $Black = 0x000000
 
 $DB = "HKEY_CURRENT_USER\Software\WorkDays"
-_CriaINI(@YEAR)
-;~ _ReadColors()
+
 
 Global $CalendarTag = RegRead($DB, "caltag")
 If @error Then $CalendarTag = "1"
@@ -145,9 +150,14 @@ Global $DBpMenu_backup_Data = GUICtrlCreateMenu("Data", $DBpMenu_db)
 Global $DBpMenu_backup = GUICtrlCreateMenuItem("Create Backup", $DBpMenu_backup_Data)
 Global $BkpMenu_Batch = GUICtrlCreateMenuItem("Restore Backup", $DBpMenu_backup_Data)
 Global $DBpMenu_backup_2 = GUICtrlCreateMenuItem("", $DBpMenu_backup_Data)
-Global $BkpMenu_reset_all = GUICtrlCreateMenuItem("Reset Database", $DBpMenu_backup_Data)
+Global $BkpMenu_reset_all1 = GUICtrlCreateMenu("Reset Data", $DBpMenu_backup_Data)
+Global $BkpMenu_reset_all = GUICtrlCreateMenuItem("Reset Entire Database", $BkpMenu_reset_all1)
+Global $DBpMenu_Delete = GUICtrlCreateMenu("Delete Specific year", $BkpMenu_reset_all1)
 Global $DBpMenu_backup_3 = GUICtrlCreateMenuItem("", $DBpMenu_backup_Data)
 Global $DBpMenu_backup_Data_Holidays = GUICtrlCreateMenuItem("Import Holidays File", $DBpMenu_backup_Data)
+Global $DBpMenu_Report = GUICtrlCreateMenu("Report", $DBpMenu_db)
+;~ Global $DBpMenu_backup_4 = GUICtrlCreateMenuItem("", $DBpMenu_backup_Data)
+
 ;~ Global $BkpMenu_reset = GUICtrlCreateMenu("Reset Data", $DBpMenu_db)
 Global $BkpMenu_reset_1 = GUICtrlCreateMenuItem("", $DBpMenu_db)
 Global $BkpMenu_Exit = GUICtrlCreateMenuItem("&Exit", $DBpMenu_db)
@@ -160,7 +170,8 @@ Global $BkpMenu_help_space = GUICtrlCreateMenuItem("", $BkpMenu_help)
 Global $BkpMenu_help_About = GUICtrlCreateMenuItem("About", $BkpMenu_help)
 ;~ Global $BkpMenu_reset_year = GUICtrlCreateMenuItem("Reset Specific Year", $BkpMenu_reset)
 
-$Calendar = GUICtrlCreateMonthCal(@YEAR & "/" & @MON & "/" & @MDAY, 8, 8, 273, 201)
+$Calendar = GUICtrlCreateMonthCal(@YEAR & "/" & @MON & "/" & @MDAY, 8, 8, 273, 201, $MCS_WEEKNUMBERS)
+
 $Group1 = GUICtrlCreateGroup("", 288, 8, 270, 200)
 
 $Input_SelDate = GUICtrlCreateInput("", 376, 24, 70, 21, $ES_READONLY)
@@ -334,12 +345,15 @@ $StatusBar1 = _GUICtrlStatusBar_Create($Form_WorkDays)
 $sMessage = "Developed by Fabricio Zambroni - VERSION: " & FileGetVersion(@ScriptFullPath) & " - Today: " & @YEAR & "/" & @MON & "/" & @MDAY
 _GUICtrlStatusBar_SetText($StatusBar1, $sMessage)
 
+_CriaINI(@YEAR)
 
 _ReadINI(@YEAR)
 
 _CheckQuarter()
 
 _AutoBKP()
+
+_CreateMenu()
 
 $SelDate = GUICtrlRead($Calendar)
 $SelDate_slipt = StringSplit($SelDate, "/")
@@ -356,6 +370,45 @@ While 1
 	$nMsg = GUIGetMsg()
 
 	For $J = 1 To 12
+
+		If $nMsg = $DBpMenu_Report_Year[$J] And $DBpMenu_Report_Year[$J] <> 0 Then
+			$DBpMenu_Report_Date = GUICtrlRead($DBpMenu_Report_Year[$J], 1)
+			GenerateWorkdaysReportHTML($DBpMenu_Report_Date)
+
+		EndIf
+
+		If $nMsg = $DBpMenu_Delete_Year[$J] And $DBpMenu_Delete_Year[$J] <> 0 Then
+			$DBpMenu_Delete_Date = GUICtrlRead($DBpMenu_Delete_Year[$J], 1)
+			If Not IsDeclared("iMsgBoxAnswer") Then Local $iMsgBoxAnswer
+			$iMsgBoxAnswer = MsgBox(262452, "Delete Year", "WARNING" & @CRLF & "" & @CRLF & "You are about To delete the year " & $DBpMenu_Delete_Date & " from the database." & @CRLF & "" & @CRLF & "All data associated With this year will be permanently removed And cannot be recovered." & @CRLF & "" & @CRLF & "Are you sure you want To proceed ?")
+			Select
+				Case $iMsgBoxAnswer = 6 ;Yes
+					$BKPDB = @ScriptDir & "\autosave.db"
+					_CreateBackup($BKPDB)
+					$FOO = RegDelete($DB & "\" & $DBpMenu_Delete_Date)
+					If Not @error Then
+						If $DBpMenu_Delete_Date = @YEAR Then
+						_CriaINI(@YEAR)
+					EndIf
+						GUICtrlSetData($Calendar, @YEAR & "/" & @MON & "/" & @MDAY)
+					$SelDate = GUICtrlRead($Calendar)
+					$SelDate_slipt = StringSplit($SelDate, "/")
+					GUICtrlSetData($Input_SelDate, $SelDate)
+					_ReadINI($SelDate_slipt[1])
+					GUICtrlSetData($Calendar, @YEAR & "/" & @MON & "/" & @MDAY)
+					GUICtrlSetData($Input_SelDate, $SelDate)
+					_CreateMenu()
+						MsgBox(262208, "Delete Year", "Year Deleted with Success")
+					Else
+						MsgBox(262160, "Year Delete", "An error occurred while attempting to delete this value from the database.")
+					EndIf
+
+				Case $iMsgBoxAnswer = 7 ;No
+
+			EndSelect
+
+		EndIf
+
 		For $i = 1 To 31
 			If $Inputs[$i][$J] <> 0 And $nMsg = $Inputs[$i][$J] Then
 				If $i < 10 Then
@@ -384,6 +437,10 @@ While 1
 
 		Case $BkpMenu_Exit
 			Exit
+
+
+
+
 
 		Case $BkpMenu_settings_BKcolors
 			$Return_Color = _BKColorPallet()
@@ -671,6 +728,31 @@ While 1
 
 WEnd
 
+Func _CreateMenu()
+
+	GUICtrlDelete($DBpMenu_Report)
+	GUICtrlDelete($DBpMenu_Delete)
+	GUICtrlDelete($BkpMenu_reset_1)
+	GUICtrlDelete($BkpMenu_Exit)
+	Global $DBpMenu_Delete = GUICtrlCreateMenu("Delete Specific year", $BkpMenu_reset_all1)
+	Global $DBpMenu_Report = GUICtrlCreateMenu("Report", $DBpMenu_db)
+;~ 	Global $DBpMenu_Delete = GUICtrlCreateMenu("Delete", $DBpMenu_backup_Data)
+
+	Local $sSubKey = ""
+	For $i = 1 To 12
+		$sSubKey = RegEnumKey($DB, $i)
+		If @error Then ExitLoop
+
+		$DBpMenu_Delete_Year[$i] = GUICtrlCreateMenuItem($sSubKey, $DBpMenu_Delete)
+		$DBpMenu_Report_Year[$i] = GUICtrlCreateMenuItem($sSubKey, $DBpMenu_Report)
+	Next
+
+	Global $BkpMenu_reset_1 = GUICtrlCreateMenuItem("", $DBpMenu_db)
+Global $BkpMenu_Exit = GUICtrlCreateMenuItem("&Exit", $DBpMenu_db)
+
+
+EndFunc   ;==>_CreateMenu
+
 Func _CheckDate($DateToCheck, $NewStatus)
 
 	$DateToCheck_split = StringSplit($DateToCheck, "/")
@@ -780,7 +862,6 @@ Func _RestoreBackup()
 EndFunc   ;==>_RestoreBackup
 
 Func _Update($SelDate)
-;~ 	MsgBox(262144,"","oi")
 
 	$SelDate_splited = StringSplit($SelDate, "/")
 	$Data_year = Number($SelDate_splited[1])
@@ -902,6 +983,8 @@ Func _Update($SelDate)
 	EndIf
 
 	_ReadStatistics($Data_year)
+	_CreateMenu()
+
 
 EndFunc   ;==>_Update
 
@@ -932,7 +1015,7 @@ Func _ImportHolidays()
 		$FileHolidays_hwd = FileOpen($HolidaysFile, 0)
 		If $FileHolidays_hwd <> -1 Then
 
-		While 1
+			While 1
 				$HolidaysLine = FileReadLine($FileHolidays_hwd)
 				If @error = -1 Then ExitLoop
 				If @error = 1 Then
@@ -992,12 +1075,14 @@ Func _ImportHolidays()
 				EndIf
 			EndIf
 		EndIf
-
+		_CreateMenu()
 	EndIf
 
 EndFunc   ;==>_ImportHolidays
 
 Func _ResetDatabase($step = "0")
+
+	_CreateMenu()
 
 	$sKey = $DB & "\"
 	If $step = "0" Then
@@ -1668,7 +1753,9 @@ Func _ReadStatistics($Year)
 ;~ 	ConsoleWrite("$Input_TD_q2: " & $Counta_TD_q2 & @CRLF)
 ;~ 	ConsoleWrite("$Input_WD_q2: " & $Counta_WD_q2 & @CRLF)
 ;~ 	ConsoleWrite("$Input_E_Onsite_q2: " & ((($Counta_WD_q2 / 5) * 3) & " - " & Ceiling($Counta_WD_q2 / 5) * 3) & @CRLF)
-;~ 	ConsoleWrite("$Input_R_Onsite_q2: " & $Counta_R_Onsite_q2 & @CRLF)
+	ConsoleWrite("$Counta_R_Onsite_Quarter_Q1: " & $Counta_R_Onsite_Quarter_Q1 & @CRLF)
+	ConsoleWrite("$Counta_WD_Quarter_Q1: " & $Counta_WD_Quarter_Q1 & @CRLF)
+	ConsoleWrite("Ratio: " & ($Counta_R_Onsite_Quarter_Q1 / Ceiling($Counta_WD_Quarter_Q1 / 5)) & @CRLF)
 ;~ 	ConsoleWrite("$Input_Remaining_q2: " & ((($Counta_WD_q2 / 5) * 3) - $Counta_R_Onsite_q2) & " - " & ((Ceiling($Counta_WD_q2 / 5) * 3) - $Counta_R_Onsite_q2) & @CRLF)
 ;~ 	ConsoleWrite("$Ratio_R_Q2: " & $Ratio_R_Q2 & " - " & ($Counta_R_Onsite_q2 / ($Counta_WD_q2 / 5)) & @CRLF)
 ;~ 	ConsoleWrite("$Ratio_Q2 : " & $Ratio_Q2  & " - " & ($Counta_R_Onsite_Quarter_Q2 / ($Counta_WD_Quarter_Q2 / 5)) & @CRLF)
@@ -1706,6 +1793,8 @@ Func _ReadStatistics($Year)
 EndFunc   ;==>_ReadStatistics
 
 Func _ReadINI($Year)
+
+
 
 	GUICtrlSetData($Input_Tip, "")
 
@@ -1757,7 +1846,7 @@ Func _ReadINI($Year)
 		If @error Then ContinueLoop ; Se a seção não existir, pula para o próximo mês
 
 		; Month
-		$LabelMonthX[$J] = GUICtrlCreateLabel($Return, 8, 208 + $Skip + ($J * 25), 20, 20,$SS_CENTER);,$SS_BLACKRECT)
+		$LabelMonthX[$J] = GUICtrlCreateLabel($Return, 8, 208 + $Skip + ($J * 25), 20, 20, $SS_CENTER) ;,$SS_BLACKRECT)
 
 		;Days
 		For $i = 1 To 31
@@ -1769,10 +1858,10 @@ Func _ReadINI($Year)
 			EndIf
 
 			If _DateIsValid($Year & "/" & $X & "/" & $i) = 1 Then
-				$TodayLabel[$i][$J] = GUICtrlCreateLabel("", -2 + ($i * 35), 203 + $Skip + ($J * 25), 35, 26);,$SS_BLACKFRAME)
-				GUICtrlSetBkColor($TodayLabel[$i][$J],$Color_bk_Today)
-				GUICtrlSetState($TodayLabel[$i][$J],$gui_disable)
-				GUICtrlSetState($TodayLabel[$i][$J],$gui_hide)
+				$TodayLabel[$i][$J] = GUICtrlCreateLabel("", -2 + ($i * 35), 203 + $Skip + ($J * 25), 35, 26) ;,$SS_BLACKFRAME)
+				GUICtrlSetBkColor($TodayLabel[$i][$J], $Color_bk_Today)
+				GUICtrlSetState($TodayLabel[$i][$J], $gui_disable)
+				GUICtrlSetState($TodayLabel[$i][$J], $gui_hide)
 				$Inputs[$i][$J] = GUICtrlCreateButton("", 0 + ($i * 35), 205 + $Skip + ($J * 25), 30, 22, BitOR($ES_READONLY, $ES_CENTER, $BS_FLAT, $BS_BOTTOM))
 ;~ 				$Inputs[$i][$J] = GUICtrlCreateButton("", 5 + ($i * 35), 220 + $Skip + ($J * 25), 34, 24, BitOR($ES_READONLY, $ES_CENTER, $BS_FLAT, $BS_BOTTOM))
 
@@ -1898,7 +1987,7 @@ Func _ReadINI($Year)
 ;~ 						$Status = "X"
 ;~ 						GUICtrlSetColor($Inputs[$i][$J], 0xFF0000) ; today
 ;~ 					EndIf
-					GUICtrlSetState($TodayLabel[$i][$J],$gui_show)
+					GUICtrlSetState($TodayLabel[$i][$J], $gui_show)
 
 
 				EndIf
@@ -1915,7 +2004,7 @@ Func _ReadINI($Year)
 		EndIf
 
 	Next
-
+	_CreateMenu()
 	Return
 
 EndFunc   ;==>_ReadINI
@@ -2093,6 +2182,7 @@ Func _CriaINI($Year)
 
 		EndIf
 	Next
+	_CreateMenu()
 	Return
 
 EndFunc   ;==>_CriaINI
@@ -2308,7 +2398,7 @@ Func _ReadColors()
 	Global $Color_bk_Weekend = RegRead($DB, "Color_Weekend")
 	If @error Then $Color_bk_Weekend = 0xA0A0A0
 
-    Global $Color_bk_Today = RegRead($DB, "Color_Today")
+	Global $Color_bk_Today = RegRead($DB, "Color_Today")
 	If @error Then $Color_bk_Today = 0xFF000000
 
 
@@ -2509,3 +2599,8 @@ Func _GetColorGradient($value)
 	; Retorna em formato hexadecimal
 	Return "0x" & StringFormat("%02X%02X%02X", $r, $g, $b)
 EndFunc   ;==>_GetColorGradient
+
+
+
+
+
