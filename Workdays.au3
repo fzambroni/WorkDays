@@ -45,6 +45,7 @@ Global $LabelMonth[99999]
 Global $LabelMonthX[99999]
 Global $Inputs[32][32]
 Global $TodayLabel[32][32]
+Global $SelectLabel[32][32]
 Global $DBpMenu_Delete_Year[20]
 Global $DBpMenu_Delete_Date[15]
 
@@ -93,6 +94,9 @@ If @error Then $Color_bk_Weekend = 0xA0A0A0
 
 Global $Color_bk_Today = RegRead($DB, "Color_Today")
 If @error Then $Color_bk_Today = 0xFF0000
+
+Global $Color_bk_Selected = RegRead($DB, "Color_Selected")
+If @error Then $Color_bk_Selected = 0x00F0F0
 
 Global $Picker_Font_OnSite_Read = RegRead($DB, "Font_OnSite")
 Global $Font_OnSite = $Black
@@ -182,14 +186,14 @@ $Label1 = GUICtrlCreateLabel("Selected Date:", 296, 28, 75, 17)
 $Input_Quarter = GUICtrlCreateInput("", 450, 24, 20, 21, $ES_READONLY)
 GUICtrlSetColor($Input_Quarter, 0x00994C)
 
-$Input_Tip = GUICtrlCreateInput("", 296, 54, 175, 21, $ES_READONLY)
+$Input_Tag = GUICtrlCreateInput("", 296, 54, 175, 21) ;, $ES_READONLY)
 
-$Checkbox_calendtarTag = GUICtrlCreateCheckbox("Calendar Tag", 472, 54) ;## Calendar TAG
-If $CalendarTag = "1" Then
-	GUICtrlSetState($Checkbox_calendtarTag, $gui_checked)
-Else
-	GUICtrlSetState($Checkbox_calendtarTag, $gui_unchecked)
-EndIf
+$Button_CalendtarTag = GUICtrlCreateButton("Tag", 472, 52, 75, 25) ;## Calendar TAG
+;~ If $CalendarTag = "1" Then
+;~ 	GUICtrlSetState($Checkbox_calendtarTag, $gui_checked)
+;~ Else
+;~ 	GUICtrlSetState($Checkbox_calendtarTag, $gui_unchecked)
+;~ EndIf
 
 $Button_OnSite = GUICtrlCreateButton("&On Site", 296, 84, 75, 25)
 GUICtrlSetBkColor($Button_OnSite, $Color_bk_OnSite)
@@ -361,7 +365,7 @@ $SelDate_slipt = StringSplit($SelDate, "/")
 $Status1 = RegRead($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3])
 $Status = StringTrimLeft($Status1, 1)
 
-GUICtrlSetData($Input_Tip, $Status)
+GUICtrlSetData($Input_Tag, $Status)
 
 GUISetState(@SW_SHOW)
 
@@ -388,16 +392,16 @@ While 1
 					$FOO = RegDelete($DB & "\" & $DBpMenu_Delete_Date)
 					If Not @error Then
 						If $DBpMenu_Delete_Date = @YEAR Then
-						_CriaINI(@YEAR)
-					EndIf
+							_CriaINI(@YEAR)
+						EndIf
 						GUICtrlSetData($Calendar, @YEAR & "/" & @MON & "/" & @MDAY)
-					$SelDate = GUICtrlRead($Calendar)
-					$SelDate_slipt = StringSplit($SelDate, "/")
-					GUICtrlSetData($Input_SelDate, $SelDate)
-					_ReadINI($SelDate_slipt[1])
-					GUICtrlSetData($Calendar, @YEAR & "/" & @MON & "/" & @MDAY)
-					GUICtrlSetData($Input_SelDate, $SelDate)
-					_CreateMenu()
+						$SelDate = GUICtrlRead($Calendar)
+						$SelDate_slipt = StringSplit($SelDate, "/")
+						GUICtrlSetData($Input_SelDate, $SelDate)
+						_ReadINI($SelDate_slipt[1])
+						GUICtrlSetData($Calendar, @YEAR & "/" & @MON & "/" & @MDAY)
+						GUICtrlSetData($Input_SelDate, $SelDate)
+						_CreateMenu()
 						MsgBox(262208, "Delete Year", "Year Deleted with Success")
 					Else
 						MsgBox(262160, "Year Delete", "An error occurred while attempting to delete this value from the database.")
@@ -427,7 +431,7 @@ While 1
 				$ClickedDate = $FullDate_Split[1] & "/" & $s & "/" & $n
 
 				GUICtrlSetData($Calendar, $ClickedDate)
-				_CalendarRead()
+				_CalendarRead($i,$J)
 
 			EndIf
 		Next
@@ -437,10 +441,6 @@ While 1
 
 		Case $BkpMenu_Exit
 			Exit
-
-
-
-
 
 		Case $BkpMenu_settings_BKcolors
 			$Return_Color = _BKColorPallet()
@@ -468,10 +468,13 @@ While 1
 				If @error Then $Color_bk_Blank = 0xFFFFFF
 
 				$Color_bk_Weekend = RegRead($DB, "Color_Weekend")
-				If @error Then $Color_bk_Weekend = 0xA0A0A0
+				If @error Then $Color_bk_Weekend = 0xF0F4A1
 
 				$Color_bk_Today = RegRead($DB, "Color_Today")
 				If @error Then $Color_bk_Today = 0xA0A0A0
+
+				$Color_bk_Selected = RegRead($DB, "Color_Selected")
+				If @error Then $Color_bk_Selected = 0x00FFA0
 
 				GUICtrlSetBkColor($Button_OnSite, $Color_bk_OnSite)
 				GUICtrlSetBkColor($Button_Remote, $Color_bk_Remote)
@@ -501,13 +504,10 @@ While 1
 		Case $GUI_EVENT_CLOSE
 			Exit
 
-		Case $Checkbox_calendtarTag
-;~ 			MsgBox(262144,"",GUICtrlRead($Checkbox_calendtarTag))
-			If GUICtrlRead($Checkbox_calendtarTag) = "1" Then
-				RegWrite($DB, "caltag", "REG_SZ", "1")
-			Else
-				RegWrite($DB, "caltag", "REG_SZ", "0")
-			EndIf
+		Case $Button_CalendtarTag
+			$DateToTag = GUICtrlRead($Calendar)
+			_CalendarTag($DateToTag)
+			_Update($DateToTag)
 
 		Case $BkpMenu_Batch
 			If Not IsDeclared("iMsgBoxAnswer") Then Local $iMsgBoxAnswer
@@ -568,25 +568,16 @@ While 1
 			$SelDate_slipt = StringSplit($SelDate, "/")
 			$Status1 = RegRead($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3])
 			$Status = StringTrimLeft($Status1, 1)
-			GUICtrlSetData($Input_Tip, $Status)
+			GUICtrlSetData($Input_Tag, $Status)
 
 		Case $Button_OnSite
 			$SelDate = GUICtrlRead($Calendar)
 			$CheckDate_Return = _CheckDate($SelDate, "O")
 			If $CheckDate_Return = 0 Then
 				$SelDate_slipt = StringSplit($SelDate, "/")
-				If GUICtrlRead($Checkbox_calendtarTag) = "1" Then
-					$holidayName = InputBox("Calendar Tag", "Give a tag name for this ON SITE event on " & $SelDate & ":", GUICtrlRead($Input_Tip), "", -1, -1, Default, Default, 0, $Form_WorkDays)
-					If Not @error Then
-;~ 						$holidayName = StringReplace($holidayName, "-", "=")
-						RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "O" & $holidayName)
-						_Update($SelDate)
-					EndIf
-				Else
-					$holidayName = ""
-					RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "O" & $holidayName)
-					_Update($SelDate)
-				EndIf
+				$holidayName = GUICtrlRead($Input_Tag)
+				RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "O" & $holidayName)
+				_Update($SelDate)
 			EndIf
 
 		Case $Button_Blank
@@ -595,14 +586,14 @@ While 1
 			If $CheckDate_Return = 0 Then
 				$SelDate_slipt = StringSplit($SelDate, "/")
 				$WeekDayNum = _DateToDayOfWeek($SelDate_slipt[1], $SelDate_slipt[2], $SelDate_slipt[3])
-				If GUICtrlRead($Checkbox_calendtarTag) = "1" Then
-					$holidayName = InputBox("Calendar Tag", "Give a tag name for this event on " & $SelDate & ":", GUICtrlRead($Input_Tip), "", -1, -1, Default, Default, 0, $Form_WorkDays)
-					If @error Then
-						$holidayName = ""
-					EndIf
-				Else
-					$holidayName = ""
-				EndIf
+;~ 				If GUICtrlRead($Checkbox_calendtarTag) = "1" Then
+;~ 					$holidayName = InputBox("Calendar Tag", "Give a tag name for this event on " & $SelDate & ":", GUICtrlRead($Input_Tag), "", -1, -1, Default, Default, 0, $Form_WorkDays)
+;~ 					If @error Then
+;~ 						$holidayName = GUICtrlRead($Input_Tag)
+;~ 					EndIf
+;~ 				Else
+				$holidayName = GUICtrlRead($Input_Tag)
+;~ 				EndIf
 				If $WeekDayNum = "1" Or $WeekDayNum = "7" Then
 					RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "W" & $holidayName)
 					_Update($SelDate)
@@ -617,17 +608,17 @@ While 1
 			$CheckDate_Return = _CheckDate($SelDate, "R")
 			If $CheckDate_Return = 0 Then
 				$SelDate_slipt = StringSplit($SelDate, "/")
-				If GUICtrlRead($Checkbox_calendtarTag) = "1" Then
-					$holidayName = InputBox("Calendar Tag", "Give a tag name for this REMOTE WORK event on " & $SelDate & ":", GUICtrlRead($Input_Tip), "", -1, -1, Default, Default, 0, $Form_WorkDays)
-					If Not @error Then
-						RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "R" & $holidayName)
-						_Update($SelDate)
-					EndIf
-				Else
-					$holidayName = ""
-					RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "R" & $holidayName)
-					_Update($SelDate)
-				EndIf
+;~ 				If GUICtrlRead($Checkbox_calendtarTag) = "1" Then
+;~ 					$holidayName = InputBox("Calendar Tag", "Give a tag name for this REMOTE WORK event on " & $SelDate & ":", GUICtrlRead($Input_Tag), "", -1, -1, Default, Default, 0, $Form_WorkDays)
+;~ 					If Not @error Then
+;~ 						RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "R" & $holidayName)
+;~ 						_Update($SelDate)
+;~ 					EndIf
+;~ 				Else
+				$holidayName = GUICtrlRead($Input_Tag)
+				RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "R" & $holidayName)
+				_Update($SelDate)
+;~ 				EndIf
 			EndIf
 
 		Case $Button_Travel
@@ -635,17 +626,17 @@ While 1
 			$CheckDate_Return = _CheckDate($SelDate, "T")
 			If $CheckDate_Return = 0 Then
 				$SelDate_slipt = StringSplit($SelDate, "/")
-				If GUICtrlRead($Checkbox_calendtarTag) = "1" Then
-					$holidayName = InputBox("Calendar Tag", "Give a tag name for this TRAVEL event on " & $SelDate & ":", GUICtrlRead($Input_Tip), "", -1, -1, Default, Default, 0, $Form_WorkDays)
-					If Not @error Then
-						RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "T" & $holidayName)
-						_Update($SelDate)
-					EndIf
-				Else
-					$holidayName = ""
-					RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "T" & $holidayName)
-					_Update($SelDate)
-				EndIf
+;~ 				If GUICtrlRead($Checkbox_calendtarTag) = "1" Then
+;~ 					$holidayName = InputBox("Calendar Tag", "Give a tag name for this TRAVEL event on " & $SelDate & ":", GUICtrlRead($Input_Tag), "", -1, -1, Default, Default, 0, $Form_WorkDays)
+;~ 					If Not @error Then
+;~ 						RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "T" & $holidayName)
+;~ 						_Update($SelDate)
+;~ 					EndIf
+;~ 				Else
+				$holidayName = GUICtrlRead($Input_Tag)
+				RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "T" & $holidayName)
+				_Update($SelDate)
+;~ 				EndIf
 			EndIf
 
 		Case $Button_PTO
@@ -653,17 +644,17 @@ While 1
 			$CheckDate_Return = _CheckDate($SelDate, "P")
 			If $CheckDate_Return = 0 Then
 				$SelDate_slipt = StringSplit($SelDate, "/")
-				If GUICtrlRead($Checkbox_calendtarTag) = "1" Then
-					$holidayName = InputBox("Calendar Tag", "Give a tag name for this PTO event on " & $SelDate & ":", GUICtrlRead($Input_Tip), "", -1, -1, Default, Default, 0, $Form_WorkDays)
-					If Not @error Then
-						RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "P" & $holidayName)
-						_Update($SelDate)
-					EndIf
-				Else
-					$holidayName = ""
-					RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "P" & $holidayName)
-					_Update($SelDate)
-				EndIf
+;~ 				If GUICtrlRead($Checkbox_calendtarTag) = "1" Then
+;~ 					$holidayName = InputBox("Calendar Tag", "Give a tag name for this PTO event on " & $SelDate & ":", GUICtrlRead($Input_Tag), "", -1, -1, Default, Default, 0, $Form_WorkDays)
+;~ 					If Not @error Then
+;~ 						RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "P" & $holidayName)
+;~ 						_Update($SelDate)
+;~ 					EndIf
+;~ 				Else
+				$holidayName = GUICtrlRead($Input_Tag)
+				RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "P" & $holidayName)
+				_Update($SelDate)
+;~ 				EndIf
 			EndIf
 
 		Case $Button_holiday
@@ -671,17 +662,17 @@ While 1
 			$CheckDate_Return = _CheckDate($SelDate, "H")
 			If $CheckDate_Return = 0 Then
 				$SelDate_slipt = StringSplit($SelDate, "/")
-				If GUICtrlRead($Checkbox_calendtarTag) = "1" Then
-					$holidayName = InputBox("Calendar Tag", "Give a tag name for this HOLIDAY event on " & $SelDate & ":", GUICtrlRead($Input_Tip), "", -1, -1, Default, Default, 0, $Form_WorkDays)
-					If Not @error Then
-						RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "H" & $holidayName)
-						_Update($SelDate)
-					EndIf
-				Else
-					$holidayName = ""
-					RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "H" & $holidayName)
-					_Update($SelDate)
-				EndIf
+;~ 				If GUICtrlRead($Checkbox_calendtarTag) = "1" Then
+;~ 					$holidayName = InputBox("Calendar Tag", "Give a tag name for this HOLIDAY event on " & $SelDate & ":", GUICtrlRead($Input_Tag), "", -1, -1, Default, Default, 0, $Form_WorkDays)
+;~ 					If Not @error Then
+;~ 						RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "H" & $holidayName)
+;~ 						_Update($SelDate)
+;~ 					EndIf
+;~ 				Else
+				$holidayName = GUICtrlRead($Input_Tag)
+				RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "H" & $holidayName)
+				_Update($SelDate)
+;~ 				EndIf
 			EndIf
 
 		Case $Button_Sick
@@ -689,17 +680,17 @@ While 1
 			$CheckDate_Return = _CheckDate($SelDate, "S")
 			If $CheckDate_Return = 0 Then
 				$SelDate_slipt = StringSplit($SelDate, "/")
-				If GUICtrlRead($Checkbox_calendtarTag) = "1" Then
-					$holidayName = InputBox("Calendar Tag", "Give a tag name for this SICK DAY event on " & $SelDate & ":", GUICtrlRead($Input_Tip), "", -1, -1, Default, Default, 0, $Form_WorkDays)
-					If Not @error Then
-						RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "S" & $holidayName)
-						_Update($SelDate)
-					EndIf
-				Else
-					$holidayName = ""
-					RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "S" & $holidayName)
-					_Update($SelDate)
-				EndIf
+;~ 				If GUICtrlRead($Checkbox_calendtarTag) = "1" Then
+;~ 					$holidayName = InputBox("Calendar Tag", "Give a tag name for this SICK DAY event on " & $SelDate & ":", GUICtrlRead($Input_Tag), "", -1, -1, Default, Default, 0, $Form_WorkDays)
+;~ 					If Not @error Then
+;~ 						RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "S" & $holidayName)
+;~ 						_Update($SelDate)
+;~ 					EndIf
+;~ 				Else
+				$holidayName = GUICtrlRead($Input_Tag)
+				RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "S" & $holidayName)
+				_Update($SelDate)
+;~ 				EndIf
 			EndIf
 
 		Case $Button_Weekend
@@ -718,7 +709,7 @@ While 1
 				If $WeekEnd = 1 Then
 					MsgBox(262160, "Weekend", "This date is not a weekend.")
 				Else
-					$holidayName = ""
+					$holidayName = GUICtrlRead($Input_Tag)
 					RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "W" & $holidayName)
 					_Update($SelDate)
 				EndIf
@@ -728,6 +719,16 @@ While 1
 
 WEnd
 
+Func _CalendarTag($DateToTag)
+
+	$SelDate_slipt = StringSplit($DateToTag, "/")
+	$holidayName = GUICtrlRead($Input_Tag)
+	$Register = RegRead($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3])
+	RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", StringLeft($Register, 1) & $holidayName)
+	_Update($SelDate)
+
+EndFunc   ;==>_CalendarTag
+
 Func _CreateMenu()
 
 	GUICtrlDelete($DBpMenu_Report)
@@ -736,7 +737,6 @@ Func _CreateMenu()
 	GUICtrlDelete($BkpMenu_Exit)
 	Global $DBpMenu_Delete = GUICtrlCreateMenu("Delete Specific year", $BkpMenu_reset_all1)
 	Global $DBpMenu_Report = GUICtrlCreateMenu("Report", $DBpMenu_db)
-;~ 	Global $DBpMenu_Delete = GUICtrlCreateMenu("Delete", $DBpMenu_backup_Data)
 
 	Local $sSubKey = ""
 	For $i = 1 To 12
@@ -748,8 +748,7 @@ Func _CreateMenu()
 	Next
 
 	Global $BkpMenu_reset_1 = GUICtrlCreateMenuItem("", $DBpMenu_db)
-Global $BkpMenu_Exit = GUICtrlCreateMenuItem("&Exit", $DBpMenu_db)
-
+	Global $BkpMenu_Exit = GUICtrlCreateMenuItem("&Exit", $DBpMenu_db)
 
 EndFunc   ;==>_CreateMenu
 
@@ -876,10 +875,10 @@ Func _Update($SelDate)
 
 	If StringLen($Data_Register1) > 1 Then
 		$tip = " - " & StringTrimLeft($Data_Register1, 1)
-		GUICtrlSetData($Input_Tip, StringTrimLeft($Data_Register1, 1))
+		GUICtrlSetData($Input_Tag, StringTrimLeft($Data_Register1, 1))
 	Else
 		$tip = ""
-		GUICtrlSetData($Input_Tip, $tip)
+		GUICtrlSetData($Input_Tag, $tip)
 	EndIf
 	$WeekDayNum = _DateToDayOfWeek($Data_year, $Data_month, $Data_day)
 	$WeekDayName = _DateDayOfWeek($WeekDayNum, 1)
@@ -979,7 +978,7 @@ Func _Update($SelDate)
 			$Data_Register = "X"
 			GUICtrlSetColor($Inputs[$Data_day][$Data_month], 0xFF0000)             ; today
 		EndIf
-;~ 		GUICtrlSetData($Inputs[$Data_day][$Data_month], "| " & $Data_Register & " |")
+
 	EndIf
 
 	_ReadStatistics($Data_year)
@@ -1120,7 +1119,19 @@ Func _ResetDatabase($step = "0")
 
 EndFunc   ;==>_ResetDatabase
 
-Func _CalendarRead()
+Func _CalendarRead($i=0,$j=0)
+
+	For $a = 1 To 12
+		For $b = 1 To 31
+;~ 			ConsoleWrite($b & "-" & $a & "-" & GUICtrlGetState($SelectLabel[$b][$a]) & @CRLF)
+			If GUICtrlGetState($SelectLabel[$b][$a]) =  144 Then
+				ConsoleWrite($b & "-" & $a & "-" & GUICtrlGetState($SelectLabel[$b][$a]) & @CRLF)
+			GUICtrlSetState($SelectLabel[$b][$a], $gui_hide)
+			EndIf
+		Next
+	Next
+
+
 
 	$SelDate = GUICtrlRead($Calendar)
 	$SelDateYear = GUICtrlRead($Input_SelDate)
@@ -1151,8 +1162,11 @@ Func _CalendarRead()
 	GUICtrlSetData($Input_SelDate, $SelDate)
 	_CheckQuarter()
 
+;~ 	ConsoleWrite($SelDate_slipt[2] & "-" & $SelDate_slipt[3] & "-" & GUICtrlGetState($SelectLabel[$SelDate_slipt[2]][$SelDate_slipt[3]]) & @CRLF)
+	GUICtrlSetState($SelectLabel[$SelDate_slipt[3]][$SelDate_slipt[2]], $gui_show)
+
 	$Status_Tip = RegRead($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3])
-	GUICtrlSetData($Input_Tip, StringTrimLeft($Status_Tip, 1))
+	GUICtrlSetData($Input_Tag, StringTrimLeft($Status_Tip, 1))
 
 	Return
 
@@ -1164,6 +1178,7 @@ Func _ClearScreen()
 		For $i = 1 To 31
 			GUICtrlDelete($Inputs[$i][$J])
 			GUICtrlDelete($TodayLabel[$i][$J])
+			GUICtrlDelete($SelectLabel[$i][$J])
 		Next
 	Next
 
@@ -1794,12 +1809,9 @@ EndFunc   ;==>_ReadStatistics
 
 Func _ReadINI($Year)
 
-
-
-	GUICtrlSetData($Input_Tip, "")
+	GUICtrlSetData($Input_Tag, "")
 
 	_ClearScreen()
-
 
 	_ReadStatistics($Year)
 
@@ -1810,7 +1822,6 @@ Func _ReadINI($Year)
 	Next
 
 	; Criar Inputs para cabeçalhos (dias do mês)
-;~ 	$LabelMonth[0] = GUICtrlCreateLabel("", 8, 216, 20, 20)
 	For $i = 1 To 31
 		If $i < 10 Then
 			$n = "0" & $i
@@ -1818,7 +1829,6 @@ Func _ReadINI($Year)
 			$n = $i
 		EndIf
 		$LabelMonth[$i] = GUICtrlCreateLabel($n, 5 + ($i * 35), 216, 20, 20, $SS_CENTER)
-;~ 		$LabelMonth[$i] = GUICtrlCreateLabel($n, 8 + ($i * 35), 225, 20, 25, $SS_CENTER)
 	Next
 	$C = 0
 	$Skip = 0
@@ -1858,12 +1868,21 @@ Func _ReadINI($Year)
 			EndIf
 
 			If _DateIsValid($Year & "/" & $X & "/" & $i) = 1 Then
-				$TodayLabel[$i][$J] = GUICtrlCreateLabel("", -2 + ($i * 35), 203 + $Skip + ($J * 25), 35, 26) ;,$SS_BLACKFRAME)
+
+;~ 				$SelectLabel[$i][$J] = GUICtrlCreateLabel("", -2 + ($i * 35), 203 + $Skip + ($J * 25), 35, 26) ;,$SS_BLACKFRAME)
+				$SelectLabel[$i][$J] = GUICtrlCreateLabel("", -3 + ($i * 35), 202 + $Skip + ($J * 25), 36, 28) ;,$SS_BLACKFRAME)
+				GUICtrlSetBkColor($SelectLabel[$i][$J], $Color_bk_Selected)
+				GUICtrlSetState($SelectLabel[$i][$J], $gui_disable)
+				GUICtrlSetState($SelectLabel[$i][$J], $gui_hide)
+
+
+				$TodayLabel[$i][$J] = GUICtrlCreateLabel("", -1 + ($i * 35), 204 + $Skip + ($J * 25), 32, 24) ;,$SS_BLACKFRAME)
 				GUICtrlSetBkColor($TodayLabel[$i][$J], $Color_bk_Today)
 				GUICtrlSetState($TodayLabel[$i][$J], $gui_disable)
 				GUICtrlSetState($TodayLabel[$i][$J], $gui_hide)
+
+
 				$Inputs[$i][$J] = GUICtrlCreateButton("", 0 + ($i * 35), 205 + $Skip + ($J * 25), 30, 22, BitOR($ES_READONLY, $ES_CENTER, $BS_FLAT, $BS_BOTTOM))
-;~ 				$Inputs[$i][$J] = GUICtrlCreateButton("", 5 + ($i * 35), 220 + $Skip + ($J * 25), 34, 24, BitOR($ES_READONLY, $ES_CENTER, $BS_FLAT, $BS_BOTTOM))
 
 				$WeekDayNum = _DateToDayOfWeek($Year, $X, $i)
 				$WeekDayName = _DateDayOfWeek($WeekDayNum, 1)
@@ -1872,11 +1891,9 @@ Func _ReadINI($Year)
 				If StringLen($Status1) > 1 Then
 					$tip = " - " & StringTrimLeft($Status1, 1)
 					GUICtrlSetFont($Inputs[$i][$J], 9, 900, 6, "", 2)
-;~ 					GUICtrlSetData($Input_Tip, StringTrimLeft($Status1, 1))
 				Else
 					$tip = ""
 					GUICtrlSetFont($Inputs[$i][$J], 9, 100, 0, "", 2)
-;~ 					GUICtrlSetData($Input_Tip, $tip)
 				EndIf
 
 				GUICtrlSetTip($Inputs[$i][$J], $WeekDayName & " - " & $Year & "/" & $X & "/" & $n & $tip)
@@ -1995,8 +2012,6 @@ Func _ReadINI($Year)
 			EndIf
 		Next
 
-
-
 		$C += 1
 		If $C > 2 Then
 			$C = 0
@@ -2057,7 +2072,6 @@ Func _CheckQuarter()
 			GUICtrlSetState($Input_RaTio_q2, $gui_show)
 			GUICtrlSetState($Input_RaTio_q3, $gui_hide)
 			GUICtrlSetState($Input_RaTio_q4, $gui_hide)
-
 		EndIf
 
 		If @MON = "07" Or @MON = "08" Or @MON = "09" Then
@@ -2079,7 +2093,6 @@ Func _CheckQuarter()
 			GUICtrlSetState($Input_RaTio_q2, $gui_hide)
 			GUICtrlSetState($Input_RaTio_q3, $gui_show)
 			GUICtrlSetState($Input_RaTio_q4, $gui_hide)
-
 		EndIf
 
 		If @MON = "10" Or @MON = "11" Or @MON = "12" Then
@@ -2101,9 +2114,7 @@ Func _CheckQuarter()
 			GUICtrlSetState($Input_RaTio_q2, $gui_hide)
 			GUICtrlSetState($Input_RaTio_q3, $gui_hide)
 			GUICtrlSetState($Input_RaTio_q4, $gui_show)
-
 		EndIf
-
 	Else
 		GUICtrlSetData($Label_3_q1, "Ratio:")
 		GUICtrlSetColor($Label_3_q1, $Color_bk_Black)
@@ -2123,13 +2134,11 @@ Func _CheckQuarter()
 		GUICtrlSetState($Input_RaTio_q2, $gui_hide)
 		GUICtrlSetState($Input_RaTio_q3, $gui_hide)
 		GUICtrlSetState($Input_RaTio_q4, $gui_hide)
-
 	EndIf
 
 	If $SelDate_slipt[2] = "01" Or $SelDate_slipt[2] = "02" Or $SelDate_slipt[2] = "03" Then
 		GUICtrlSetData($Input_Quarter, "Q1")
 		GUICtrlSetBkColor($Group_Q1, 0x00FF00)
-
 	Else
 		GUICtrlSetBkColor($Group_Q1, 0xC0C0C0)
 	EndIf
@@ -2169,8 +2178,6 @@ Func _CriaINI($Year)
 		Local $Y, $M, $D
 		$sJulDate = _DayValueToDate($sJulDate1 - $i, $Y, $M, $D)
 		If $Y = $Year Then
-
-
 			$Wday = _DateToDayOfWeek($Year, $M, $D)
 			If $Wday = 1 Or $Wday = 7 Then
 				If RegRead($DB & "\" & $Year & "\" & $M, $D) = "" Then
@@ -2179,7 +2186,6 @@ Func _CriaINI($Year)
 			Else
 				RegWrite($DB & "\" & $Year & "\" & $M, $D, "REG_SZ", RegRead($DB & "\" & $Year & "\" & $M, $D))
 			EndIf
-
 		EndIf
 	Next
 	_CreateMenu()
@@ -2197,8 +2203,8 @@ Func _BKColorPallet()
 			0x0000FF, 0x000080, 0xFF00FF, 0x800080, _
 			0xC0DCC0, 0xA6CAF0, 0xFFFBF0, 0xA0A0A4]
 
-
-	$Form_Colors = GUICreate('Colors', 220, 350, -1, -1, $DS_MODALFRAME, $WS_EX_TOPMOST)
+	$WinPos = WinGetPos("Work Days")
+	$Form_Colors = GUICreate('Colors', 220, 400, $WinPos[0] + 300, $WinPos[1] + 100, $DS_MODALFRAME, $WS_EX_TOPMOST)
 	GUICtrlSetBkColor(-1, 0x50CA1B)
 
 	GUICtrlCreateLabel("On Site:", 10, 15)
@@ -2210,6 +2216,7 @@ Func _BKColorPallet()
 	GUICtrlCreateLabel("Blank:", 10, 195)
 	GUICtrlCreateLabel("Weekend:", 10, 225)
 	GUICtrlCreateLabel("Today:", 10, 255)
+	GUICtrlCreateLabel("Selected:", 10, 285)
 
 	$Picker_OnSite = _GUIColorPicker_Create('', 65, 10, 60, 23, $Color_bk_OnSite, BitOR($CP_FLAG_CHOOSERBUTTON, $CP_FLAG_ARROWSTYLE, $CP_FLAG_MOUSEWHEEL), $aPalette, 4, 5, 0, '', 'More...')
 	$Picker_Remote = _GUIColorPicker_Create('', 65, 40, 60, 23, $Color_bk_Remote, BitOR($CP_FLAG_CHOOSERBUTTON, $CP_FLAG_ARROWSTYLE, $CP_FLAG_MOUSEWHEEL), $aPalette, 4, 5, 0, '', 'More...')
@@ -2220,6 +2227,7 @@ Func _BKColorPallet()
 	$Picker_Blank = _GUIColorPicker_Create('', 65, 190, 60, 23, $Color_bk_Blank, BitOR($CP_FLAG_CHOOSERBUTTON, $CP_FLAG_ARROWSTYLE, $CP_FLAG_MOUSEWHEEL), $aPalette, 4, 5, 0, '', 'More...')
 	$Picker_Weekend = _GUIColorPicker_Create('', 65, 220, 60, 23, $Color_bk_Weekend, BitOR($CP_FLAG_CHOOSERBUTTON, $CP_FLAG_ARROWSTYLE, $CP_FLAG_MOUSEWHEEL), $aPalette, 4, 5, 0, '', 'More...')
 	$Picker_Today = _GUIColorPicker_Create('', 65, 250, 60, 23, $Color_bk_Today, BitOR($CP_FLAG_CHOOSERBUTTON, $CP_FLAG_ARROWSTYLE, $CP_FLAG_MOUSEWHEEL), $aPalette, 4, 5, 0, '', 'More...')
+	$Picker_Selected = _GUIColorPicker_Create('', 65, 280, 60, 23, $Color_bk_Selected, BitOR($CP_FLAG_CHOOSERBUTTON, $CP_FLAG_ARROWSTYLE, $CP_FLAG_MOUSEWHEEL), $aPalette, 4, 5, 0, '', 'More...')
 
 	$Picker_Font_OnSite = GUICtrlCreateCheckbox("White Font", 130, 10)
 	$Picker_Font_Remote = GUICtrlCreateCheckbox("White Font", 130, 40)
@@ -2239,10 +2247,10 @@ Func _BKColorPallet()
 	GUICtrlSetState($Picker_Font_Blank, $Picker_Font_Blank_Read)
 	GUICtrlSetState($Picker_Font_Weekend, $Picker_Font_Weekend_Read)
 
-	$Original_Color_1 = $Color_bk_OnSite & $Color_bk_Remote & $Color_bk_holiday & $Color_bk_PTO & $Color_bk_Travel & $Color_bk_Sick & $Color_bk_Blank & $Color_bk_Weekend & $Color_bk_Today & $Picker_Font_OnSite_Read & $Picker_Font_Remote_Read & $Picker_Font_Holiday_Read & $Picker_Font_PTO_Read & $Picker_Font_Travel_Read & $Picker_Font_Sick_Read & $Picker_Font_Blank_Read & $Picker_Font_Weekend_Read
+	$Original_Color_1 = $Color_bk_OnSite & $Color_bk_Remote & $Color_bk_holiday & $Color_bk_PTO & $Color_bk_Travel & $Color_bk_Sick & $Color_bk_Blank & $Color_bk_Weekend & $Color_bk_Today & $Color_bk_Selected & $Picker_Font_OnSite_Read & $Picker_Font_Remote_Read & $Picker_Font_Holiday_Read & $Picker_Font_PTO_Read & $Picker_Font_Travel_Read & $Picker_Font_Sick_Read & $Picker_Font_Blank_Read & $Picker_Font_Weekend_Read
 ;~ 	ConsoleWrite($Original_Color_1 & @CRLF)
 
-	$Colors_Close = GUICtrlCreateButton("Close", 80, 285, 70, 30)
+	$Colors_Close = GUICtrlCreateButton("Close", 80, 330, 70, 30)
 
 	GUISetState()
 
@@ -2259,6 +2267,7 @@ Func _BKColorPallet()
 				$Picker_Color_Blank = _GUIColorPicker_GetColor($Picker_Blank)
 				$Picker_Color_Weekend = _GUIColorPicker_GetColor($Picker_Weekend)
 				$Picker_Color_Today = _GUIColorPicker_GetColor($Picker_Today)
+				$Picker_Color_Selected = _GUIColorPicker_GetColor($Picker_Selected)
 
 				RegWrite($DB, "Color_OnSite", "REG_SZ", $Picker_Color_OnSite)
 				RegWrite($DB, "Color_Remote", "REG_SZ", $Picker_Color_Remote)
@@ -2269,6 +2278,7 @@ Func _BKColorPallet()
 				RegWrite($DB, "Color_Blank", "REG_SZ", $Picker_Color_Blank)
 				RegWrite($DB, "Color_Weekend", "REG_SZ", $Picker_Color_Weekend)
 				RegWrite($DB, "Color_Today", "REG_SZ", $Picker_Color_Today)
+				RegWrite($DB, "Color_Selected", "REG_SZ", $Picker_Color_Selected)
 
 				$Picker_Font_OnSite_Read = GUICtrlRead($Picker_Font_OnSite)
 				$Picker_Font_Remote_Read = GUICtrlRead($Picker_Font_Remote)
@@ -2348,7 +2358,7 @@ Func _BKColorPallet()
 				GUICtrlSetColor($Button_Blank, $Font_Blank)
 				GUICtrlSetColor($Button_Weekend, $Font_Weekend)
 
-				$Original_Color_2 = $Picker_Color_OnSite & $Picker_Color_Remote & $Picker_Color_Holiday & $Picker_Color_PTO & $Picker_Color_Travel & $Picker_Color_Sick & $Picker_Color_Blank & $Picker_Color_Weekend & $Picker_Color_Today & $Picker_Font_OnSite_Read & $Picker_Font_Remote_Read & $Picker_Font_Holiday_Read & $Picker_Font_PTO_Read & $Picker_Font_Travel_Read & $Picker_Font_Sick_Read & $Picker_Font_Blank_Read & $Picker_Font_Weekend_Read
+				$Original_Color_2 = $Picker_Color_OnSite & $Picker_Color_Remote & $Picker_Color_Holiday & $Picker_Color_PTO & $Picker_Color_Travel & $Picker_Color_Sick & $Picker_Color_Blank & $Picker_Color_Weekend & $Picker_Color_Today & $Picker_Color_Selected & $Picker_Font_OnSite_Read & $Picker_Font_Remote_Read & $Picker_Font_Holiday_Read & $Picker_Font_PTO_Read & $Picker_Font_Travel_Read & $Picker_Font_Sick_Read & $Picker_Font_Blank_Read & $Picker_Font_Weekend_Read
 
 ;~ 				ConsoleWrite($Original_Color_2 & @CRLF)
 
