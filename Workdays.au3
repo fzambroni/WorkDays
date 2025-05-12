@@ -189,11 +189,6 @@ GUICtrlSetColor($Input_Quarter, 0x00994C)
 $Input_Tag = GUICtrlCreateInput("", 296, 54, 175, 21) ;, $ES_READONLY)
 
 $Button_CalendtarTag = GUICtrlCreateButton("Tag", 472, 52, 75, 25) ;## Calendar TAG
-;~ If $CalendarTag = "1" Then
-;~ 	GUICtrlSetState($Checkbox_calendtarTag, $gui_checked)
-;~ Else
-;~ 	GUICtrlSetState($Checkbox_calendtarTag, $gui_unchecked)
-;~ EndIf
 
 $Button_OnSite = GUICtrlCreateButton("&On Site", 296, 84, 75, 25)
 GUICtrlSetBkColor($Button_OnSite, $Color_bk_OnSite)
@@ -231,8 +226,18 @@ GUICtrlSetState($Button_Weekend, $gui_hide)
 
 GUICtrlCreateLabel("Use Blank button for Weekends", 384, 180, 170)
 
-GUICtrlCreateGroup("", -99, -99, 1, 1)
 
+$SelectLabel_1 = GUICtrlCreateLabel("",464,87, 76, 21) ;,$SS_BLACKFRAME)
+$SelectLabel_2 = GUICtrlCreateLabel("",466,89, 72, 17) ;,$SS_BLACKFRAME)
+GUICtrlSetBkColor($SelectLabel_1, $Color_bk_Today)
+GUICtrlCreateLabel("Today", 467, 90, 70,15,$SS_CENTER)
+
+$TodayLabel_1 = GUICtrlCreateLabel("",464,116, 76, 21) ;,$SS_BLACKFRAME)
+$TodayLabel_2 = GUICtrlCreateLabel("",466,118, 72, 17) ;,$SS_BLACKFRAME)
+GUICtrlSetBkColor($TodayLabel_1, $Color_bk_Selected)
+GUICtrlCreateLabel("Selected Date", 467, 119, 70,15,$SS_CENTER)
+
+GUICtrlCreateGroup("", -99, -99, 1, 1)
 
 $Button_Reload = GUICtrlCreateButton("Reload Data", 472, 22, 75, 25)
 
@@ -367,6 +372,8 @@ $Status = StringTrimLeft($Status1, 1)
 
 GUICtrlSetData($Input_Tag, $Status)
 
+GUICtrlSetState($SelectLabel[$SelDate_slipt[3]][$SelDate_slipt[2]], $gui_show)
+
 GUISetState(@SW_SHOW)
 
 
@@ -485,6 +492,9 @@ While 1
 				GUICtrlSetBkColor($Button_Blank, $Color_bk_Blank)
 				GUICtrlSetBkColor($Button_Weekend, $Color_bk_Weekend)
 
+				GUICtrlSetBkColor($SelectLabel_1, $Color_bk_Today)
+				GUICtrlSetBkColor($TodayLabel_1, $Color_bk_Selected)
+
 				$SelDate = GUICtrlRead($Calendar)
 				$SelDate_slipt = StringSplit($SelDate, "/")
 				_ReadINI($SelDate_slipt[1])
@@ -569,6 +579,7 @@ While 1
 			$Status1 = RegRead($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3])
 			$Status = StringTrimLeft($Status1, 1)
 			GUICtrlSetData($Input_Tag, $Status)
+			GUICtrlSetState($SelectLabel[$SelDate_slipt[3]][$SelDate_slipt[2]], $gui_show)
 
 		Case $Button_OnSite
 			$SelDate = GUICtrlRead($Calendar)
@@ -848,7 +859,7 @@ Func _RestoreBackup()
 			If $HolidaysError <> "" Then
 				MsgBox(262160, "Import", "Oops! Something went wrong when read the file." & @CRLF & "The following lines was not imported:" & @CRLF & @CRLF & $HolidaysError & @CRLF & @CRLF & "The following lines was imported:" & @CRLF & @CRLF & $HolidaysSucess)
 			Else
-				If $ImportCount > 10 Then
+				If $ImportCount > 15 Then
 					MsgBox(262208, "Import", "**Success!** The command was executed successfully." & @CRLF & @CRLF & $ImportCount & " lines imported.")
 				Else
 					MsgBox(262208, "Import", "**Success!** The command was executed successfully." & @CRLF & "The following lines was imported:" & @CRLF & @CRLF & $HolidaysSucess)
@@ -1765,41 +1776,29 @@ Func _ReadStatistics($Year)
 	GUICtrlSetData($Input_RaTio_q3, "")
 	GUICtrlSetData($Input_RaTio_q4, "")
 
-;~ 	ConsoleWrite("$Input_TD_q2: " & $Counta_TD_q2 & @CRLF)
-;~ 	ConsoleWrite("$Input_WD_q2: " & $Counta_WD_q2 & @CRLF)
-;~ 	ConsoleWrite("$Input_E_Onsite_q2: " & ((($Counta_WD_q2 / 5) * 3) & " - " & Ceiling($Counta_WD_q2 / 5) * 3) & @CRLF)
 	ConsoleWrite("$Counta_R_Onsite_Quarter_Q1: " & $Counta_R_Onsite_Quarter_Q1 & @CRLF)
 	ConsoleWrite("$Counta_WD_Quarter_Q1: " & $Counta_WD_Quarter_Q1 & @CRLF)
 	ConsoleWrite("Ratio: " & ($Counta_R_Onsite_Quarter_Q1 / Ceiling($Counta_WD_Quarter_Q1 / 5)) & @CRLF)
-;~ 	ConsoleWrite("$Input_Remaining_q2: " & ((($Counta_WD_q2 / 5) * 3) - $Counta_R_Onsite_q2) & " - " & ((Ceiling($Counta_WD_q2 / 5) * 3) - $Counta_R_Onsite_q2) & @CRLF)
-;~ 	ConsoleWrite("$Ratio_R_Q2: " & $Ratio_R_Q2 & " - " & ($Counta_R_Onsite_q2 / ($Counta_WD_q2 / 5)) & @CRLF)
-;~ 	ConsoleWrite("$Ratio_Q2 : " & $Ratio_Q2  & " - " & ($Counta_R_Onsite_Quarter_Q2 / ($Counta_WD_Quarter_Q2 / 5)) & @CRLF)
-
 
 	If $Year = @YEAR Then
 		If @MON = "01" Or @MON = "02" Or @MON = "03" Then
 			GUICtrlSetData($Input_RaTio_q1, $Ratio_Q1)
 			GUICtrlSetBkColor($Input_RaTio_q1, _GetColorGradient($Ratio_Q1))
-
 		EndIf
 
 		If @MON = "04" Or @MON = "05" Or @MON = "06" Then
 			GUICtrlSetData($Input_RaTio_q2, $Ratio_Q2)
 			GUICtrlSetBkColor($Input_RaTio_q2, _GetColorGradient($Ratio_Q2))
-
-
 		EndIf
 
 		If @MON = "07" Or @MON = "08" Or @MON = "09" Then
 			GUICtrlSetData($Input_RaTio_q3, $Ratio_Q3)
 			GUICtrlSetBkColor($Input_RaTio_q3, _GetColorGradient($Ratio_Q3))
-
 		EndIf
 
 		If @MON = "10" Or @MON = "11" Or @MON = "12" Then
 			GUICtrlSetData($Input_RaTio_q4, $Ratio_Q4)
 			GUICtrlSetBkColor($Input_RaTio_q4, _GetColorGradient($Ratio_Q4))
-
 		EndIf
 	EndIf
 
@@ -1869,7 +1868,6 @@ Func _ReadINI($Year)
 
 			If _DateIsValid($Year & "/" & $X & "/" & $i) = 1 Then
 
-;~ 				$SelectLabel[$i][$J] = GUICtrlCreateLabel("", -2 + ($i * 35), 203 + $Skip + ($J * 25), 35, 26) ;,$SS_BLACKFRAME)
 				$SelectLabel[$i][$J] = GUICtrlCreateLabel("", -3 + ($i * 35), 202 + $Skip + ($J * 25), 36, 28) ;,$SS_BLACKFRAME)
 				GUICtrlSetBkColor($SelectLabel[$i][$J], $Color_bk_Selected)
 				GUICtrlSetState($SelectLabel[$i][$J], $gui_disable)
@@ -2000,10 +1998,6 @@ Func _ReadINI($Year)
 				If $Year & "/" & $X & "/" & $n = @YEAR & "/" & @MON & "/" & @MDAY Then
 
 					GUICtrlSetTip($Inputs[$i][$J], $WeekDayName & " - " & $Year & "/" & $X & "/" & $n & " - TODAY" & $tip)
-;~ 					If $Status = "" Then
-;~ 						$Status = "X"
-;~ 						GUICtrlSetColor($Inputs[$i][$J], 0xFF0000) ; today
-;~ 					EndIf
 					GUICtrlSetState($TodayLabel[$i][$J], $gui_show)
 
 
@@ -2478,6 +2472,9 @@ Func _ReadColors()
 	GUICtrlSetBkColor($Button_Sick, $Color_bk_Sick)
 	GUICtrlSetBkColor($Button_Blank, $Color_bk_Blank)
 	GUICtrlSetBkColor($Button_Weekend, $Color_bk_Weekend)
+
+	GUICtrlSetBkColor($SelectLabel_1, $Color_bk_Today)
+GUICtrlSetBkColor($TodayLabel_1, $Color_bk_Selected)
 
 
 EndFunc   ;==>_ReadColors
