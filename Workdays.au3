@@ -227,15 +227,15 @@ GUICtrlSetState($Button_Weekend, $gui_hide)
 GUICtrlCreateLabel("Use Blank button for Weekends", 384, 180, 170)
 
 
-$SelectLabel_1 = GUICtrlCreateLabel("",464,87, 76, 21) ;,$SS_BLACKFRAME)
-$SelectLabel_2 = GUICtrlCreateLabel("",466,89, 72, 17) ;,$SS_BLACKFRAME)
+$SelectLabel_1 = GUICtrlCreateLabel("",494,87, 46, 21) ;,$SS_BLACKFRAME)
+$SelectLabel_2 = GUICtrlCreateLabel("",496,89, 42, 17) ;,$SS_BLACKFRAME)
 GUICtrlSetBkColor($SelectLabel_1, $Color_bk_Today)
-GUICtrlCreateLabel("Today", 467, 90, 70,15,$SS_CENTER)
+GUICtrlCreateLabel("Today", 497, 90, 40,15,$SS_CENTER)
 
-$TodayLabel_1 = GUICtrlCreateLabel("",464,116, 76, 21) ;,$SS_BLACKFRAME)
-$TodayLabel_2 = GUICtrlCreateLabel("",466,118, 72, 17) ;,$SS_BLACKFRAME)
+$TodayLabel_1 = GUICtrlCreateLabel("",494,116, 46, 21) ;,$SS_BLACKFRAME)
+$TodayLabel_2 = GUICtrlCreateLabel("",496,118, 42, 17) ;,$SS_BLACKFRAME)
 GUICtrlSetBkColor($TodayLabel_1, $Color_bk_Selected)
-GUICtrlCreateLabel("Selected Date", 467, 119, 70,15,$SS_CENTER)
+GUICtrlCreateLabel("Selected", 497, 119, 40,15,$SS_CENTER)
 
 GUICtrlCreateGroup("", -99, -99, 1, 1)
 
@@ -751,11 +751,13 @@ Func _CreateMenu()
 
 	Local $sSubKey = ""
 	For $i = 1 To 12
+
 		$sSubKey = RegEnumKey($DB, $i)
 		If @error Then ExitLoop
 
 		$DBpMenu_Delete_Year[$i] = GUICtrlCreateMenuItem($sSubKey, $DBpMenu_Delete)
 		$DBpMenu_Report_Year[$i] = GUICtrlCreateMenuItem($sSubKey, $DBpMenu_Report)
+
 	Next
 
 	Global $BkpMenu_reset_1 = GUICtrlCreateMenuItem("", $DBpMenu_db)
