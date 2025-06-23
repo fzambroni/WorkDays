@@ -52,11 +52,13 @@ Func GenerateWorkdaysReportHTML($Year)
 			Local $DateStr = $Year & "/" & $MonthKey & "/" & $Day
 			Local $CatLetter = StringUpper(StringLeft($RawVal, 1))
 			Local $Note = StringTrimLeft($RawVal, 1)
+;~ 			$Note = StringReplace($Note,"/n",@CRLF)
 			If $Note = $RawVal Then $Note = ""
 
+			#cs
 			If $RawVal = "" Or $CatLetter = "B" Or $CatLetter = "W" Then
 				$CategoryCount[$q][7] += 1
-				If $Note <> "" Then $CategoryNotes[$q][7] &= "<li><b>" & $DateStr & ":</b> " & $Note & "</li>"
+				If $Note <> "" Then $CategoryNotes[$q][7] &= "<li><b>" & $DateStr & ":</b> xxx" & $Note & "</li>"
 				$QuarterStats[$q][0] += 1
 				If $RawVal = "" Or $CatLetter = "B" Then
 					$QuarterStats[$q][1] += 1
@@ -66,6 +68,7 @@ Func GenerateWorkdaysReportHTML($Year)
 				$i += 1
 				ContinueLoop
 			EndIf
+			#ce
 
 			Local $CatIndex = 6
 			If $CatLetter = "O" Then $CatIndex = 0
@@ -74,6 +77,9 @@ Func GenerateWorkdaysReportHTML($Year)
 			If $CatLetter = "P" Then $CatIndex = 3
 			If $CatLetter = "T" Then $CatIndex = 4
 			If $CatLetter = "S" Then $CatIndex = 5
+			If $CatLetter = "B" Then $CatIndex = 7
+			If $CatLetter = "W" Then $CatIndex = 7
+			If $RawVal = "" Then $CatIndex = 7
 
 			If $CatIndex = 6 And $Note = "" Then
 				$i += 1
@@ -81,10 +87,34 @@ Func GenerateWorkdaysReportHTML($Year)
 			EndIf
 
 			$CategoryCount[$q][$CatIndex] += 1
+			ConsoleWrite($Note & @CRLF)
 			If $Note <> "" Then
-				$CategoryNotes[$q][$CatIndex] &= "<li><b>" & $DateStr & ":</b> " & $Note & "</li>"
-			Else
-				$CategoryNotes[$q][$CatIndex] &= "<li>" & $DateStr & "</li>"
+;~ 				ConsoleWrite($Note & @CRLF)
+				If StringInStr($Note,"/n",0,1) Then
+;~ 					MsgBox(262144,"",$Note)
+					$Note_Splited = StringSplit($Note,"/n",1)
+					$Count_Note = 1
+					For $Count_Note = 1 To $Note_Splited[0]
+						If $Count_Note = 1 Then
+							If $Note_Splited[$Count_Note] <> "" Then
+								$CategoryNotes[$q][$CatIndex] &= "<li><b>" & $DateStr & ":</b> " & $Note_Splited[$Count_Note] & "</li>"
+							EndIf
+						Else
+							If $Note_Splited[$Count_Note] <> "" Then
+;~ 								$CategoryNotes[$q][$CatIndex] &= "<li><b>_________:</b> " & $Note_Splited[$Count_Note] & "</li>"
+								$CategoryNotes[$q][$CatIndex] &= "<b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:</b> " & $Note_Splited[$Count_Note] & "<br>"
+							EndIf
+						EndIf
+
+					Next
+				Else
+					$CategoryNotes[$q][$CatIndex] &= "<li><b>" & $DateStr & ":</b> " & $Note & "</li>"
+				EndIf
+				Else
+				If $CatIndex <> 7 Then
+					$CategoryNotes[$q][$CatIndex] &= "<li>" & $DateStr & "</li>"
+				EndIf
+
 			EndIf
 
 			$QuarterStats[$q][0] += 1
@@ -134,6 +164,8 @@ Func GenerateWorkdaysReportHTML($Year)
 			FileWriteLine($hFile, "<tr style='background-color:" & $Colors[$c] & ";'><td><b>" & $CatNames[$c] & "</b></td><td>" & $CategoryCount[$q][$c] & "</td>")
 			If $Full = 1 Then
 			If $CategoryNotes[$q][$c] <> "" Then
+;~ 				ConsoleWrite( $CategoryNotes[$q][$c] & @CRLF)
+
 				FileWriteLine($hFile, "<td><ul>" & $CategoryNotes[$q][$c] & "</ul></td></tr>")
 			Else
 				FileWriteLine($hFile, "<td>No details listed</td></tr>")

@@ -1,7 +1,7 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=calendar.ico
 #AutoIt3Wrapper_Res_Description=Work Day management
-#AutoIt3Wrapper_Res_Fileversion=1.0.2.0
+#AutoIt3Wrapper_Res_Fileversion=1.0.2.1
 #AutoIt3Wrapper_Res_ProductName=Work Days
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 #cs ----------------------------------------------------------------------------
@@ -38,7 +38,15 @@ Opt("TrayAutoPause", 0)
 #include <WinAPI.au3>
 #include "GenerateWorkdaysReportHTML.au3"
 
-Global $About = "1.0.1.3 - Custom colors and bug fixes" & @CRLF & "1.0.1.4 - Code polishing and new custom color palette" & @CRLF & "1.0.1.5 - Bug Fixes and improvements" & @CRLF & "1.0.1.6 - Bug Fixes and improvements" & @CRLF & "1.0.1.7 - KPI Bug Fixes" & @CRLF & "1.0.1.8 - Today custom color option" & @CRLF & "1.0.1.9 - Report Functionality" & @CRLF & "1.0.2.0 - Bug Fix"
+Global $About = "1.0.1.3 - Custom colors and bug fixes" & @CRLF _
+& "1.0.1.4 - Code polishing and new custom color palette" & @CRLF _
+& "1.0.1.5 - Bug Fixes and improvements" & @CRLF _
+& "1.0.1.6 - Bug Fixes and improvements" & @CRLF _
+& "1.0.1.7 - KPI Bug Fixes" & @CRLF _
+& "1.0.1.8 - Today custom color option" & @CRLF _
+& "1.0.1.9 - Report Functionality" & @CRLF _
+& "1.0.2.0 - Bug Fix" & @CRLF _
+& "1.0.2.1 - Bug Fix"
 
 Global $IniSection[999][999]
 Global $LabelMonth[99999]
@@ -164,7 +172,7 @@ Global $DBpMenu_backup_Data = GUICtrlCreateMenu("Data", $DBpMenu_db)
 Global $DBpMenu_backup = GUICtrlCreateMenuItem("Create Backup", $DBpMenu_backup_Data)
 Global $BkpMenu_Batch = GUICtrlCreateMenuItem("Restore Backup", $DBpMenu_backup_Data)
 Global $DBpMenu_backup_2 = GUICtrlCreateMenuItem("", $DBpMenu_backup_Data)
-Global $BkpMenu_reset_all1 = GUICtrlCreateMenu("Reset Data", $DBpMenu_backup_Data)
+Global $BkpMenu_reset_all1 = GUICtrlCreateMenu("Data Management", $DBpMenu_backup_Data)
 Global $BkpMenu_reset_all = GUICtrlCreateMenuItem("Reset Entire Database", $BkpMenu_reset_all1)
 Global $DBpMenu_Delete = GUICtrlCreateMenu("Delete Specific year", $BkpMenu_reset_all1)
 Global $DBpMenu_backup_3 = GUICtrlCreateMenuItem("", $DBpMenu_backup_Data)
@@ -199,7 +207,7 @@ GUICtrlSetColor($Input_Quarter, 0x00994C)
 $Input_Tag = GUICtrlCreateInput("", 296, 54, 175, 21) ;, $ES_READONLY)
 
 $Button_CalendtarTag = GUICtrlCreateButton("Tag", 472, 52, 75, 25) ;## Calendar TAG
-
+GUICtrlSetTip($Button_CalendtarTag,"Use /n as linebreak.")
 $Button_OnSite = GUICtrlCreateButton("&On Site", 296, 84, 75, 25)
 GUICtrlSetBkColor($Button_OnSite, $Color_bk_OnSite)
 GUICtrlSetColor($Button_OnSite, $Font_OnSite)
@@ -351,7 +359,6 @@ GUICtrlSetState($Input_RaTio_q4, $gui_hide)
 
 GUICtrlCreateGroup("", -99, -99, 1, 1)
 
-
 GUICtrlCreateGroup("", 10, 303, 1120, 9)
 GUICtrlSetColor(-1, 0x0000FF)
 GUICtrlCreateGroup("", 10, 388, 1120, 9)
@@ -385,7 +392,6 @@ GUICtrlSetData($Input_Tag, $Status)
 GUICtrlSetState($SelectLabel[$SelDate_slipt[3]][$SelDate_slipt[2]], $gui_show)
 
 GUISetState(@SW_SHOW)
-
 
 While 1
 	$nMsg = GUIGetMsg()
@@ -704,6 +710,8 @@ Func _CalendarTag($DateToTag)
 	$SelDate_slipt = StringSplit($DateToTag, "/")
 	$holidayName = GUICtrlRead($Input_Tag)
 	$Register = RegRead($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3])
+;~ 	MsgBox(262144,"$Register",$Register)
+	If $Register = "" Then $Register = "B"
 	RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", StringLeft($Register, 1) & $holidayName)
 	_Update($SelDate)
 
@@ -859,7 +867,7 @@ Func _Update($SelDate)
 	$Data_Register = StringLeft($Data_Register1, 1)
 
 	If StringLen($Data_Register1) > 1 Then
-		$tip = " - " & StringTrimLeft($Data_Register1, 1)
+		$tip = "- " & StringTrimLeft($Data_Register1, 1)
 		GUICtrlSetData($Input_Tag, StringTrimLeft($Data_Register1, 1))
 	Else
 		$tip = ""
@@ -876,7 +884,8 @@ Func _Update($SelDate)
 	EndIf
 
 	GUICtrlSetData($Inputs[$Data_day][$Data_month], $Data_Register)
-	GUICtrlSetTip($Inputs[$Data_day][$Data_month], $WeekDayName & " - " & $Data_year & "/" & $Data_month & "/" & $Data_day & $tip)
+;~ 	GUICtrlSetTip($Inputs[$Data_day][$Data_month], $WeekDayName & " - " & $Data_year & "/" & $Data_month & "/" & $Data_day & StringReplace($tip,"/n",@CRLF & "- "))
+	GUICtrlSetTip($Inputs[$Data_day][$Data_month], StringReplace($tip,"/n",@CRLF & "-"),$WeekDayName & " - " & $Data_year & "/" & $Data_month & "/" & $Data_day)
 	If $tip <> "" Then
 		GUICtrlSetFont($Inputs[$Data_day][$Data_month], 9, 900, 6, "", 2)
 	Else
@@ -959,7 +968,8 @@ Func _Update($SelDate)
 			GUICtrlSetFont($Inputs[$Data_day][$Data_month], 9, 100, 0, "", 2)
 		EndIf
 
-		GUICtrlSetTip($Inputs[$Data_day][$Data_month], $WeekDayName & " - " & $Data_year & "/" & $Data_month & "/" & $Data_day & " - TODAY" & $tip)
+		GUICtrlSetTip($Inputs[$Data_day][$Data_month], StringReplace($tip,"/n",@CRLF & "-"),$WeekDayName & " - " & $Data_year & "/" & $Data_month & "/" & $Data_day & " - TODAY")
+;~ 		GUICtrlSetTip($Inputs[$Data_day][$Data_month], $WeekDayName & " - " & $Data_year & "/" & $Data_month & "/" & $Data_day & " - TODAY" & StringReplace($tip,"/n",@CRLF & "- "))
 		If $Data_Register = "" Then
 			$Data_Register = "X"
 			GUICtrlSetColor($Inputs[$Data_day][$Data_month], 0xFF0000)             ; today
@@ -1305,7 +1315,7 @@ Func _ReadStatistics($Year)
 				$Status1 = RegRead($DB & "\" & $Year & "\" & $X, $n)
 				$Status = StringLeft($Status1, 1)
 				If StringLen($Status1) > 1 Then
-					$tip = " - " & StringTrimLeft($Status1, 1)
+					$tip = "- " & StringTrimLeft($Status1, 1)
 				Else
 					$tip = ""
 				EndIf
@@ -1875,14 +1885,15 @@ Func _ReadINI($Year)
 				$Status1 = RegRead($DB & "\" & $Year & "\" & $X, $n)
 				$Status = StringLeft($Status1, 1)
 				If StringLen($Status1) > 1 Then
-					$tip = " - " & StringTrimLeft($Status1, 1)
+					$tip = "- " & StringTrimLeft($Status1, 1)
 					GUICtrlSetFont($Inputs[$i][$j], 9, 900, 6, "", 2)
 				Else
 					$tip = ""
 					GUICtrlSetFont($Inputs[$i][$j], 9, 100, 0, "", 2)
 				EndIf
 
-				GUICtrlSetTip($Inputs[$i][$j], $WeekDayName & " - " & $Year & "/" & $X & "/" & $n & $tip)
+;~ 				GUICtrlSetTip($Inputs[$i][$j], $WeekDayName & " - " & $Year & "/" & $X & "/" & $n & StringReplace($tip,"/n",@CRLF & "- "))
+				GUICtrlSetTip($Inputs[$i][$j], StringReplace($tip,"/n",@CRLF & "-"),$WeekDayName & " - " & $Year & "/" & $X & "/" & $n)
 
 				If $Status = "B" Then
 					If $tip <> "" Then
@@ -1985,7 +1996,8 @@ Func _ReadINI($Year)
 
 				If $Year & "/" & $X & "/" & $n = @YEAR & "/" & @MON & "/" & @MDAY Then
 
-					GUICtrlSetTip($Inputs[$i][$j], $WeekDayName & " - " & $Year & "/" & $X & "/" & $n & " - TODAY" & $tip)
+;~ 					GUICtrlSetTip($Inputs[$i][$j], $WeekDayName & " - " & $Year & "/" & $X & "/" & $n & " - TODAY" & StringReplace($tip,"/n",@CRLF & "- "))
+					GUICtrlSetTip($Inputs[$i][$j], StringReplace($tip,"/n",@CRLF & "-"),$WeekDayName & " - " & $Year & "/" & $X & "/" & $n & " - TODAY")
 					GUICtrlSetState($TodayLabel[$i][$j], $gui_show)
 
 
@@ -2643,7 +2655,6 @@ Func _GetColorGradient($value)
 	Return "0x" & StringFormat("%02X%02X%02X", $r, $g, $b)
 EndFunc   ;==>_GetColorGradient
 
-
 Func _GetColorFromValue($iValue)
 ;~
 	; Limita o intervalo
@@ -2670,7 +2681,7 @@ EndFunc   ;==>_GetColorFromValue
 ; Descrição: Retorna uma cor RGB em função de um valor entre -30 e 30.
 ; Valores >= 0 variam do verde (0) ao vermelho (30).
 ; Valores < 0 retornam um verde fixo.
-
+#cs
 Func _oldGetColorFromValue($iValue)
 	; Garante que o valor está no intervalo permitido
 	If $iValue < -30 Then $iValue = -30
@@ -2691,5 +2702,5 @@ Func _oldGetColorFromValue($iValue)
 	; Converte para RGB no formato 0xRRGGBB
 	Return BitShift($iRed, -16) + BitShift($iGreen, -8) + $iBlue
 EndFunc   ;==>_oldGetColorFromValue
-
+#ce
 
