@@ -1,7 +1,7 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=calendar.ico
 #AutoIt3Wrapper_Res_Description=Work Day management
-#AutoIt3Wrapper_Res_Fileversion=1.0.2.1
+#AutoIt3Wrapper_Res_Fileversion=1.0.2.2
 #AutoIt3Wrapper_Res_ProductName=Work Days
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 #cs ----------------------------------------------------------------------------
@@ -46,7 +46,8 @@ Global $About = "1.0.1.3 - Custom colors and bug fixes" & @CRLF _
 & "1.0.1.8 - Today custom color option" & @CRLF _
 & "1.0.1.9 - Report Functionality" & @CRLF _
 & "1.0.2.0 - Bug Fix" & @CRLF _
-& "1.0.2.1 - Bug Fix"
+& "1.0.2.1 - Bug Fix" & @CRLF _
+& "1.0.2.2 - Report and Tag Multiline"
 
 Global $IniSection[999][999]
 Global $LabelMonth[99999]
