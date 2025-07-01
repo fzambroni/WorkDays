@@ -1,3 +1,4 @@
+
 Func GenerateWorkdaysReportHTML($Year)
 	$Full = 0
 
@@ -12,6 +13,8 @@ Func GenerateWorkdaysReportHTML($Year)
 
 	EndSelect
 
+
+
 	Local $RegistryBase = "HKEY_CURRENT_USER\Software\WorkDays\" & $Year
 	Local $OutputPath = @ScriptDir & "\Workdays_Report.html"
 	Local $hFile = FileOpen($OutputPath, 2)
@@ -25,7 +28,7 @@ Func GenerateWorkdaysReportHTML($Year)
 
 	Local $CategoryCount[4][8] = [[0]]
 	Local $CategoryNotes[4][8]
-	Local $QuarterStats[4][7]
+	Local $QuarterStats[4][7] ; [q][0=TotalDays, 1=WorkDays, 2=Ratio, 3=EstimatedOnSite, 4=RealOnSite, 5=RemainingOnSite, 6=--not used--]
 
 	Local $TotalDays = 0, $WorkDays = 0, $RealOnSite = 0
 	Local $TotalOnSiteTravel = 0
@@ -49,7 +52,23 @@ Func GenerateWorkdaysReportHTML($Year)
 			Local $DateStr = $Year & "/" & $MonthKey & "/" & $Day
 			Local $CatLetter = StringUpper(StringLeft($RawVal, 1))
 			Local $Note = StringTrimLeft($RawVal, 1)
+;~ 			$Note = StringReplace($Note,"/n",@CRLF)
 			If $Note = $RawVal Then $Note = ""
+
+			#cs
+			If $RawVal = "" Or $CatLetter = "B" Or $CatLetter = "W" Then
+				$CategoryCount[$q][7] += 1
+				If $Note <> "" Then $CategoryNotes[$q][7] &= "<li><b>" & $DateStr & ":</b> xxx" & $Note & "</li>"
+				$QuarterStats[$q][0] += 1
+				If $RawVal = "" Or $CatLetter = "B" Then
+					$QuarterStats[$q][1] += 1
+					$WorkDays += 1
+				EndIf
+				$TotalDays += 1
+				$i += 1
+				ContinueLoop
+			EndIf
+			#ce
 
 			Local $CatIndex = 6
 			If $CatLetter = "O" Then $CatIndex = 0
@@ -58,7 +77,9 @@ Func GenerateWorkdaysReportHTML($Year)
 			If $CatLetter = "P" Then $CatIndex = 3
 			If $CatLetter = "T" Then $CatIndex = 4
 			If $CatLetter = "S" Then $CatIndex = 5
-			If $CatLetter = "B" Or $CatLetter = "W" Or $RawVal = "" Then $CatIndex = 7
+			If $CatLetter = "B" Then $CatIndex = 7
+			If $CatLetter = "W" Then $CatIndex = 7
+			If $RawVal = "" Then $CatIndex = 7
 
 			If $CatIndex = 6 And $Note = "" Then
 				$i += 1
@@ -66,9 +87,13 @@ Func GenerateWorkdaysReportHTML($Year)
 			EndIf
 
 			$CategoryCount[$q][$CatIndex] += 1
+			ConsoleWrite($Note & @CRLF)
 			If $Note <> "" Then
+;~ 				ConsoleWrite($Note & @CRLF)
 				If StringInStr($Note,"/n",0,1) Then
+;~ 					MsgBox(262144,"",$Note)
 					$Note_Splited = StringSplit($Note,"/n",1)
+					$Count_Note = 1
 					For $Count_Note = 1 To $Note_Splited[0]
 						If $Count_Note = 1 Then
 							If $Note_Splited[$Count_Note] <> "" Then
@@ -76,21 +101,24 @@ Func GenerateWorkdaysReportHTML($Year)
 							EndIf
 						Else
 							If $Note_Splited[$Count_Note] <> "" Then
+;~ 								$CategoryNotes[$q][$CatIndex] &= "<li><b>_________:</b> " & $Note_Splited[$Count_Note] & "</li>"
 								$CategoryNotes[$q][$CatIndex] &= "<b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:</b> " & $Note_Splited[$Count_Note] & "<br>"
 							EndIf
 						EndIf
+
 					Next
 				Else
 					$CategoryNotes[$q][$CatIndex] &= "<li><b>" & $DateStr & ":</b> " & $Note & "</li>"
 				EndIf
-			Else
+				Else
 				If $CatIndex <> 7 Then
 					$CategoryNotes[$q][$CatIndex] &= "<li>" & $DateStr & "</li>"
 				EndIf
+
 			EndIf
 
 			$QuarterStats[$q][0] += 1
-			If $CatLetter = "O" Or $CatLetter = "R" Or $CatLetter = "T" Or ($CatLetter = "B" And $RawVal <> "") Then
+			If $CatLetter = "O" Or $CatLetter = "R" Or $CatLetter = "T" Then
 				$QuarterStats[$q][1] += 1
 				$WorkDays += 1
 			EndIf
@@ -127,41 +155,25 @@ Func GenerateWorkdaysReportHTML($Year)
 		FileWriteLine($hFile, "<h2>Quarter " & ($q + 1) & "</h2>")
 		FileWriteLine($hFile, "<div class='qstat'><b>Total Days:</b> " & $QuarterStats[$q][0] & "<br><b>Work Days:</b> " & $QuarterStats[$q][1] & "<br><b>Ratio:</b> " & Round($QuarterStats[$q][4] / Ceiling($QuarterStats[$q][1] / 5), 2) & "<br><b>Estimated OnSite:</b> " & $QuarterStats[$q][3] & "<br><b>Real On-Site:</b> " & $QuarterStats[$q][4] & "<br><b>Remaining:</b> " & $QuarterStats[$q][5] & "</div>")
 		If $Full = 1 Then
-			FileWriteLine($hFile, "<table><tr><th>Category</th><th>Count</th><th>Dates & Notes</th></tr>")
+		FileWriteLine($hFile, "<table><tr><th>Category</th><th>Count</th><th>Dates & Notes</th></tr>")
 		Else
-			FileWriteLine($hFile, "<table><tr><th>Category</th><th>Count</th></tr>")
+		FileWriteLine($hFile, "<table><tr><th>Category</th><th>Count</th></tr>")
 		EndIf
 		For $c = 0 To 7
 			If $CategoryCount[$q][$c] = 0 Then ContinueLoop
 			FileWriteLine($hFile, "<tr style='background-color:" & $Colors[$c] & ";'><td><b>" & $CatNames[$c] & "</b></td><td>" & $CategoryCount[$q][$c] & "</td>")
 			If $Full = 1 Then
-				If $CategoryNotes[$q][$c] <> "" Then
-					FileWriteLine($hFile, "<td><ul>" & $CategoryNotes[$q][$c] & "</ul></td></tr>")
-				Else
-					FileWriteLine($hFile, "<td>No details listed</td></tr>")
-				EndIf
+			If $CategoryNotes[$q][$c] <> "" Then
+;~ 				ConsoleWrite( $CategoryNotes[$q][$c] & @CRLF)
+
+				FileWriteLine($hFile, "<td><ul>" & $CategoryNotes[$q][$c] & "</ul></td></tr>")
+			Else
+				FileWriteLine($hFile, "<td>No details listed</td></tr>")
+			EndIf
 			EndIf
 		Next
 		FileWriteLine($hFile, "</table>")
 	Next
-
-	; >>>> RESUMO ANUAL ADICIONADO AQUI <<<<
-	Local $YearlyTotals[8] = [0,0,0,0,0,0,0,0]
-	For $q = 0 To 3
-		For $c = 0 To 7
-			$YearlyTotals[$c] += $CategoryCount[$q][$c]
-		Next
-	Next
-
-	FileWriteLine($hFile, "<h2>Yearly Summary</h2>")
-	FileWriteLine($hFile, "<table><tr><th>Category</th><th>Total Count</th></tr>")
-	For $c = 0 To 7
-		If $YearlyTotals[$c] > 0 Then
-			FileWriteLine($hFile, "<tr style='background-color:" & $Colors[$c] & ";'><td><b>" & $CatNames[$c] & "</b></td><td>" & $YearlyTotals[$c] & "</td></tr>")
-		EndIf
-	Next
-	FileWriteLine($hFile, "</table>")
-	; <<<< FIM DO RESUMO ANUAL
 
 	FileWriteLine($hFile, "<p style='color:gray;font-size:small;'>Generated on " & @YEAR & "/" & @MON & "/" & @MDAY & " at " & @HOUR & ":" & @MIN & "</p>")
 	FileWriteLine($hFile, "<p style='color:gray;font-size:small;'>Develop by Fabricio Zambroni - Version: " & FileGetVersion(@ScriptFullPath) & "</p>")

@@ -36,18 +36,19 @@ Opt("TrayAutoPause", 0)
 #include <ColorChooser.au3>
 #include <ColorPicker.au3>
 #include <WinAPI.au3>
+#include <FontConstants.au3>
 #include "GenerateWorkdaysReportHTML.au3"
 
 Global $About = "1.0.1.3 - Custom colors and bug fixes" & @CRLF _
-& "1.0.1.4 - Code polishing and new custom color palette" & @CRLF _
-& "1.0.1.5 - Bug Fixes and improvements" & @CRLF _
-& "1.0.1.6 - Bug Fixes and improvements" & @CRLF _
-& "1.0.1.7 - KPI Bug Fixes" & @CRLF _
-& "1.0.1.8 - Today custom color option" & @CRLF _
-& "1.0.1.9 - Report Functionality" & @CRLF _
-& "1.0.2.0 - Bug Fix" & @CRLF _
-& "1.0.2.1 - Bug Fix" & @CRLF _
-& "1.0.2.2 - Report and Tag Multiline"
+		 & "1.0.1.4 - Code polishing and new custom color palette" & @CRLF _
+		 & "1.0.1.5 - Bug Fixes and improvements" & @CRLF _
+		 & "1.0.1.6 - Bug Fixes and improvements" & @CRLF _
+		 & "1.0.1.7 - KPI Bug Fixes" & @CRLF _
+		 & "1.0.1.8 - Today custom color option" & @CRLF _
+		 & "1.0.1.9 - Report Functionality" & @CRLF _
+		 & "1.0.2.0 - Bug Fix" & @CRLF _
+		 & "1.0.2.1 - Bug Fix" & @CRLF _
+		 & "1.0.2.2 - Report and Tag Multiline"
 
 Global $IniSection[999][999]
 Global $LabelMonth[99999]
@@ -200,15 +201,17 @@ $Group1 = GUICtrlCreateGroup("", 288, 8, 270, 200)
 $Input_SelDate = GUICtrlCreateInput("", 376, 24, 70, 21, $ES_READONLY)
 GUICtrlSetData($Input_SelDate, GUICtrlRead($Calendar))
 GUICtrlSetColor($Input_SelDate, 0x990000)
+GUICtrlSetState($Input_SelDate, $gui_disable)
 
 $Label1 = GUICtrlCreateLabel("Selected Date:", 296, 28, 75, 17)
 $Input_Quarter = GUICtrlCreateInput("", 450, 24, 20, 21, $ES_READONLY)
 GUICtrlSetColor($Input_Quarter, 0x00994C)
+GUICtrlSetState($Input_Quarter, $gui_disable)
 
 $Input_Tag = GUICtrlCreateInput("", 296, 54, 175, 21) ;, $ES_READONLY)
 
 $Button_CalendtarTag = GUICtrlCreateButton("Tag", 472, 52, 75, 25) ;## Calendar TAG
-GUICtrlSetTip($Button_CalendtarTag,"Use /n as linebreak.")
+GUICtrlSetTip($Button_CalendtarTag, "Use /n as linebreak.")
 $Button_OnSite = GUICtrlCreateButton("&On Site", 296, 84, 75, 25)
 GUICtrlSetBkColor($Button_OnSite, $Color_bk_OnSite)
 GUICtrlSetColor($Button_OnSite, $Font_OnSite)
@@ -268,20 +271,20 @@ $Label_1_q1 = GUICtrlCreateLabel("Total Days:", 571, 30, 79, 21, $SS_RIGHT)
 $Label_2_q1 = GUICtrlCreateLabel("Work Days:", 571, 50, 79, 21, $SS_RIGHT)
 $Label_3_q1 = GUICtrlCreateLabel("Ratio:", 571, 70, 79, 21, $SS_RIGHT)
 $Label_ratio_q1 = GUICtrlCreateLabel("Ratio to Date:", 571, 89, 79, 16, $SS_RIGHT)
-GUICtrlSetColor($Label_ratio_q1, 0x0066CC)
+;~ GUICtrlSetColor($Label_ratio_q1, 0x0066CC)
 
 $Label_4_q1 = GUICtrlCreateLabel("Estim.On-Site:", 700, 30, 65, 21, $SS_RIGHT)
 $Label_5_q1 = GUICtrlCreateLabel("Real On-Site:", 700, 50, 65, 21, $SS_RIGHT)
 $Label_6_q1 = GUICtrlCreateLabel("Remaining:", 700, 70, 65, 21, $SS_RIGHT)
 
-$Input_TD_q1 = GUICtrlCreateInput("", 651, 25, 40, 20, BitOR($ES_CENTER, $ES_READONLY))
-$Input_WD_q1 = GUICtrlCreateInput("", 651, 45, 40, 20, BitOR($ES_CENTER, $ES_READONLY))
-$Input_RT_q1 = GUICtrlCreateInput("", 651, 65, 40, 20, BitOR($ES_CENTER, $ES_READONLY))
-$Input_RaTio_q1 = GUICtrlCreateInput("", 651, 85, 40, 20, BitOR($ES_CENTER, $ES_READONLY))
+$Input_TD_q1 = GUICtrlCreateLabel("", 651, 30, 40, 15, BitOR($ES_CENTER, $ES_READONLY))
+$Input_WD_q1 = GUICtrlCreateLabel("", 651, 50, 40, 15, BitOR($ES_CENTER, $ES_READONLY))
+$Input_RT_q1 = GUICtrlCreateLabel("", 651, 70, 40, 15, BitOR($ES_CENTER, $ES_READONLY))
+$Input_RaTio_q1 = GUICtrlCreateLabel("", 651, 90, 40, 15, BitOR($ES_CENTER, $ES_READONLY))
 
-$Input_E_Onsite_q1 = GUICtrlCreateInput("", 770, 25, 40, 20, BitOR($ES_CENTER, $ES_READONLY))
-$Input_R_Onsite_q1 = GUICtrlCreateInput("", 770, 45, 40, 20, BitOR($ES_CENTER, $ES_READONLY))
-$Input_Remaining_q1 = GUICtrlCreateInput("", 770, 65, 40, 20, BitOR($ES_CENTER, $ES_READONLY))
+$Input_E_Onsite_q1 = GUICtrlCreateLabel("", 770, 30, 40, 15, BitOR($ES_CENTER, $ES_READONLY))
+$Input_R_Onsite_q1 = GUICtrlCreateLabel("", 770, 50, 40, 15, BitOR($ES_CENTER, $ES_READONLY))
+$Input_Remaining_q1 = GUICtrlCreateLabel("", 770, 70, 40, 15, BitOR($ES_CENTER, $ES_READONLY))
 
 GUICtrlCreateGroup("", -99, -99, 1, 1)
 
@@ -291,20 +294,21 @@ $Label_1_q2 = GUICtrlCreateLabel("Total Days:", 856, 30, 79, 21, $SS_RIGHT)
 $Label_2_q2 = GUICtrlCreateLabel("Work Days:", 856, 50, 79, 21, $SS_RIGHT)
 $Label_3_q2 = GUICtrlCreateLabel("Ratio:", 856, 70, 79, 21, $SS_RIGHT)
 $Label_Ratio_q2 = GUICtrlCreateLabel("Ratio to Date:", 856, 90, 79, 16, $SS_RIGHT)
-GUICtrlSetColor($Label_Ratio_q2, 0x0066CC)
+;~ GUICtrlSetColor($Label_Ratio_q2, 0x0066CC)
 
 $Label_4_q2 = GUICtrlCreateLabel("Estim.On-Site:", 985, 30, 65, 21, $SS_RIGHT)
 $Label_5_q2 = GUICtrlCreateLabel("Real On-Site:", 985, 50, 65, 21, $SS_RIGHT)
 $Label_6_q2 = GUICtrlCreateLabel("Remaining:", 985, 70, 65, 21, $SS_RIGHT)
 
-$Input_TD_q2 = GUICtrlCreateInput("", 936, 25, 40, 20, BitOR($ES_CENTER, $ES_READONLY))
-$Input_WD_q2 = GUICtrlCreateInput("", 936, 45, 40, 20, BitOR($ES_CENTER, $ES_READONLY))
-$Input_RT_q2 = GUICtrlCreateInput("", 936, 65, 40, 20, BitOR($ES_CENTER, $ES_READONLY))
-$Input_RaTio_q2 = GUICtrlCreateInput("", 936, 85, 40, 20, BitOR($ES_CENTER, $ES_READONLY))
+$Input_TD_q2 = GUICtrlCreateLabel("", 936, 30, 40, 15, BitOR($ES_CENTER, $ES_READONLY))
+$Input_WD_q2 = GUICtrlCreateLabel("", 936, 50, 40, 15, BitOR($ES_CENTER, $ES_READONLY))
+$Input_RT_q2 = GUICtrlCreateLabel("", 936, 70, 40, 15, BitOR($ES_CENTER, $ES_READONLY))
+$Input_RaTio_q2 = GUICtrlCreateLabel("", 936, 90, 40, 15, BitOR($ES_CENTER, $ES_READONLY))
 
-$Input_E_Onsite_q2 = GUICtrlCreateInput("", 1055, 25, 40, 20, BitOR($ES_CENTER, $ES_READONLY))
-$Input_R_Onsite_q2 = GUICtrlCreateInput("", 1055, 45, 40, 20, BitOR($ES_CENTER, $ES_READONLY))
-$Input_Remaining_q2 = GUICtrlCreateInput("", 1055, 65, 40, 20, BitOR($ES_CENTER, $ES_READONLY))
+$Input_E_Onsite_q2 = GUICtrlCreateLabel("", 1055, 30, 40, 15, BitOR($ES_CENTER, $ES_READONLY))
+$Input_R_Onsite_q2 = GUICtrlCreateLabel("", 1055, 50, 40, 15, BitOR($ES_CENTER, $ES_READONLY))
+;~ $Input_Remaining_q2 = GUICtrlCreateInput("", 1055, 65, 40, 20, BitOR($ES_CENTER, $ES_READONLY))
+$Input_Remaining_q2 = GUICtrlCreateLabel("", 1055, 70, 40, 15, BitOR($ES_CENTER, $ES_READONLY))
 
 GUICtrlCreateGroup("", -99, -99, 1, 1)
 
@@ -314,20 +318,20 @@ $Label_1_q3 = GUICtrlCreateLabel("Total Days:", 571, 130, 79, 21, $SS_RIGHT)
 $Label_2_q3 = GUICtrlCreateLabel("Work Days:", 571, 150, 79, 21, $SS_RIGHT)
 $Label_3_q3 = GUICtrlCreateLabel("Ratio:", 571, 170, 79, 21, $SS_RIGHT)
 $Label_Ratio_q3 = GUICtrlCreateLabel("Ratio to Date:", 571, 190, 79, 16, $SS_RIGHT)
-GUICtrlSetColor($Label_Ratio_q3, 0x0066CC)
+;~ GUICtrlSetColor($Label_Ratio_q3, 0x0066CC)
 
 $Label_4_q3 = GUICtrlCreateLabel("Estim.On-Site:", 700, 130, 65, 21, $SS_RIGHT)
 $Label_5_q3 = GUICtrlCreateLabel("Real On-Site:", 700, 150, 65, 21, $SS_RIGHT)
 $Label_6_q3 = GUICtrlCreateLabel("Remaining:", 700, 170, 65, 21, $SS_RIGHT)
 
-$Input_TD_q3 = GUICtrlCreateInput("", 651, 125, 40, 20, BitOR($ES_CENTER, $ES_READONLY))
-$Input_WD_q3 = GUICtrlCreateInput("", 651, 145, 40, 20, BitOR($ES_CENTER, $ES_READONLY))
-$Input_RT_q3 = GUICtrlCreateInput("", 651, 165, 40, 20, BitOR($ES_CENTER, $ES_READONLY))
-$Input_RaTio_q3 = GUICtrlCreateInput("", 651, 185, 40, 20, BitOR($ES_CENTER, $ES_READONLY))
+$Input_TD_q3 = GUICtrlCreateLabel("", 651, 130, 40, 15, BitOR($ES_CENTER, $ES_READONLY))
+$Input_WD_q3 = GUICtrlCreateLabel("", 651, 150, 40, 15, BitOR($ES_CENTER, $ES_READONLY))
+$Input_RT_q3 = GUICtrlCreateLabel("", 651, 170, 40, 15, BitOR($ES_CENTER, $ES_READONLY))
+$Input_RaTio_q3 = GUICtrlCreateLabel("", 651, 190, 40, 15, BitOR($ES_CENTER, $ES_READONLY))
 
-$Input_E_Onsite_q3 = GUICtrlCreateInput("", 770, 125, 40, 20, BitOR($ES_CENTER, $ES_READONLY))
-$Input_R_Onsite_q3 = GUICtrlCreateInput("", 770, 145, 40, 20, BitOR($ES_CENTER, $ES_READONLY))
-$Input_Remaining_q3 = GUICtrlCreateInput("", 770, 165, 40, 20, BitOR($ES_CENTER, $ES_READONLY))
+$Input_E_Onsite_q3 = GUICtrlCreateLabel("", 770, 130, 40, 15, BitOR($ES_CENTER, $ES_READONLY))
+$Input_R_Onsite_q3 = GUICtrlCreateLabel("", 770, 150, 40, 15, BitOR($ES_CENTER, $ES_READONLY))
+$Input_Remaining_q3 = GUICtrlCreateLabel("", 770, 170, 40, 15, BitOR($ES_CENTER, $ES_READONLY))
 
 GUICtrlCreateGroup("", -99, -99, 1, 1)
 
@@ -337,20 +341,20 @@ $Label_1_q4 = GUICtrlCreateLabel("Total Days:", 856, 130, 79, 21, $SS_RIGHT)
 $Label_2_q4 = GUICtrlCreateLabel("Work Days:", 856, 150, 79, 21, $SS_RIGHT)
 $Label_3_q4 = GUICtrlCreateLabel("Ratio:", 856, 170, 79, 21, $SS_RIGHT)
 $Label_Ratio_q4 = GUICtrlCreateLabel("Ratio to Date:", 856, 190, 79, 16, $SS_RIGHT)
-GUICtrlSetColor($Label_Ratio_q4, 0x0066CC)
+;~ GUICtrlSetColor($Label_Ratio_q4, 0x0066CC)
 
 $Label_4_q4 = GUICtrlCreateLabel("Estim.On-Site:", 985, 130, 65, 21, $SS_RIGHT)
 $Label_5_q4 = GUICtrlCreateLabel("Real On-Site:", 985, 150, 65, 21, $SS_RIGHT)
 $Label_6_q4 = GUICtrlCreateLabel("Remaining:", 985, 170, 65, 21, $SS_RIGHT)
 
-$Input_TD_q4 = GUICtrlCreateInput("", 936, 125, 40, 20, BitOR($ES_CENTER, $ES_READONLY))
-$Input_WD_q4 = GUICtrlCreateInput("", 936, 145, 40, 20, BitOR($ES_CENTER, $ES_READONLY))
-$Input_RT_q4 = GUICtrlCreateInput("", 936, 165, 40, 20, BitOR($ES_CENTER, $ES_READONLY))
-$Input_RaTio_q4 = GUICtrlCreateInput("", 936, 185, 40, 20, BitOR($ES_CENTER, $ES_READONLY))
+$Input_TD_q4 = GUICtrlCreateLabel("", 936, 130, 40, 15, BitOR($ES_CENTER, $ES_READONLY))
+$Input_WD_q4 = GUICtrlCreateLabel("", 936, 150, 40, 15, BitOR($ES_CENTER, $ES_READONLY))
+$Input_RT_q4 = GUICtrlCreateLabel("", 936, 170, 40, 15, BitOR($ES_CENTER, $ES_READONLY))
+$Input_RaTio_q4 = GUICtrlCreateLabel("", 936, 190, 40, 15, BitOR($ES_CENTER, $ES_READONLY))
 
-$Input_E_Onsite_q4 = GUICtrlCreateInput("", 1055, 125, 40, 20, BitOR($ES_CENTER, $ES_READONLY))
-$Input_R_Onsite_q4 = GUICtrlCreateInput("", 1055, 145, 40, 20, BitOR($ES_CENTER, $ES_READONLY))
-$Input_Remaining_q4 = GUICtrlCreateInput("", 1055, 165, 40, 20, BitOR($ES_CENTER, $ES_READONLY))
+$Input_E_Onsite_q4 = GUICtrlCreateLabel("", 1055, 130, 40, 15, BitOR($ES_CENTER, $ES_READONLY))
+$Input_R_Onsite_q4 = GUICtrlCreateLabel("", 1055, 150, 40, 15, BitOR($ES_CENTER, $ES_READONLY))
+$Input_Remaining_q4 = GUICtrlCreateLabel("", 1055, 170, 40, 15, BitOR($ES_CENTER, $ES_READONLY))
 
 
 GUICtrlSetState($Input_RaTio_q1, $gui_hide)
@@ -547,13 +551,15 @@ While 1
 			$iMsgBoxAnswer = MsgBox(262452, "Batch Import", "**WARNING** Importing data will overwrite any existing records. Do you want to proceed?" & @CRLF & @CRLF & "Check the help file for more details.")
 			Select
 				Case $iMsgBoxAnswer = 6 ;Yes
-					$ResetReturn = _ResetDatabase("1")
-					If $ResetReturn = "1" Then
-						_CriaINI(@YEAR)
-						_RestoreBackup()
-					Else
-						MsgBox(262160, "Reset Database", "Oops! Something went wrong. Please try again.")
-					EndIf
+
+					_RestoreBackup()
+;~ 					$ResetReturn = _ResetDatabase("1")
+;~ 					If $ResetReturn = "1" Then
+;~ 						_CriaINI(@YEAR)
+;~ 						_RestoreBackup()
+;~ 					Else
+;~ 						MsgBox(262160, "Reset Database", "Oops! Something went wrong. Please try again.")
+;~ 					EndIf
 					_ClearScreen()
 					_ReadColors()
 					_ReadINI(@YEAR)
@@ -800,54 +806,64 @@ Func _RestoreBackup()
 
 	$HolidaysFile = FileOpenDialog("File to import", @ScriptDir, "All (*.*)", 3, "", $Form_WorkDays)
 	If @error Then
-		MsgBox(262160, "Import", "Oops! Something went wrong. Please try again." & @CRLF & "Error code: " & @error)
+		MsgBox(262160, "Import", "Oops! Something went wrong. Please try again." & @CRLF & "Error code: 1." & @error)
 	Else
 		$FileHolidays_hwd = FileOpen($HolidaysFile, 0)
 		If $FileHolidays_hwd = -1 Then
+			MsgBox(262160, "Import", "Oops! Something went wrong when read the file. Please try again." & @CRLF & "Error code: 2." & @error)
+			Return
 
 		Else
 
-			While 1
-				$HolidaysLine = FileReadLine($FileHolidays_hwd)
-				If @error = -1 Then ExitLoop
-				If @error = 1 Then
-					MsgBox(262160, "Import", "Oops! Something went wrong when read the file. Please try again." & @CRLF & "Error code: " & @error)
-					Return
-				EndIf
-				If Not StringInStr($HolidaysLine, "\") Then
-					If Not StringInStr($HolidaysLine, "=") Then
-						$HolidaysError = $HolidaysError & "Error to import line: " & $HolidaysLine & @CRLF
+			$ResetReturn = _ResetDatabase("1")
+			If $ResetReturn = "1" Then
+				_CriaINI(@YEAR)
+				While 1
+					$HolidaysLine = FileReadLine($FileHolidays_hwd)
+					If @error = -1 Then ExitLoop
+					If @error = 1 Then
+						MsgBox(262160, "Import", "Oops! Something went wrong when read the file. Please try again." & @CRLF & "Error code: 3." & @error)
+						Return
+					EndIf
+					If Not StringInStr($HolidaysLine, "\") Then
+						If Not StringInStr($HolidaysLine, "=") Then
+							$HolidaysError = $HolidaysError & "Error to import line: " & $HolidaysLine & @CRLF
+						Else
+							$HolidaysLine_Setting = StringSplit($HolidaysLine, "=")
+							$RegError = RegWrite($DB, $HolidaysLine_Setting[1], "REG_SZ", $HolidaysLine_Setting[2])
+							If @error Then
+								$HolidaysError = $HolidaysError & "Error to import line: " & $HolidaysLine & @CRLF
+							Else
+								$ImportCount += 1
+							EndIf
+						EndIf
 					Else
-						$HolidaysLine_Setting = StringSplit($HolidaysLine, "=")
-						$RegError = RegWrite($DB, $HolidaysLine_Setting[1], "REG_SZ", $HolidaysLine_Setting[2])
+						$HolidaysLine_key = StringSplit($HolidaysLine, "\")
+						$HolidaysLine_Value = StringSplit($HolidaysLine_key[3], "=")
+						$RegError = RegWrite($DB & "\" & $HolidaysLine_key[1] & "\" & $HolidaysLine_key[2], $HolidaysLine_Value[1], "REG_SZ", $HolidaysLine_Value[2])
 						If @error Then
 							$HolidaysError = $HolidaysError & "Error to import line: " & $HolidaysLine & @CRLF
 						Else
 							$ImportCount += 1
 						EndIf
 					EndIf
+
+				WEnd
+
+				If $HolidaysError <> "" Then
+					MsgBox(262160, "Import", "Oops! Something went wrong when read the file." & @CRLF & "The following lines was not imported:" & @CRLF & @CRLF & $HolidaysError & @CRLF & @CRLF & "The following lines was imported:" & @CRLF & @CRLF & $HolidaysSucess)
 				Else
-					$HolidaysLine_key = StringSplit($HolidaysLine, "\")
-					$HolidaysLine_Value = StringSplit($HolidaysLine_key[3], "=")
-					$RegError = RegWrite($DB & "\" & $HolidaysLine_key[1] & "\" & $HolidaysLine_key[2], $HolidaysLine_Value[1], "REG_SZ", $HolidaysLine_Value[2])
-					If @error Then
-						$HolidaysError = $HolidaysError & "Error to import line: " & $HolidaysLine & @CRLF
+					If $ImportCount > 15 Then
+						MsgBox(262208, "Import", "**Success!** The command was executed successfully." & @CRLF & @CRLF & $ImportCount & " lines imported.")
 					Else
-						$ImportCount += 1
+						MsgBox(262208, "Import", "**Success!** The command was executed successfully." & @CRLF & "The following lines was imported:" & @CRLF & @CRLF & $HolidaysSucess)
 					EndIf
 				EndIf
 
-			WEnd
-
-			If $HolidaysError <> "" Then
-				MsgBox(262160, "Import", "Oops! Something went wrong when read the file." & @CRLF & "The following lines was not imported:" & @CRLF & @CRLF & $HolidaysError & @CRLF & @CRLF & "The following lines was imported:" & @CRLF & @CRLF & $HolidaysSucess)
 			Else
-				If $ImportCount > 15 Then
-					MsgBox(262208, "Import", "**Success!** The command was executed successfully." & @CRLF & @CRLF & $ImportCount & " lines imported.")
-				Else
-					MsgBox(262208, "Import", "**Success!** The command was executed successfully." & @CRLF & "The following lines was imported:" & @CRLF & @CRLF & $HolidaysSucess)
-				EndIf
+				MsgBox(262160, "Reset Database", "Oops! Something went wrong. Please try again.")
 			EndIf
+
 		EndIf
 
 	EndIf
@@ -886,7 +902,7 @@ Func _Update($SelDate)
 
 	GUICtrlSetData($Inputs[$Data_day][$Data_month], $Data_Register)
 ;~ 	GUICtrlSetTip($Inputs[$Data_day][$Data_month], $WeekDayName & " - " & $Data_year & "/" & $Data_month & "/" & $Data_day & StringReplace($tip,"/n",@CRLF & "- "))
-	GUICtrlSetTip($Inputs[$Data_day][$Data_month], StringReplace($tip,"/n",@CRLF & "-"),$WeekDayName & " - " & $Data_year & "/" & $Data_month & "/" & $Data_day)
+	GUICtrlSetTip($Inputs[$Data_day][$Data_month], StringReplace($tip, "/n", @CRLF & "-"), $WeekDayName & " - " & $Data_year & "/" & $Data_month & "/" & $Data_day)
 	If $tip <> "" Then
 		GUICtrlSetFont($Inputs[$Data_day][$Data_month], 9, 900, 6, "", 2)
 	Else
@@ -969,7 +985,7 @@ Func _Update($SelDate)
 			GUICtrlSetFont($Inputs[$Data_day][$Data_month], 9, 100, 0, "", 2)
 		EndIf
 
-		GUICtrlSetTip($Inputs[$Data_day][$Data_month], StringReplace($tip,"/n",@CRLF & "-"),$WeekDayName & " - " & $Data_year & "/" & $Data_month & "/" & $Data_day & " - TODAY")
+		GUICtrlSetTip($Inputs[$Data_day][$Data_month], StringReplace($tip, "/n", @CRLF & "-"), $WeekDayName & " - " & $Data_year & "/" & $Data_month & "/" & $Data_day & " - TODAY")
 ;~ 		GUICtrlSetTip($Inputs[$Data_day][$Data_month], $WeekDayName & " - " & $Data_year & "/" & $Data_month & "/" & $Data_day & " - TODAY" & StringReplace($tip,"/n",@CRLF & "- "))
 		If $Data_Register = "" Then
 			$Data_Register = "X"
@@ -1761,6 +1777,42 @@ Func _ReadStatistics($Year)
 	GUICtrlSetData($Input_RT_q4, $Ratio_R_Q4)
 	GUICtrlSetBkColor($Input_RT_q4, _GetColorGradient($Ratio_R_Q4))
 
+;~ 	GUICtrlSetState($Input_RT_q1,$gui_disable)
+;~ 	GUICtrlSetState($Input_RT_q2,$gui_disable)
+;~ 	GUICtrlSetState($Input_RT_q3,$gui_disable)
+;~ 	GUICtrlSetState($Input_RT_q4,$gui_disable)
+
+
+
+;~ 	GUICtrlSetState($Input_E_Onsite_q1,$gui_disable)
+;~ 	GUICtrlSetState($Input_E_Onsite_q2,$gui_disable)
+;~ 	GUICtrlSetState($Input_E_Onsite_q3,$gui_disable)
+;~ 	GUICtrlSetState($Input_E_Onsite_q4,$gui_disable)
+
+
+;~ 	GUICtrlSetState($Input_R_Onsite_q1,$gui_disable)
+;~ 	GUICtrlSetState($Input_R_Onsite_q2,$gui_disable)
+;~ 	GUICtrlSetState($Input_R_Onsite_q3,$gui_disable)
+;~ 	GUICtrlSetState($Input_R_Onsite_q4,$gui_disable)
+
+;~ 	GUICtrlSetState($Input_Remaining_q1,$gui_disable)
+;~ 	GUICtrlSetState($Input_Remaining_q2,$gui_disable)
+;~ 	GUICtrlSetState($Input_Remaining_q3,$gui_disable)
+;~ 	GUICtrlSetState($Input_Remaining_q4,$gui_disable)
+
+;~ 	GUICtrlSetState($Input_TD_q1,$gui_disable)
+;~ 	GUICtrlSetState($Input_TD_q2,$gui_disable)
+;~ 	GUICtrlSetState($Input_TD_q3,$gui_disable)
+;~ 	GUICtrlSetState($Input_TD_q4,$gui_disable)
+
+;~ 	GUICtrlSetColor ( $Input_TD_q1, 0xFFFFFF )
+
+;~ 	GUICtrlSetFont($Input_TD_q1,8.5, $FW_BOLD)
+
+;~ 	GUICtrlSetState($Input_WD_q1,$gui_disable)
+;~ 	GUICtrlSetState($Input_WD_q2,$gui_disable)
+;~ 	GUICtrlSetState($Input_WD_q3,$gui_disable)
+;~ 	GUICtrlSetState($Input_WD_q4,$gui_disable)
 
 	$Ratio_Q1 = Round(($Counta_R_Onsite_Quarter_Q1 / Ceiling($Counta_WD_Quarter_Q1 / 5)), 2)
 	$Ratio_Q2 = Round(($Counta_R_Onsite_Quarter_Q2 / Ceiling($Counta_WD_Quarter_Q2 / 5)), 2)
@@ -1772,29 +1824,44 @@ Func _ReadStatistics($Year)
 	GUICtrlSetData($Input_RaTio_q3, "")
 	GUICtrlSetData($Input_RaTio_q4, "")
 
-;~ 	ConsoleWrite("$Counta_R_Onsite_Quarter_Q1: " & $Counta_R_Onsite_Quarter_Q1 & @CRLF)
-;~ 	ConsoleWrite("$Counta_WD_Quarter_Q1: " & $Counta_WD_Quarter_Q1 & @CRLF)
-;~ 	ConsoleWrite("Ratio: " & ($Counta_R_Onsite_Quarter_Q1 / Ceiling($Counta_WD_Quarter_Q1 / 5)) & @CRLF)
+	ConsoleWrite(@CRLF & _
+			"Dias úteis em Q2 (total): " & $Counta_WD_q2 & @CRLF & _
+			"Dias úteis em Q2 (to date): " & $Counta_WD_Quarter_Q2 & @CRLF & _
+			"Dias on-site Q2 (total): " & $Counta_R_Onsite_q2 & @CRLF & _
+			"Dias on-site Q2 (to date): " & $Counta_R_Onsite_Quarter_Q2 & @CRLF & _
+			"Ratio Q2 (total): " & $Ratio_R_Q2 & @CRLF & _
+			"Ratio Q2 (to date): " & $Ratio_Q2)
+
+
+
 
 	If $Year = @YEAR Then
 		If @MON = "01" Or @MON = "02" Or @MON = "03" Then
 			GUICtrlSetData($Input_RaTio_q1, $Ratio_Q1)
 			GUICtrlSetBkColor($Input_RaTio_q1, _GetColorGradient($Ratio_Q1))
+;~ 			GUICtrlSetState($Input_RaTio_q1,$gui_disable)
+			GUICtrlSetTip($Input_RaTio_q1, "Work Days to date: " & $Counta_WD_Quarter_Q1)
 		EndIf
 
 		If @MON = "04" Or @MON = "05" Or @MON = "06" Then
 			GUICtrlSetData($Input_RaTio_q2, $Ratio_Q2)
 			GUICtrlSetBkColor($Input_RaTio_q2, _GetColorGradient($Ratio_Q2))
+;~ 			GUICtrlSetState($Input_RaTio_q2,$gui_disable)
+			GUICtrlSetTip($Input_RaTio_q2, "Work Days to date: " & $Counta_WD_Quarter_Q2)
 		EndIf
 
 		If @MON = "07" Or @MON = "08" Or @MON = "09" Then
 			GUICtrlSetData($Input_RaTio_q3, $Ratio_Q3)
 			GUICtrlSetBkColor($Input_RaTio_q3, _GetColorGradient($Ratio_Q3))
+;~ 			GUICtrlSetState($Input_RaTio_q3,$gui_disable)
+			GUICtrlSetTip($Input_RaTio_q3, "Work Days to date: " & $Counta_WD_Quarter_Q3)
 		EndIf
 
 		If @MON = "10" Or @MON = "11" Or @MON = "12" Then
 			GUICtrlSetData($Input_RaTio_q4, $Ratio_Q4)
 			GUICtrlSetBkColor($Input_RaTio_q4, _GetColorGradient($Ratio_Q4))
+;~ 			GUICtrlSetState($Input_RaTio_q4,$gui_disable)
+			GUICtrlSetTip($Input_RaTio_q4, "Work Days to date: " & $Counta_WD_Quarter_Q4)
 		EndIf
 	EndIf
 
@@ -1894,7 +1961,7 @@ Func _ReadINI($Year)
 				EndIf
 
 ;~ 				GUICtrlSetTip($Inputs[$i][$j], $WeekDayName & " - " & $Year & "/" & $X & "/" & $n & StringReplace($tip,"/n",@CRLF & "- "))
-				GUICtrlSetTip($Inputs[$i][$j], StringReplace($tip,"/n",@CRLF & "-"),$WeekDayName & " - " & $Year & "/" & $X & "/" & $n)
+				GUICtrlSetTip($Inputs[$i][$j], StringReplace($tip, "/n", @CRLF & "-"), $WeekDayName & " - " & $Year & "/" & $X & "/" & $n)
 
 				If $Status = "B" Then
 					If $tip <> "" Then
@@ -1998,7 +2065,7 @@ Func _ReadINI($Year)
 				If $Year & "/" & $X & "/" & $n = @YEAR & "/" & @MON & "/" & @MDAY Then
 
 ;~ 					GUICtrlSetTip($Inputs[$i][$j], $WeekDayName & " - " & $Year & "/" & $X & "/" & $n & " - TODAY" & StringReplace($tip,"/n",@CRLF & "- "))
-					GUICtrlSetTip($Inputs[$i][$j], StringReplace($tip,"/n",@CRLF & "-"),$WeekDayName & " - " & $Year & "/" & $X & "/" & $n & " - TODAY")
+					GUICtrlSetTip($Inputs[$i][$j], StringReplace($tip, "/n", @CRLF & "-"), $WeekDayName & " - " & $Year & "/" & $X & "/" & $n & " - TODAY")
 					GUICtrlSetState($TodayLabel[$i][$j], $gui_show)
 
 
@@ -2029,17 +2096,49 @@ Func _CheckQuarter()
 	GUICtrlSetBkColor($Input_Remaining_q3, 0xFFFFFF)
 	GUICtrlSetBkColor($Input_Remaining_q4, 0xFFFFFF)
 
+	GUICtrlSetColor($Input_Remaining_q1, 0x000000)
+	GUICtrlSetColor($Input_Remaining_q2, 0x000000)
+	GUICtrlSetColor($Input_Remaining_q3, 0x000000)
+	GUICtrlSetColor($Input_Remaining_q4, 0x000000)
+
 	If $Ratio_R_Q1 > 0 Or $Ratio_R_Q1 < 0 Then
 		GUICtrlSetBkColor($Input_Remaining_q1, _GetColorFromValue($Remaining_q1))
+		If $Ratio_R_Q1 > 2.99 Then
+			GUICtrlSetBkColor($Input_Remaining_q1, 0x009900)
+			GUICtrlSetColor($Input_Remaining_q1, $Color_bk_Blank)
+		Else
+			GUICtrlSetColor($Input_Remaining_q1, $Color_bk_Black)
+		EndIf
 	EndIf
+
 	If $Ratio_R_Q2 > 0 Or $Ratio_R_Q2 < 0 Then
 		GUICtrlSetBkColor($Input_Remaining_q2, _GetColorFromValue($Remaining_q2))
+		If $Ratio_R_Q2 > 2.99 Then
+			GUICtrlSetBkColor($Input_Remaining_q2, 0x009900)
+			GUICtrlSetColor($Input_Remaining_q2, $Color_bk_Blank)
+		Else
+			GUICtrlSetColor($Input_Remaining_q2, $Color_bk_Black)
+		EndIf
 	EndIf
+
 	If $Ratio_R_Q3 > 0 Or $Ratio_R_Q3 < 0 Then
 		GUICtrlSetBkColor($Input_Remaining_q3, _GetColorFromValue($Remaining_q3))
+		If $Ratio_R_Q3 > 2.99 Then
+			GUICtrlSetBkColor($Input_Remaining_q3, 0x009900)
+			GUICtrlSetColor($Input_Remaining_q3, $Color_bk_Blank)
+		Else
+			GUICtrlSetColor($Input_Remaining_q3, $Color_bk_Black)
+		EndIf
 	EndIf
+
 	If $Ratio_R_Q4 > 0 Or $Ratio_R_Q4 < 0 Then
 		GUICtrlSetBkColor($Input_Remaining_q4, _GetColorFromValue($Remaining_q4))
+		If $Ratio_R_Q4 > 2.99 Then
+			GUICtrlSetBkColor($Input_Remaining_q4, 0x009900)
+			GUICtrlSetColor($Input_Remaining_q4, $Color_bk_Blank)
+		Else
+			GUICtrlSetColor($Input_Remaining_q4, $Color_bk_Black)
+		EndIf
 	EndIf
 
 ;~ 	ConsoleWrite("$Ratio_Q1: " & $Ratio_Q1 & @CRLF)
@@ -2051,14 +2150,14 @@ Func _CheckQuarter()
 	If $SelDate_slipt[1] = @YEAR Then
 
 		If @MON = "01" Or @MON = "02" Or @MON = "03" Then
-			GUICtrlSetData($Label_3_q1, "Ratio:")
-			GUICtrlSetColor($Label_3_q1, $Color_bk_Black)
-			GUICtrlSetData($Label_3_q2, "Ratio:")
-			GUICtrlSetColor($Label_3_q2, $Color_bk_Black)
-			GUICtrlSetData($Label_3_q3, "Ratio:")
-			GUICtrlSetColor($Label_3_q3, $Color_bk_Black)
-			GUICtrlSetData($Label_3_q4, "Ratio:")
-			GUICtrlSetColor($Label_3_q4, $Color_bk_Black)
+;~ 			GUICtrlSetData($Label_3_q1, "Ratio:")
+;~ 			GUICtrlSetColor($Label_3_q1, $Color_bk_Black)
+;~ 			GUICtrlSetData($Label_3_q2, "Ratio:")
+;~ 			GUICtrlSetColor($Label_3_q2, $Color_bk_Black)
+;~ 			GUICtrlSetData($Label_3_q3, "Ratio:")
+;~ 			GUICtrlSetColor($Label_3_q3, $Color_bk_Black)
+;~ 			GUICtrlSetData($Label_3_q4, "Ratio:")
+;~ 			GUICtrlSetColor($Label_3_q4, $Color_bk_Black)
 
 			GUICtrlSetState($Label_ratio_q1, $gui_show)
 			GUICtrlSetState($Label_Ratio_q2, $gui_hide)
@@ -2079,14 +2178,14 @@ Func _CheckQuarter()
 		EndIf
 
 		If @MON = "04" Or @MON = "05" Or @MON = "06" Then
-			GUICtrlSetData($Label_3_q1, "Ratio:")
-			GUICtrlSetColor($Label_3_q1, $Color_bk_Black)
-			GUICtrlSetData($Label_3_q2, "Ratio:")
-			GUICtrlSetColor($Label_3_q2, $Color_bk_Black)
-			GUICtrlSetData($Label_3_q3, "Ratio:")
-			GUICtrlSetColor($Label_3_q3, $Color_bk_Black)
-			GUICtrlSetData($Label_3_q4, "Ratio:")
-			GUICtrlSetColor($Label_3_q4, $Color_bk_Black)
+;~ 			GUICtrlSetData($Label_3_q1, "Ratio:")
+;~ 			GUICtrlSetColor($Label_3_q1, $Color_bk_Black)
+;~ 			GUICtrlSetData($Label_3_q2, "Ratio:")
+;~ 			GUICtrlSetColor($Label_3_q2, $Color_bk_Black)
+;~ 			GUICtrlSetData($Label_3_q3, "Ratio:")
+;~ 			GUICtrlSetColor($Label_3_q3, $Color_bk_Black)
+;~ 			GUICtrlSetData($Label_3_q4, "Ratio:")
+;~ 			GUICtrlSetColor($Label_3_q4, $Color_bk_Black)
 
 			GUICtrlSetState($Label_ratio_q1, $gui_hide)
 			GUICtrlSetState($Label_Ratio_q2, $gui_show)
@@ -2106,14 +2205,14 @@ Func _CheckQuarter()
 		EndIf
 
 		If @MON = "07" Or @MON = "08" Or @MON = "09" Then
-			GUICtrlSetData($Label_3_q1, "Ratio:")
-			GUICtrlSetBkColor($Label_3_q1, $Color_bk_Black)
-			GUICtrlSetData($Label_3_q2, "Ratio:")
-			GUICtrlSetBkColor($Label_3_q2, $Color_bk_Black)
-			GUICtrlSetData($Label_3_q3, "Ratio:")
-			GUICtrlSetBkColor($Label_3_q3, $Color_bk_Black)
-			GUICtrlSetData($Label_3_q4, "Ratio:")
-			GUICtrlSetBkColor($Label_3_q4, $Color_bk_Black)
+;~ 			GUICtrlSetData($Label_3_q1, "Ratio:")
+;~ 			GUICtrlSetBkColor($Label_3_q1, $Color_bk_Black)
+;~ 			GUICtrlSetData($Label_3_q2, "Ratio:")
+;~ 			GUICtrlSetBkColor($Label_3_q2, $Color_bk_Black)
+;~ 			GUICtrlSetData($Label_3_q3, "Ratio:")
+;~ 			GUICtrlSetBkColor($Label_3_q3, $Color_bk_Black)
+;~ 			GUICtrlSetData($Label_3_q4, "Ratio:")
+;~ 			GUICtrlSetBkColor($Label_3_q4, $Color_bk_Black)
 
 			GUICtrlSetState($Label_ratio_q1, $gui_hide)
 			GUICtrlSetState($Label_Ratio_q2, $gui_hide)
@@ -2133,14 +2232,14 @@ Func _CheckQuarter()
 		EndIf
 
 		If @MON = "10" Or @MON = "11" Or @MON = "12" Then
-			GUICtrlSetData($Label_3_q1, "Ratio:")
-			GUICtrlSetBkColor($Label_3_q1, $Color_bk_Black)
-			GUICtrlSetData($Label_3_q2, "Ratio:")
-			GUICtrlSetBkColor($Label_3_q2, $Color_bk_Black)
-			GUICtrlSetData($Label_3_q3, "Ratio:")
-			GUICtrlSetBkColor($Label_3_q3, $Color_bk_Black)
-			GUICtrlSetData($Label_3_q4, "Ratio:")
-			GUICtrlSetBkColor($Label_3_q4, $Color_bk_Black)
+;~ 			GUICtrlSetData($Label_3_q1, "Ratio:")
+;~ 			GUICtrlSetBkColor($Label_3_q1, $Color_bk_Black)
+;~ 			GUICtrlSetData($Label_3_q2, "Ratio:")
+;~ 			GUICtrlSetBkColor($Label_3_q2, $Color_bk_Black)
+;~ 			GUICtrlSetData($Label_3_q3, "Ratio:")
+;~ 			GUICtrlSetBkColor($Label_3_q3, $Color_bk_Black)
+;~ 			GUICtrlSetData($Label_3_q4, "Ratio:")
+;~ 			GUICtrlSetBkColor($Label_3_q4, $Color_bk_Black)
 
 			GUICtrlSetState($Label_ratio_q1, $gui_hide)
 			GUICtrlSetState($Label_Ratio_q2, $gui_hide)
@@ -2159,14 +2258,14 @@ Func _CheckQuarter()
 
 		EndIf
 	Else
-		GUICtrlSetData($Label_3_q1, "Ratio:")
-		GUICtrlSetColor($Label_3_q1, $Color_bk_Black)
-		GUICtrlSetData($Label_3_q2, "Ratio:")
-		GUICtrlSetColor($Label_3_q2, $Color_bk_Black)
-		GUICtrlSetData($Label_3_q3, "Ratio:")
-		GUICtrlSetColor($Label_3_q3, $Color_bk_Black)
-		GUICtrlSetData($Label_3_q4, "Ratio:")
-		GUICtrlSetColor($Label_3_q4, $Color_bk_Black)
+;~ 		GUICtrlSetData($Label_3_q1, "Ratio:")
+;~ 		GUICtrlSetColor($Label_3_q1, $Color_bk_Black)
+;~ 		GUICtrlSetData($Label_3_q2, "Ratio:")
+;~ 		GUICtrlSetColor($Label_3_q2, $Color_bk_Black)
+;~ 		GUICtrlSetData($Label_3_q3, "Ratio:")
+;~ 		GUICtrlSetColor($Label_3_q3, $Color_bk_Black)
+;~ 		GUICtrlSetData($Label_3_q4, "Ratio:")
+;~ 		GUICtrlSetColor($Label_3_q4, $Color_bk_Black)
 
 		GUICtrlSetState($Label_ratio_q1, $gui_hide)
 		GUICtrlSetState($Label_Ratio_q2, $gui_hide)
@@ -2678,30 +2777,5 @@ Func _GetColorFromValue($iValue)
 	Return BitShift($iRed, -16) + BitShift($iGreen, -8) + $iBlue
 EndFunc   ;==>_GetColorFromValue
 
-; Função: GetColorFromValue
-; Descrição: Retorna uma cor RGB em função de um valor entre -30 e 30.
-; Valores >= 0 variam do verde (0) ao vermelho (30).
-; Valores < 0 retornam um verde fixo.
-#cs
-Func _oldGetColorFromValue($iValue)
-	; Garante que o valor está no intervalo permitido
-	If $iValue < -30 Then $iValue = -30
-	If $iValue > 30 Then $iValue = 30
 
-	; Para valores negativos, retorna verde fixo
-	If $iValue < 0 Then
-		Return 0x00FF00 ; Verde puro (R=0, G=255, B=0)
-	EndIf
-
-	; Para valores entre 0 e 30, calcular do verde ao vermelho
-	; Quanto maior o valor, mais vermelho e menos verde
-	Local $fRatio = $iValue / 30
-	Local $iRed = Int(255 * $fRatio)
-	Local $iGreen = Int(255 * (1 - $fRatio))
-	Local $iBlue = 0
-
-	; Converte para RGB no formato 0xRRGGBB
-	Return BitShift($iRed, -16) + BitShift($iGreen, -8) + $iBlue
-EndFunc   ;==>_oldGetColorFromValue
-#ce
 
