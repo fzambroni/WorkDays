@@ -1,7 +1,7 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=calendar.ico
 #AutoIt3Wrapper_Res_Description=Work Day management
-#AutoIt3Wrapper_Res_Fileversion=1.0.2.4
+#AutoIt3Wrapper_Res_Fileversion=1.0.2.3
 #AutoIt3Wrapper_Res_ProductName=Work Days
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 #cs ----------------------------------------------------------------------------
@@ -49,8 +49,7 @@ Global $About = "1.0.1.3 - Custom colors and bug fixes" & @CRLF _
 		 & "1.0.2.0 - Bug Fix" & @CRLF _
 		 & "1.0.2.1 - Bug Fix" & @CRLF _
 		 & "1.0.2.2 - Report and Tag Multiline" & @CRLF _
-		 & "1.0.2.3 - Bug Fixes and Report adjustment" & @CRLF _
-		 & "1.0.2.4 - Report Bug Fixes"
+		 & "1.0.2.3 - Bug Fixes and Report adjustment"
 
 Global $Contextual_Menu = 0 ;;;;###### ATIVA A FUNÇÃO DE MENU CONTEXTUAL ##### AINDA É NECESSÁRIO DESENVOLVIMENTO.
 
@@ -60,14 +59,14 @@ Global $LabelMonthX[99999]
 Global $Inputs[32][32]
 
 
-Global $Context[32][32]
-Global $ContextItem_OnSite[32][32]
-Global $ContextItem_Remote[32][32]
-Global $ContextItem_Holiday[32][32]
-Global $ContextItem_PTO[32][32]
-Global $ContextItem_Travel[32][32]
-Global $ContextItem_Sick[32][32]
-Global $ContextItem_Blank[32][32]
+	Global $Context[32][32]
+	Global $ContextItem_OnSite[32][32]
+	Global $ContextItem_Remote[32][32]
+	Global $ContextItem_Holiday[32][32]
+	Global $ContextItem_PTO[32][32]
+	Global $ContextItem_Travel[32][32]
+	Global $ContextItem_Sick[32][32]
+	Global $ContextItem_Blank[32][32]
 
 
 Global $TodayLabel[32][32]
@@ -75,8 +74,6 @@ Global $SelectLabel[32][32]
 Global $DBpMenu_Delete_Year[20]
 Global $DBpMenu_Delete_Date[15]
 
-Global $DBpMenu_Report_simple_Year[20]
-Global $DBpMenu_Report_detailed_Year[20]
 Global $DBpMenu_Report_Year[20]
 Global $DBpMenu_Report_Date[15]
 
@@ -188,8 +185,7 @@ EndIf
 $Form_WorkDays = GUICreate("Work Days", 1140, 620, -1, -1)
 
 Global $DBpMenu_db = GUICtrlCreateMenu("File")
-;~ Global $DBpMenu_backup_Data = GUICtrlCreateMenu("Data", $DBpMenu_db)
-Global $DBpMenu_backup_Data = GUICtrlCreateMenu("Data")
+Global $DBpMenu_backup_Data = GUICtrlCreateMenu("Data", $DBpMenu_db)
 Global $DBpMenu_backup = GUICtrlCreateMenuItem("Create Backup", $DBpMenu_backup_Data)
 Global $BkpMenu_Batch = GUICtrlCreateMenuItem("Restore Backup", $DBpMenu_backup_Data)
 Global $DBpMenu_backup_2 = GUICtrlCreateMenuItem("", $DBpMenu_backup_Data)
@@ -198,12 +194,11 @@ Global $BkpMenu_reset_all = GUICtrlCreateMenuItem("Reset Entire Database", $BkpM
 Global $DBpMenu_Delete = GUICtrlCreateMenu("Delete Specific year", $BkpMenu_reset_all1)
 Global $DBpMenu_backup_3 = GUICtrlCreateMenuItem("", $DBpMenu_backup_Data)
 Global $DBpMenu_backup_Data_Holidays = GUICtrlCreateMenuItem("Import Holidays File", $DBpMenu_backup_Data)
-;~ Global $DBpMenu_Report = GUICtrlCreateMenu("Report", $DBpMenu_db)
-Global $DBpMenu_Report = GUICtrlCreateMenu("Report")
-Global $DBpMenu_Report_Simple = GUICtrlCreateMenu("Simple", $DBpMenu_Report)
-Global $DBpMenu_Report_Detailed = GUICtrlCreateMenu("Detailed", $DBpMenu_Report)
+Global $DBpMenu_Report = GUICtrlCreateMenu("Report", $DBpMenu_db)
+;~ Global $DBpMenu_backup_4 = GUICtrlCreateMenuItem("", $DBpMenu_backup_Data)
 
-;~ Global $BkpMenu_reset_1 = GUICtrlCreateMenuItem("", $DBpMenu_db)
+;~ Global $BkpMenu_reset = GUICtrlCreateMenu("Reset Data", $DBpMenu_db)
+Global $BkpMenu_reset_1 = GUICtrlCreateMenuItem("", $DBpMenu_db)
 Global $BkpMenu_Exit = GUICtrlCreateMenuItem("&Exit", $DBpMenu_db)
 
 Global $DBpMenu_settings = GUICtrlCreateMenu("Settings")
@@ -423,14 +418,10 @@ While 1
 
 	For $j = 1 To 12
 
-		If $nMsg = $DBpMenu_Report_simple_Year[$j] And $DBpMenu_Report_simple_Year[$j] <> 0 Then
-			$DBpMenu_Report_Date = GUICtrlRead($DBpMenu_Report_simple_Year[$j], 1)
-			GenerateWorkdaysReportHTML($DBpMenu_Report_Date, 0)
-		EndIf
+		If $nMsg = $DBpMenu_Report_Year[$j] And $DBpMenu_Report_Year[$j] <> 0 Then
+			$DBpMenu_Report_Date = GUICtrlRead($DBpMenu_Report_Year[$j], 1)
+			GenerateWorkdaysReportHTML($DBpMenu_Report_Date)
 
-		If $nMsg = $DBpMenu_Report_detailed_Year[$j] And $DBpMenu_Report_detailed_Year[$j] <> 0 Then
-			$DBpMenu_Report_Date = GUICtrlRead($DBpMenu_Report_detailed_Year[$j], 1)
-			GenerateWorkdaysReportHTML($DBpMenu_Report_Date, 1)
 		EndIf
 
 		If $nMsg = $DBpMenu_Delete_Year[$j] And $DBpMenu_Delete_Year[$j] <> 0 Then
@@ -738,16 +729,12 @@ EndFunc   ;==>_CalendarTag
 
 Func _CreateMenu()
 
-;~ 	GUICtrlDelete($DBpMenu_Report)
-	GUICtrlDelete($DBpMenu_Report_Simple)
-	GUICtrlDelete($DBpMenu_Report_Detailed)
+	GUICtrlDelete($DBpMenu_Report)
 	GUICtrlDelete($DBpMenu_Delete)
-;~ 	GUICtrlDelete($BkpMenu_reset_1)
+	GUICtrlDelete($BkpMenu_reset_1)
 	GUICtrlDelete($BkpMenu_Exit)
 	Global $DBpMenu_Delete = GUICtrlCreateMenu("Delete Specific year", $BkpMenu_reset_all1)
-	Global $DBpMenu_Report_Simple = GUICtrlCreateMenu("Simple", $DBpMenu_Report)
-	Global $DBpMenu_Report_Detailed = GUICtrlCreateMenu("Detailed", $DBpMenu_Report)
-
+	Global $DBpMenu_Report = GUICtrlCreateMenu("Report", $DBpMenu_db)
 
 	Local $sSubKey = ""
 	For $i = 1 To 12
@@ -756,14 +743,11 @@ Func _CreateMenu()
 		If @error Then ExitLoop
 
 		$DBpMenu_Delete_Year[$i] = GUICtrlCreateMenuItem($sSubKey, $DBpMenu_Delete)
-;~ 		$DBpMenu_Report_Year[$i] = GUICtrlCreateMenuItem($sSubKey, $DBpMenu_Report)
-		$DBpMenu_Report_simple_Year[$i] = GUICtrlCreateMenuItem($sSubKey, $DBpMenu_Report_Simple)
-		$DBpMenu_Report_detailed_Year[$i] = GUICtrlCreateMenuItem($sSubKey, $DBpMenu_Report_Detailed)
-
+		$DBpMenu_Report_Year[$i] = GUICtrlCreateMenuItem($sSubKey, $DBpMenu_Report)
 
 	Next
 
-;~ 	Global $BkpMenu_reset_1 = GUICtrlCreateMenuItem("", $DBpMenu_db)
+	Global $BkpMenu_reset_1 = GUICtrlCreateMenuItem("", $DBpMenu_db)
 	Global $BkpMenu_Exit = GUICtrlCreateMenuItem("&Exit", $DBpMenu_db)
 
 EndFunc   ;==>_CreateMenu
@@ -1785,25 +1769,25 @@ Func _ReadStatistics($Year)
 	GUICtrlSetData($Input_E_Onsite_q3, Ceiling(($Counta_WD_q3 / 5) * 3))
 	GUICtrlSetData($Input_E_Onsite_q4, Ceiling(($Counta_WD_q4 / 5) * 3))
 
-	GUICtrlSetData($Input_R_Onsite_q1, Round($Counta_R_Onsite_q1,2)) ;## Real On-Site ##
-	GUICtrlSetData($Input_R_Onsite_q2, Round($Counta_R_Onsite_q2,2))
-	GUICtrlSetData($Input_R_Onsite_q3, Round($Counta_R_Onsite_q3,2))
-	GUICtrlSetData($Input_R_Onsite_q4, Round($Counta_R_Onsite_q4,2))
+	GUICtrlSetData($Input_R_Onsite_q1, $Counta_R_Onsite_q1) ;## Real On-Site ##
+	GUICtrlSetData($Input_R_Onsite_q2, $Counta_R_Onsite_q2)
+	GUICtrlSetData($Input_R_Onsite_q3, $Counta_R_Onsite_q3)
+	GUICtrlSetData($Input_R_Onsite_q4, $Counta_R_Onsite_q4)
 
-	$Remaining_q1 = Ceiling(($Counta_WD_q1 / 5) * 3) - $Counta_R_Onsite_q1
-	$Remaining_q2 = Ceiling(($Counta_WD_q2 / 5) * 3) - $Counta_R_Onsite_q2
-	$Remaining_q3 = Ceiling(($Counta_WD_q3 / 5) * 3) - $Counta_R_Onsite_q3
-	$Remaining_q4 = Ceiling(($Counta_WD_q4 / 5) * 3) - $Counta_R_Onsite_q4
+	$Remaining_q1 = (Ceiling(($Counta_WD_q1 / 5) * 3)) - $Counta_R_Onsite_q1
+	$Remaining_q2 = (Ceiling(($Counta_WD_q2 / 5) * 3)) - $Counta_R_Onsite_q2
+	$Remaining_q3 = (Ceiling(($Counta_WD_q3 / 5) * 3)) - $Counta_R_Onsite_q3
+	$Remaining_q4 = (Ceiling(($Counta_WD_q4 / 5) * 3)) - $Counta_R_Onsite_q4
 
 	GUICtrlSetData($Input_Remaining_q1, $Remaining_q1) ;## Remaining ##
 	GUICtrlSetData($Input_Remaining_q2, $Remaining_q2)
 	GUICtrlSetData($Input_Remaining_q3, $Remaining_q3)
 	GUICtrlSetData($Input_Remaining_q4, $Remaining_q4)
 
-	$Ratio_R_Q1 = Round(($Counta_R_Onsite_q1 / ($Counta_WD_q1 / 5)), 2)
-	$Ratio_R_Q2 = Round(($Counta_R_Onsite_q2 / ($Counta_WD_q2 / 5)), 2)
-	$Ratio_R_Q3 = Round(($Counta_R_Onsite_q3 / ($Counta_WD_q3 / 5)), 2)
-	$Ratio_R_Q4 = Round(($Counta_R_Onsite_q4 / ($Counta_WD_q4 / 5)), 2)
+	$Ratio_R_Q1 = Round(($Counta_R_Onsite_q1 / Ceiling($Counta_WD_q1 / 5)), 2)
+	$Ratio_R_Q2 = Round(($Counta_R_Onsite_q2 / Ceiling($Counta_WD_q2 / 5)), 2)
+	$Ratio_R_Q3 = Round(($Counta_R_Onsite_q3 / Ceiling($Counta_WD_q3 / 5)), 2)
+	$Ratio_R_Q4 = Round(($Counta_R_Onsite_q4 / Ceiling($Counta_WD_q4 / 5)), 2)
 
 	GUICtrlSetData($Input_RT_q1, $Ratio_R_Q1) ; ## Ration ##
 	GUICtrlSetBkColor($Input_RT_q1, _GetColorGradient($Ratio_R_Q1))
@@ -1820,12 +1804,47 @@ Func _ReadStatistics($Year)
 	GUICtrlSetData($Input_RT_q4, $Ratio_R_Q4)
 	GUICtrlSetBkColor($Input_RT_q4, _GetColorGradient($Ratio_R_Q4))
 
+;~ 	GUICtrlSetState($Input_RT_q1,$gui_disable)
+;~ 	GUICtrlSetState($Input_RT_q2,$gui_disable)
+;~ 	GUICtrlSetState($Input_RT_q3,$gui_disable)
+;~ 	GUICtrlSetState($Input_RT_q4,$gui_disable)
 
 
-	$Ratio_Q1 = Round(($Counta_R_Onsite_Quarter_Q1 / ($Counta_WD_Quarter_Q1 / 5)), 2)
-	$Ratio_Q2 = Round(($Counta_R_Onsite_Quarter_Q2 / ($Counta_WD_Quarter_Q2 / 5)), 2)
-	$Ratio_Q3 = Round(($Counta_R_Onsite_Quarter_Q3 / ($Counta_WD_Quarter_Q3 / 5)), 2)
-	$Ratio_Q4 = Round(($Counta_R_Onsite_Quarter_Q4 / ($Counta_WD_Quarter_Q4 / 5)), 2)
+
+;~ 	GUICtrlSetState($Input_E_Onsite_q1,$gui_disable)
+;~ 	GUICtrlSetState($Input_E_Onsite_q2,$gui_disable)
+;~ 	GUICtrlSetState($Input_E_Onsite_q3,$gui_disable)
+;~ 	GUICtrlSetState($Input_E_Onsite_q4,$gui_disable)
+
+
+;~ 	GUICtrlSetState($Input_R_Onsite_q1,$gui_disable)
+;~ 	GUICtrlSetState($Input_R_Onsite_q2,$gui_disable)
+;~ 	GUICtrlSetState($Input_R_Onsite_q3,$gui_disable)
+;~ 	GUICtrlSetState($Input_R_Onsite_q4,$gui_disable)
+
+;~ 	GUICtrlSetState($Input_Remaining_q1,$gui_disable)
+;~ 	GUICtrlSetState($Input_Remaining_q2,$gui_disable)
+;~ 	GUICtrlSetState($Input_Remaining_q3,$gui_disable)
+;~ 	GUICtrlSetState($Input_Remaining_q4,$gui_disable)
+
+;~ 	GUICtrlSetState($Input_TD_q1,$gui_disable)
+;~ 	GUICtrlSetState($Input_TD_q2,$gui_disable)
+;~ 	GUICtrlSetState($Input_TD_q3,$gui_disable)
+;~ 	GUICtrlSetState($Input_TD_q4,$gui_disable)
+
+;~ 	GUICtrlSetColor ( $Input_TD_q1, 0xFFFFFF )
+
+;~ 	GUICtrlSetFont($Input_TD_q1,8.5, $FW_BOLD)
+
+;~ 	GUICtrlSetState($Input_WD_q1,$gui_disable)
+;~ 	GUICtrlSetState($Input_WD_q2,$gui_disable)
+;~ 	GUICtrlSetState($Input_WD_q3,$gui_disable)
+;~ 	GUICtrlSetState($Input_WD_q4,$gui_disable)
+
+	$Ratio_Q1 = Round(($Counta_R_Onsite_Quarter_Q1 / Ceiling($Counta_WD_Quarter_Q1 / 5)), 2)
+	$Ratio_Q2 = Round(($Counta_R_Onsite_Quarter_Q2 / Ceiling($Counta_WD_Quarter_Q2 / 5)), 2)
+	$Ratio_Q3 = Round(($Counta_R_Onsite_Quarter_Q3 / Ceiling($Counta_WD_Quarter_Q3 / 5)), 2)
+	$Ratio_Q4 = Round(($Counta_R_Onsite_Quarter_Q4 / Ceiling($Counta_WD_Quarter_Q4 / 5)), 2)
 
 	GUICtrlSetData($Input_RaTio_q1, "")
 	GUICtrlSetData($Input_RaTio_q2, "")
@@ -1833,12 +1852,12 @@ Func _ReadStatistics($Year)
 	GUICtrlSetData($Input_RaTio_q4, "")
 
 	ConsoleWrite(@CRLF & _
-			"Dias úteis em Q2 (total): " & $Counta_WD_q3 & @CRLF & _
-			"Dias úteis em Q2 (to date): " & $Counta_WD_Quarter_Q3 & @CRLF & _
-			"Dias on-site Q2 (total): " & $Counta_R_Onsite_q3 & @CRLF & _
-			"Dias on-site Q2 (to date): " & $Counta_R_Onsite_Quarter_Q3 & @CRLF & _
-			"Ratio Q2 (total): " & $Ratio_R_Q3 & @CRLF & _
-			"Ratio Q2 (to date): " & $Ratio_Q3)
+			"Dias úteis em Q2 (total): " & $Counta_WD_q2 & @CRLF & _
+			"Dias úteis em Q2 (to date): " & $Counta_WD_Quarter_Q2 & @CRLF & _
+			"Dias on-site Q2 (total): " & $Counta_R_Onsite_q2 & @CRLF & _
+			"Dias on-site Q2 (to date): " & $Counta_R_Onsite_Quarter_Q2 & @CRLF & _
+			"Ratio Q2 (total): " & $Ratio_R_Q2 & @CRLF & _
+			"Ratio Q2 (to date): " & $Ratio_Q2)
 
 
 

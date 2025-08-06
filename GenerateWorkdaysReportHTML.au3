@@ -1,16 +1,16 @@
-Func GenerateWorkdaysReportHTML($Year)
-	$Full = 0
+Func GenerateWorkdaysReportHTML($Year, $Full)
+;~ 	$Full = 0
 
-	If Not IsDeclared("iMsgBoxAnswer") Then Local $iMsgBoxAnswer
-	$iMsgBoxAnswer = MsgBox(262180, "Generate Report", "Would you like to generate a full report that includes all recorded dates?" & @CRLF & @CRLF & "Yes = Full Report" & @CRLF & "No = Summary Only")
-	Select
-		Case $iMsgBoxAnswer = 6 ;Yes
-			$Full = 1
+;~ 	If Not IsDeclared("iMsgBoxAnswer") Then Local $iMsgBoxAnswer
+;~ 	$iMsgBoxAnswer = MsgBox(262180, "Generate Report", "Would you like to generate a full report that includes all recorded dates?" & @CRLF & @CRLF & "Yes = Full Report" & @CRLF & "No = Summary Only")
+;~ 	Select
+;~ 		Case $iMsgBoxAnswer = 6 ;Yes
+;~ 			$Full = 1
 
-		Case $iMsgBoxAnswer = 7 ;No
-			$Full = 0
+;~ 		Case $iMsgBoxAnswer = 7 ;No
+;~ 			$Full = 0
 
-	EndSelect
+;~ 	EndSelect
 
 	Local $RegistryBase = "HKEY_CURRENT_USER\Software\WorkDays\" & $Year
 	Local $OutputPath = @ScriptDir & "\Workdays_Report.html"
@@ -67,8 +67,8 @@ Func GenerateWorkdaysReportHTML($Year)
 
 			$CategoryCount[$q][$CatIndex] += 1
 			If $Note <> "" Then
-				If StringInStr($Note,"/n",0,1) Then
-					$Note_Splited = StringSplit($Note,"/n",1)
+				If StringInStr($Note, "/n", 0, 1) Then
+					$Note_Splited = StringSplit($Note, "/n", 1)
 					For $Count_Note = 1 To $Note_Splited[0]
 						If $Count_Note = 1 Then
 							If $Note_Splited[$Count_Note] <> "" Then
@@ -90,7 +90,8 @@ Func GenerateWorkdaysReportHTML($Year)
 			EndIf
 
 			$QuarterStats[$q][0] += 1
-			If $CatLetter = "O" Or $CatLetter = "R" Or $CatLetter = "T" Or ($CatLetter = "B" And $RawVal <> "") Then
+;~ 			If $CatLetter = "O" Or $CatLetter = "R" Or $CatLetter = "T" Or ($CatLetter = "B" And $RawVal <> "") Then
+			If $CatLetter = "O" Or $CatLetter = "R" Or $CatLetter = "T" Or $CatLetter = "B" Or $CatLetter = "" Then
 				$QuarterStats[$q][1] += 1
 				$WorkDays += 1
 			EndIf
@@ -109,23 +110,37 @@ Func GenerateWorkdaysReportHTML($Year)
 		If $QuarterStats[$q][0] = 0 Then ContinueLoop
 		Local $Expected = Ceiling(($QuarterStats[$q][1] / 5) * 3)
 		Local $Actual = $QuarterStats[$q][4]
+;~ 		If $q = 2 Then
+;~ 			MsgBox(262144,"","Real on-site: " & $QuarterStats[$q][4] & @CRLF & "WorkDays: " & $QuarterStats[$q][1])
+;~ 		EndIf
 		$QuarterStats[$q][3] = $Expected
 		$QuarterStats[$q][5] = $Expected - $Actual
 		$QuarterStats[$q][2] = ($Actual > 0) ? Round(($Expected / $Actual), 2) : 0
 	Next
 
 	Local $ExpectedTotal = Ceiling(($WorkDays / 5) * 3)
-	Local $Ratio = Round($RealOnSite / Ceiling($WorkDays / 5), 2)
+	Local $Ratio = Round($RealOnSite / ($WorkDays / 5), 2)
 
-	FileWriteLine($hFile, "<html><head><title>Workdays Report " & $Year & "</title>")
+	If $Full = 1 Then
+		FileWriteLine($hFile, "<html><head><title>Workdays Report - DETAILED - " & $Year & "</title>")
+	Else
+		FileWriteLine($hFile, "<html><head><title>Workdays Report - SIMPLE - " & $Year & "</title>")
+	EndIf
 	FileWriteLine($hFile, "<style>body{font-family:Arial;} table{border-collapse:collapse;width:100%;margin-bottom:20px;} th,td{border:1px solid #ccc;padding:6px;} th{background:#f0f0f0;} .stat,.qstat{margin:10px 0;padding:10px;background:#eef;border-left:4px solid #88f;} ul{margin:0;padding-left:20px;} h2{margin-top:30px;}</style></head><body>")
-	FileWriteLine($hFile, "<h1>Workdays Report - " & $Year & "</h1>")
+;~ 	FileWriteLine($hFile, "<h1>Workdays Report - " & $Year & "</h1>")
+If $Full = 1 Then
+		FileWriteLine($hFile, "<h1>Workdays Report - DETAILED - " & $Year & "</h1>")
+	Else
+		FileWriteLine($hFile, "<h1>Workdays Report - SIMPLE - " & $Year & "</h1>")
+	EndIf
 	FileWriteLine($hFile, "<div class='stat'><b>Total Days Recorded:</b> " & $TotalDays & "<br><b>Work Days:</b> " & $WorkDays & "<br><b>Ratio*:</b> " & $Ratio & "<br><b>Estimated OnSite*:</b> " & $ExpectedTotal & "<br><b>Real On-Site*:</b> " & $RealOnSite & "<br><b>Remaining*:</b> " & ($ExpectedTotal - $RealOnSite) & "<br>*These values are for reference only. For an accurate analysis, consider the quarterly data. </div>")
 
 	For $q = 0 To 3
 		If $QuarterStats[$q][0] = 0 Then ContinueLoop
 		FileWriteLine($hFile, "<h2>Quarter " & ($q + 1) & "</h2>")
-		FileWriteLine($hFile, "<div class='qstat'><b>Total Days:</b> " & $QuarterStats[$q][0] & "<br><b>Work Days:</b> " & $QuarterStats[$q][1] & "<br><b>Ratio:</b> " & Round($QuarterStats[$q][4] / Ceiling($QuarterStats[$q][1] / 5), 2) & "<br><b>Estimated OnSite:</b> " & $QuarterStats[$q][3] & "<br><b>Real On-Site:</b> " & $QuarterStats[$q][4] & "<br><b>Remaining:</b> " & $QuarterStats[$q][5] & "</div>")
+;~ 		FileWriteLine($hFile, "<div class='qstat'><b>Total Days:</b> " & $QuarterStats[$q][0] & "<br><b>Work Days:</b> " & $QuarterStats[$q][1] & "<br><b>Ratio:</b> " & Round($QuarterStats[$q][4] / Ceiling($QuarterStats[$q][1] / 5), 2) & "<br><b>Estimated OnSite:</b> " & $QuarterStats[$q][3] & "<br><b>Real On-Site:</b> " & $QuarterStats[$q][4] & "<br><b>Remaining:</b> " & $QuarterStats[$q][5] & "</div>")
+;~ 		FileWriteLine($hFile, "<div class='qstat'><b>Total Days:</b> " & $QuarterStats[$q][0] & "<br><b>Work Days:</b> " & $QuarterStats[$q][1] & "<br><b>Ratio:</b> " & Round($QuarterStats[$q][4] / $QuarterStats[$q][1] / 5, 2) & "<br><b>Estimated OnSite:</b> " & $QuarterStats[$q][3] & "<br><b>Real On-Site:</b> " & $QuarterStats[$q][4] & "<br><b>Remaining:</b> " & $QuarterStats[$q][5] & "</div>")
+		FileWriteLine($hFile, "<div class='qstat'><b>Total Days:</b> " & $QuarterStats[$q][0] & "<br><b>Work Days:</b> " & $QuarterStats[$q][1] & "<br><b>Ratio:</b> " & Round($QuarterStats[$q][4] / ($QuarterStats[$q][1] / 5), 2) & "<br><b>Estimated OnSite:</b> " & $QuarterStats[$q][3] & "<br><b>Real On-Site:</b> " & $QuarterStats[$q][4] & "<br><b>Remaining:</b> " & $QuarterStats[$q][5] & "</div>")
 		If $Full = 1 Then
 			FileWriteLine($hFile, "<table><tr><th>Category</th><th>Count</th><th>Dates & Notes</th></tr>")
 		Else
@@ -146,7 +161,7 @@ Func GenerateWorkdaysReportHTML($Year)
 	Next
 
 	; >>>> RESUMO ANUAL ADICIONADO AQUI <<<<
-	Local $YearlyTotals[8] = [0,0,0,0,0,0,0,0]
+	Local $YearlyTotals[8] = [0, 0, 0, 0, 0, 0, 0, 0]
 	For $q = 0 To 3
 		For $c = 0 To 7
 			$YearlyTotals[$c] += $CategoryCount[$q][$c]
