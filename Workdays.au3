@@ -1,7 +1,7 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=calendar.ico
 #AutoIt3Wrapper_Res_Description=Work Day management
-#AutoIt3Wrapper_Res_Fileversion=1.0.2.4
+#AutoIt3Wrapper_Res_Fileversion=1.0.2.5
 #AutoIt3Wrapper_Res_ProductName=Work Days
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 #cs ----------------------------------------------------------------------------
@@ -37,7 +37,7 @@ Opt("TrayAutoPause", 0)
 #include <ColorPicker.au3>
 #include <WinAPI.au3>
 #include <FontConstants.au3>
-#include "GenerateWorkdaysReportHTML.au3"
+#include "GenerateWorkdaysReportHTML2.au3"
 
 Global $About = "1.0.1.3 - Custom colors and bug fixes" & @CRLF _
 		 & "1.0.1.4 - Code polishing and new custom color palette" & @CRLF _
@@ -50,7 +50,8 @@ Global $About = "1.0.1.3 - Custom colors and bug fixes" & @CRLF _
 		 & "1.0.2.1 - Bug Fix" & @CRLF _
 		 & "1.0.2.2 - Report and Tag Multiline" & @CRLF _
 		 & "1.0.2.3 - Bug Fixes and Report adjustment" & @CRLF _
-		 & "1.0.2.4 - Report Bug Fixes"
+		 & "1.0.2.4 - Report Bug Fixes" & @CRLF _
+		 & "1.0.2.5 - Report improvement with Weekends and Blank categories"
 
 Global $Contextual_Menu = 0 ;;;;###### ATIVA A FUNÇÃO DE MENU CONTEXTUAL ##### AINDA É NECESSÁRIO DESENVOLVIMENTO.
 
