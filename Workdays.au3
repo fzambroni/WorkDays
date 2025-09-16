@@ -1,8 +1,11 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
-#AutoIt3Wrapper_Icon=calendar.ico
+#AutoIt3Wrapper_Icon=xcalendar.ico
 #AutoIt3Wrapper_Res_Description=Work Day management
-#AutoIt3Wrapper_Res_Fileversion=1.0.2.5
+#AutoIt3Wrapper_Res_Fileversion=1.0.3.0
 #AutoIt3Wrapper_Res_ProductName=Work Days
+#AutoIt3Wrapper_Res_File_Add=E:\GitHub\WorkDays\splash.jpg
+#AutoIt3Wrapper_Res_File_Add=E:\GitHub\WorkDays\about.jpg
+#AutoIt3Wrapper_Res_File_Add=E:\GitHub\WorkDays\Help.pdf
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 #cs ----------------------------------------------------------------------------
 
@@ -37,23 +40,19 @@ Opt("TrayAutoPause", 0)
 #include <ColorPicker.au3>
 #include <WinAPI.au3>
 #include <FontConstants.au3>
-#include "GenerateWorkdaysReportHTML2.au3"
+#include "GenerateWorkdaysReportHTML.au3"
 
 Global $About = "1.0.1.3 - Custom colors and bug fixes" & @CRLF _
 		 & "1.0.1.4 - Code polishing and new custom color palette" & @CRLF _
-		 & "1.0.1.5 - Bug Fixes and improvements" & @CRLF _
-		 & "1.0.1.6 - Bug Fixes and improvements" & @CRLF _
 		 & "1.0.1.7 - KPI Bug Fixes" & @CRLF _
 		 & "1.0.1.8 - Today custom color option" & @CRLF _
 		 & "1.0.1.9 - Report Functionality" & @CRLF _
-		 & "1.0.2.0 - Bug Fix" & @CRLF _
-		 & "1.0.2.1 - Bug Fix" & @CRLF _
 		 & "1.0.2.2 - Report and Tag Multiline" & @CRLF _
 		 & "1.0.2.3 - Bug Fixes and Report adjustment" & @CRLF _
-		 & "1.0.2.4 - Report Bug Fixes" & @CRLF _
-		 & "1.0.2.5 - Report improvement with Weekends and Blank categories"
+		 & "1.0.2.5 - Report improvements" & @CRLF _
+		 & "1.0.3.0 - New Contextual Menu, Splash Screen and about."
 
-Global $Contextual_Menu = 0 ;;;;###### ATIVA A FUNÇÃO DE MENU CONTEXTUAL ##### AINDA É NECESSÁRIO DESENVOLVIMENTO.
+Global $XCount = 0
 
 Global $IniSection[999][999]
 Global $LabelMonth[99999]
@@ -62,6 +61,8 @@ Global $Inputs[32][32]
 
 
 Global $Context[32][32]
+Global $ContextItem_Date[32][32]
+Global $ContextItem_Separator[32][32]
 Global $ContextItem_OnSite[32][32]
 Global $ContextItem_Remote[32][32]
 Global $ContextItem_Holiday[32][32]
@@ -100,11 +101,35 @@ Global $Ratio_R_Q4
 Global $White = 0xFFFFFF
 Global $Black = 0x000000
 
+
+; Caminho de extração (tempo de execução)
+
+Global $HelpFile = @TempDir & "\Help.pdf"
+Global $sSplashPath = @TempDir & "\splash.jpg"
+Global $AboutFile = @TempDir & "\about.jpg"
+
+; Empacota na compilação e extrai ao rodar
+;  - 1 = sobrescreve se já existir
+FileInstall("splash.jpg", $sSplashPath, 1)
+
+; Mostra o splash (BMP/JPG/GIF funcionam bem)
+SplashImageOn("Work Days", $sSplashPath, 640, 360, -1, -1, 1)
+
+
+
+; (Opcional) Apagar depois de usar
+; FileDelete($sSplashPath)
+
+
+
 $DB = "HKEY_CURRENT_USER\Software\WorkDays"
 
 
 Global $CalendarTag = RegRead($DB, "caltag")
 If @error Then $CalendarTag = "1"
+
+Global $Debug = RegRead($DB, "Debug")
+If @error Then $Debug = "0"
 
 Global $Color_bk_OnSite = RegRead($DB, "Color_OnSite")
 If @error Then $Color_bk_OnSite = 0x00CC66
@@ -187,9 +212,9 @@ If $Picker_Font_Weekend_Read = 1 Then
 EndIf
 
 $Form_WorkDays = GUICreate("Work Days", 1140, 620, -1, -1)
+;~ $Form_WorkDays = GUICreate("Work Days", 1140, 620, -1, -1, $WS_SYSMENU)
 
 Global $DBpMenu_db = GUICtrlCreateMenu("File")
-;~ Global $DBpMenu_backup_Data = GUICtrlCreateMenu("Data", $DBpMenu_db)
 Global $DBpMenu_backup_Data = GUICtrlCreateMenu("Data")
 Global $DBpMenu_backup = GUICtrlCreateMenuItem("Create Backup", $DBpMenu_backup_Data)
 Global $BkpMenu_Batch = GUICtrlCreateMenuItem("Restore Backup", $DBpMenu_backup_Data)
@@ -199,21 +224,20 @@ Global $BkpMenu_reset_all = GUICtrlCreateMenuItem("Reset Entire Database", $BkpM
 Global $DBpMenu_Delete = GUICtrlCreateMenu("Delete Specific year", $BkpMenu_reset_all1)
 Global $DBpMenu_backup_3 = GUICtrlCreateMenuItem("", $DBpMenu_backup_Data)
 Global $DBpMenu_backup_Data_Holidays = GUICtrlCreateMenuItem("Import Holidays File", $DBpMenu_backup_Data)
-;~ Global $DBpMenu_Report = GUICtrlCreateMenu("Report", $DBpMenu_db)
 Global $DBpMenu_Report = GUICtrlCreateMenu("Report")
 Global $DBpMenu_Report_Simple = GUICtrlCreateMenu("Simple", $DBpMenu_Report)
 Global $DBpMenu_Report_Detailed = GUICtrlCreateMenu("Detailed", $DBpMenu_Report)
 
-;~ Global $BkpMenu_reset_1 = GUICtrlCreateMenuItem("", $DBpMenu_db)
+
 Global $BkpMenu_Exit = GUICtrlCreateMenuItem("&Exit", $DBpMenu_db)
 
 Global $DBpMenu_settings = GUICtrlCreateMenu("Settings")
-Global $BkpMenu_settings_BKcolors = GUICtrlCreateMenuItem("Colors", $DBpMenu_settings)
+Global $BkpMenu_settings_BKcolors = GUICtrlCreateMenuItem("Options", $DBpMenu_settings)
 Global $BkpMenu_help = GUICtrlCreateMenu("?")
 Global $BkpMenu_help_help = GUICtrlCreateMenuItem("Help", $BkpMenu_help)
 Global $BkpMenu_help_space = GUICtrlCreateMenuItem("", $BkpMenu_help)
 Global $BkpMenu_help_About = GUICtrlCreateMenuItem("About", $BkpMenu_help)
-;~ Global $BkpMenu_reset_year = GUICtrlCreateMenuItem("Reset Specific Year", $BkpMenu_reset)
+
 
 $Calendar = GUICtrlCreateMonthCal(@YEAR & "/" & @MON & "/" & @MDAY, 8, 8, 273, 201, $MCS_WEEKNUMBERS)
 
@@ -292,7 +316,6 @@ $Label_1_q1 = GUICtrlCreateLabel("Total Days:", 571, 30, 79, 21, $SS_RIGHT)
 $Label_2_q1 = GUICtrlCreateLabel("Work Days:", 571, 50, 79, 21, $SS_RIGHT)
 $Label_3_q1 = GUICtrlCreateLabel("Ratio:", 571, 70, 79, 21, $SS_RIGHT)
 $Label_ratio_q1 = GUICtrlCreateLabel("Ratio to Date:", 571, 89, 79, 16, $SS_RIGHT)
-;~ GUICtrlSetColor($Label_ratio_q1, 0x0066CC)
 
 $Label_4_q1 = GUICtrlCreateLabel("Estim.On-Site:", 700, 30, 65, 21, $SS_RIGHT)
 $Label_5_q1 = GUICtrlCreateLabel("Real On-Site:", 700, 50, 65, 21, $SS_RIGHT)
@@ -315,7 +338,6 @@ $Label_1_q2 = GUICtrlCreateLabel("Total Days:", 856, 30, 79, 21, $SS_RIGHT)
 $Label_2_q2 = GUICtrlCreateLabel("Work Days:", 856, 50, 79, 21, $SS_RIGHT)
 $Label_3_q2 = GUICtrlCreateLabel("Ratio:", 856, 70, 79, 21, $SS_RIGHT)
 $Label_Ratio_q2 = GUICtrlCreateLabel("Ratio to Date:", 856, 90, 79, 16, $SS_RIGHT)
-;~ GUICtrlSetColor($Label_Ratio_q2, 0x0066CC)
 
 $Label_4_q2 = GUICtrlCreateLabel("Estim.On-Site:", 985, 30, 65, 21, $SS_RIGHT)
 $Label_5_q2 = GUICtrlCreateLabel("Real On-Site:", 985, 50, 65, 21, $SS_RIGHT)
@@ -328,7 +350,6 @@ $Input_RaTio_q2 = GUICtrlCreateLabel("", 936, 90, 40, 15, BitOR($ES_CENTER, $ES_
 
 $Input_E_Onsite_q2 = GUICtrlCreateLabel("", 1055, 30, 40, 15, BitOR($ES_CENTER, $ES_READONLY))
 $Input_R_Onsite_q2 = GUICtrlCreateLabel("", 1055, 50, 40, 15, BitOR($ES_CENTER, $ES_READONLY))
-;~ $Input_Remaining_q2 = GUICtrlCreateInput("", 1055, 65, 40, 20, BitOR($ES_CENTER, $ES_READONLY))
 $Input_Remaining_q2 = GUICtrlCreateLabel("", 1055, 70, 40, 15, BitOR($ES_CENTER, $ES_READONLY))
 
 GUICtrlCreateGroup("", -99, -99, 1, 1)
@@ -339,7 +360,6 @@ $Label_1_q3 = GUICtrlCreateLabel("Total Days:", 571, 130, 79, 21, $SS_RIGHT)
 $Label_2_q3 = GUICtrlCreateLabel("Work Days:", 571, 150, 79, 21, $SS_RIGHT)
 $Label_3_q3 = GUICtrlCreateLabel("Ratio:", 571, 170, 79, 21, $SS_RIGHT)
 $Label_Ratio_q3 = GUICtrlCreateLabel("Ratio to Date:", 571, 190, 79, 16, $SS_RIGHT)
-;~ GUICtrlSetColor($Label_Ratio_q3, 0x0066CC)
 
 $Label_4_q3 = GUICtrlCreateLabel("Estim.On-Site:", 700, 130, 65, 21, $SS_RIGHT)
 $Label_5_q3 = GUICtrlCreateLabel("Real On-Site:", 700, 150, 65, 21, $SS_RIGHT)
@@ -362,7 +382,6 @@ $Label_1_q4 = GUICtrlCreateLabel("Total Days:", 856, 130, 79, 21, $SS_RIGHT)
 $Label_2_q4 = GUICtrlCreateLabel("Work Days:", 856, 150, 79, 21, $SS_RIGHT)
 $Label_3_q4 = GUICtrlCreateLabel("Ratio:", 856, 170, 79, 21, $SS_RIGHT)
 $Label_Ratio_q4 = GUICtrlCreateLabel("Ratio to Date:", 856, 190, 79, 16, $SS_RIGHT)
-;~ GUICtrlSetColor($Label_Ratio_q4, 0x0066CC)
 
 $Label_4_q4 = GUICtrlCreateLabel("Estim.On-Site:", 985, 130, 65, 21, $SS_RIGHT)
 $Label_5_q4 = GUICtrlCreateLabel("Real On-Site:", 985, 150, 65, 21, $SS_RIGHT)
@@ -416,9 +435,13 @@ $Status = StringTrimLeft($Status1, 1)
 GUICtrlSetData($Input_Tag, $Status)
 
 GUICtrlSetState($SelectLabel[$SelDate_slipt[3]][$SelDate_slipt[2]], $gui_show)
-
+;~ If $Debug = 1 Then
+;~ 	_MenuContextual($SelDate_slipt[3], $SelDate_slipt[2])
+;~ EndIf
+SplashOff()
 GUISetState(@SW_SHOW)
-
+FileDelete($sSplashPath)
+;~ _About()
 While 1
 	$nMsg = GUIGetMsg()
 
@@ -484,9 +507,135 @@ While 1
 				$ClickedDate = $FullDate_Split[1] & "/" & $s & "/" & $n
 
 				GUICtrlSetData($Calendar, $ClickedDate)
+
+;~ 				If $debug = 1 Then
+;~ 					ConsoleWrite("Aqui" & @CRLF)
+;~  					_MenuContextual($i, $j)
+;~ 				EndIf
+
 				_CalendarRead($i, $j)
 
 			EndIf
+
+			If $ContextItem_OnSite[$i][$j] <> 0 And $nMsg = $ContextItem_OnSite[$i][$j] Then
+				$SelDate = GUICtrlRead($Calendar)
+				$SelDate_slipt = StringSplit($SelDate, "/")
+				If Number($j) < Number("10") Then
+					$XV = "0" & $j
+				Else
+					$XV = $j
+				EndIf
+
+				If Number($i) < Number("10") Then
+					$XU = "0" & $i
+				Else
+					$XU = $i
+				EndIf
+				_Button_OnSite($XV, $XU, $SelDate_slipt[1])
+			EndIf
+
+			If $ContextItem_Remote[$i][$j] <> 0 And $nMsg = $ContextItem_Remote[$i][$j] Then
+				$SelDate = GUICtrlRead($Calendar)
+				$SelDate_slipt = StringSplit($SelDate, "/")
+				If Number($j) < Number("10") Then
+					$XV = "0" & $j
+				Else
+					$XV = $j
+				EndIf
+
+				If Number($i) < Number("10") Then
+					$XU = "0" & $i
+				Else
+					$XU = $i
+				EndIf
+				_Button_Remote($XV, $XU, $SelDate_slipt[1])
+			EndIf
+
+			If $ContextItem_Holiday[$i][$j] <> 0 And $nMsg = $ContextItem_Holiday[$i][$j] Then
+				$SelDate = GUICtrlRead($Calendar)
+				$SelDate_slipt = StringSplit($SelDate, "/")
+				If Number($j) < Number("10") Then
+					$XV = "0" & $j
+				Else
+					$XV = $j
+				EndIf
+
+				If Number($i) < Number("10") Then
+					$XU = "0" & $i
+				Else
+					$XU = $i
+				EndIf
+				_Button_holiday($XV, $XU, $SelDate_slipt[1])
+			EndIf
+
+			If $ContextItem_PTO[$i][$j] <> 0 And $nMsg = $ContextItem_PTO[$i][$j] Then
+				$SelDate = GUICtrlRead($Calendar)
+				$SelDate_slipt = StringSplit($SelDate, "/")
+				If Number($j) < Number("10") Then
+					$XV = "0" & $j
+				Else
+					$XV = $j
+				EndIf
+
+				If Number($i) < Number("10") Then
+					$XU = "0" & $i
+				Else
+					$XU = $i
+				EndIf
+				_Button_PTO($XV, $XU, $SelDate_slipt[1])
+			EndIf
+
+			If $ContextItem_Travel[$i][$j] <> 0 And $nMsg = $ContextItem_Travel[$i][$j] Then
+				$SelDate = GUICtrlRead($Calendar)
+				$SelDate_slipt = StringSplit($SelDate, "/")
+				If Number($j) < Number("10") Then
+					$XV = "0" & $j
+				Else
+					$XV = $j
+				EndIf
+
+				If Number($i) < Number("10") Then
+					$XU = "0" & $i
+				Else
+					$XU = $i
+				EndIf
+				_Button_Travel($XV, $XU, $SelDate_slipt[1])
+			EndIf
+
+			If $ContextItem_Sick[$i][$j] <> 0 And $nMsg = $ContextItem_Sick[$i][$j] Then
+				$SelDate = GUICtrlRead($Calendar)
+				$SelDate_slipt = StringSplit($SelDate, "/")
+				If Number($j) < Number("10") Then
+					$XV = "0" & $j
+				Else
+					$XV = $j
+				EndIf
+
+				If Number($i) < Number("10") Then
+					$XU = "0" & $i
+				Else
+					$XU = $i
+				EndIf
+				_Button_Sick($XV, $XU, $SelDate_slipt[1])
+			EndIf
+
+			If $ContextItem_Blank[$i][$j] <> 0 And $nMsg = $ContextItem_Blank[$i][$j] Then
+				$SelDate = GUICtrlRead($Calendar)
+				$SelDate_slipt = StringSplit($SelDate, "/")
+				If Number($j) < Number("10") Then
+					$XV = "0" & $j
+				Else
+					$XV = $j
+				EndIf
+
+				If Number($i) < Number("10") Then
+					$XU = "0" & $i
+				Else
+					$XU = $i
+				EndIf
+				_Button_Blank($XV, $XU, $SelDate_slipt[1])
+			EndIf
+
 		Next
 	Next
 
@@ -553,15 +702,19 @@ While 1
 			EndIf
 
 		Case $BkpMenu_help_help
-			$HelpFile = @ScriptDir & "\help.pdf"
+
+			FileInstall("Help.pdf", $HelpFile, 1)
+
 			If Not FileExists($HelpFile) Then
 				MsgBox(262160, "Work Days", "Help file not found in the application folder.")
 			Else
 				ShellExecute($HelpFile)
 			EndIf
+;~ 			FileDelete($HelpFile)
 
 		Case $BkpMenu_help_About
-			MsgBox(262144 + 64, "Work Days", "Work Days is a user-friendly calendar-based application for managing and categorizing your workdays—On Site, Remote, and Holiday—throughout the year." & @CRLF & @CRLF & $About & @CRLF & @CRLF & "Developed by Fabricio Zambroni - CURRENT VERSION: " & FileGetVersion(@ScriptFullPath))
+			_About()
+
 
 		Case $GUI_EVENT_CLOSE
 			Exit
@@ -625,106 +778,221 @@ While 1
 			GUICtrlSetState($SelectLabel[$SelDate_slipt[3]][$SelDate_slipt[2]], $gui_show)
 
 		Case $Button_OnSite
-			$SelDate = GUICtrlRead($Calendar)
-			$CheckDate_Return = _CheckDate($SelDate, "O")
-			If $CheckDate_Return = 0 Then
-				$SelDate_slipt = StringSplit($SelDate, "/")
-				$holidayName = GUICtrlRead($Input_Tag)
-				RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "O" & $holidayName)
-				_Update($SelDate)
-			EndIf
+			_Button_OnSite()
+
 
 		Case $Button_Blank
-			$SelDate = GUICtrlRead($Calendar)
-			$CheckDate_Return = _CheckDate($SelDate, "")
-			If $CheckDate_Return = 0 Then
-				$SelDate_slipt = StringSplit($SelDate, "/")
-				$WeekDayNum = _DateToDayOfWeek($SelDate_slipt[1], $SelDate_slipt[2], $SelDate_slipt[3])
-				$holidayName = GUICtrlRead($Input_Tag)
-				If $WeekDayNum = "1" Or $WeekDayNum = "7" Then
-					RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "W" & $holidayName)
-					_Update($SelDate)
-				Else
-					RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "B" & $holidayName)
-					_Update($SelDate)
-				EndIf
-			EndIf
+			_Button_Blank()
+
 
 		Case $Button_Remote
-			$SelDate = GUICtrlRead($Calendar)
-			$CheckDate_Return = _CheckDate($SelDate, "R")
-			If $CheckDate_Return = 0 Then
-				$SelDate_slipt = StringSplit($SelDate, "/")
-				$holidayName = GUICtrlRead($Input_Tag)
-				RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "R" & $holidayName)
-				_Update($SelDate)
-			EndIf
+			_Button_Remote()
+
 
 		Case $Button_Travel
-			$SelDate = GUICtrlRead($Calendar)
-			$CheckDate_Return = _CheckDate($SelDate, "T")
-			If $CheckDate_Return = 0 Then
-				$SelDate_slipt = StringSplit($SelDate, "/")
-				$holidayName = GUICtrlRead($Input_Tag)
-				RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "T" & $holidayName)
-				_Update($SelDate)
-			EndIf
+			_Button_Travel()
+
 
 		Case $Button_PTO
-			$SelDate = GUICtrlRead($Calendar)
-			$CheckDate_Return = _CheckDate($SelDate, "P")
-			If $CheckDate_Return = 0 Then
-				$SelDate_slipt = StringSplit($SelDate, "/")
-				$holidayName = GUICtrlRead($Input_Tag)
-				RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "P" & $holidayName)
-				_Update($SelDate)
-			EndIf
+			_Button_PTO()
+
 
 		Case $Button_holiday
-			$SelDate = GUICtrlRead($Calendar)
-			$CheckDate_Return = _CheckDate($SelDate, "H")
-			If $CheckDate_Return = 0 Then
-				$SelDate_slipt = StringSplit($SelDate, "/")
-				$holidayName = GUICtrlRead($Input_Tag)
-				RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "H" & $holidayName)
-				_Update($SelDate)
-			EndIf
+			_Button_holiday()
+
 
 		Case $Button_Sick
-			$SelDate = GUICtrlRead($Calendar)
-			$CheckDate_Return = _CheckDate($SelDate, "S")
-			If $CheckDate_Return = 0 Then
-				$SelDate_slipt = StringSplit($SelDate, "/")
-				$holidayName = GUICtrlRead($Input_Tag)
-				RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "S" & $holidayName)
-				_Update($SelDate)
-			EndIf
+			_Button_Sick()
+
 
 		Case $Button_Weekend
-			$SelDate = GUICtrlRead($Calendar)
-			$CheckDate_Return = _CheckDate($SelDate, "W")
-			If $CheckDate_Return = 0 Then
-				$SelDate_slipt = StringSplit($SelDate, "/")
+			_Button_Weekend()
 
-				$WeekDayNum = _DateToDayOfWeek($SelDate_slipt[1], $SelDate_slipt[2], $SelDate_slipt[3])
-
-				$WeekEnd = 0
-				If $WeekDayNum <> "1" And $WeekDayNum <> "7" Then
-					$WeekEnd = 1
-				EndIf
-
-				If $WeekEnd = 1 Then
-					MsgBox(262160, "Weekend", "This date is not a weekend.")
-				Else
-					$holidayName = GUICtrlRead($Input_Tag)
-					RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "W" & $holidayName)
-					_Update($SelDate)
-				EndIf
-			EndIf
 
 	EndSwitch
 
 WEnd
+
+Func _MenuContextual($U, $V)
+
+	$SelDate = GUICtrlRead($Calendar)
+	$SelDate_slipt = StringSplit($SelDate, "/")
+
+	If Number($V) < Number("10") Then
+		$XV = "0" & $V
+	Else
+		$XV = $V
+	EndIf
+
+	If Number($U) < Number("10") Then
+		$XU = "0" & $U
+	Else
+		$XU = $U
+	EndIf
+
+
+	$Context[$U][$V] = GUICtrlCreateContextMenu($Inputs[$U][$V])
+	$ContextItem_Date[$U][$V] = GUICtrlCreateMenuItem("Date: " & $XV & "/" & $XU & "/" & $SelDate_slipt[1], $Context[$U][$V])
+	GUICtrlSetState($ContextItem_Date[$U][$V], $gui_disable)
+	$ContextItem_Separator[$U][$V] = GUICtrlCreateMenuItem("", $Context[$U][$V])
+	$ContextItem_OnSite[$U][$V] = GUICtrlCreateMenuItem("On-Site", $Context[$U][$V])
+;~ 	GUICtrlSetColor($ContextItem_OnSite[$U][$V],"0xFF0033")
+	$ContextItem_Remote[$U][$V] = GUICtrlCreateMenuItem("Remote", $Context[$U][$V])
+	$ContextItem_Holiday[$U][$V] = GUICtrlCreateMenuItem("Holiday", $Context[$U][$V])
+	$ContextItem_PTO[$U][$V] = GUICtrlCreateMenuItem("PTO", $Context[$U][$V])
+	$ContextItem_Travel[$U][$V] = GUICtrlCreateMenuItem("Travel", $Context[$U][$V])
+	$ContextItem_Sick[$U][$V] = GUICtrlCreateMenuItem("Sick", $Context[$U][$V])
+	$ContextItem_Blank[$U][$V] = GUICtrlCreateMenuItem("Blank / Weekends", $Context[$U][$V])
+
+
+EndFunc   ;==>_MenuContextual
+
+
+Func _Button_OnSite($Month = "-1", $Day = "-1", $CYear = "-1")
+	If $Month = "-1" Then
+		$SelDate = GUICtrlRead($Calendar)
+	Else
+		$SelDate = $CYear & "/" & $Month & "/" & $Day
+	EndIf
+
+	$CheckDate_Return = _CheckDate($SelDate, "O")
+	If $CheckDate_Return = 0 Then
+		$SelDate_slipt = StringSplit($SelDate, "/")
+		$holidayName = GUICtrlRead($Input_Tag)
+		RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "O" & $holidayName)
+		_Update($SelDate)
+	EndIf
+EndFunc   ;==>_Button_OnSite
+
+Func _Button_Blank($Month = "-1", $Day = "-1", $CYear = "-1")
+	If $Month = "-1" Then
+		$SelDate = GUICtrlRead($Calendar)
+	Else
+		$SelDate = $CYear & "/" & $Month & "/" & $Day
+	EndIf
+	$CheckDate_Return = _CheckDate($SelDate, "")
+	If $CheckDate_Return = 0 Then
+		$SelDate_slipt = StringSplit($SelDate, "/")
+		$WeekDayNum = _DateToDayOfWeek($SelDate_slipt[1], $SelDate_slipt[2], $SelDate_slipt[3])
+		$holidayName = GUICtrlRead($Input_Tag)
+		If $WeekDayNum = "1" Or $WeekDayNum = "7" Then
+			RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "W" & $holidayName)
+			_Update($SelDate)
+		Else
+			RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "B" & $holidayName)
+			_Update($SelDate)
+		EndIf
+	EndIf
+
+EndFunc   ;==>_Button_Blank
+
+Func _Button_Remote($Month = "-1", $Day = "-1", $CYear = "-1")
+	ConsoleWrite("##### ----->>>>> Remote" & @CRLF)
+	If $Month = "-1" Then
+		$SelDate = GUICtrlRead($Calendar)
+	Else
+		$SelDate = $CYear & "/" & $Month & "/" & $Day
+	EndIf
+	$CheckDate_Return = _CheckDate($SelDate, "R")
+	If $CheckDate_Return = 0 Then
+		$SelDate_slipt = StringSplit($SelDate, "/")
+		$holidayName = GUICtrlRead($Input_Tag)
+		RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "R" & $holidayName)
+		_Update($SelDate)
+	EndIf
+EndFunc   ;==>_Button_Remote
+
+Func _Button_Travel($Month = "-1", $Day = "-1", $CYear = "-1")
+	ConsoleWrite("##### ----->>>>> Travel" & @CRLF)
+	If $Month = "-1" Then
+		$SelDate = GUICtrlRead($Calendar)
+	Else
+		$SelDate = $CYear & "/" & $Month & "/" & $Day
+	EndIf
+	$CheckDate_Return = _CheckDate($SelDate, "T")
+	If $CheckDate_Return = 0 Then
+		$SelDate_slipt = StringSplit($SelDate, "/")
+		$holidayName = GUICtrlRead($Input_Tag)
+		RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "T" & $holidayName)
+		_Update($SelDate)
+	EndIf
+EndFunc   ;==>_Button_Travel
+
+Func _Button_PTO($Month = "-1", $Day = "-1", $CYear = "-1")
+	ConsoleWrite("##### ----->>>>> PTO" & @CRLF)
+	If $Month = "-1" Then
+		$SelDate = GUICtrlRead($Calendar)
+	Else
+		$SelDate = $CYear & "/" & $Month & "/" & $Day
+	EndIf
+	$CheckDate_Return = _CheckDate($SelDate, "P")
+	If $CheckDate_Return = 0 Then
+		$SelDate_slipt = StringSplit($SelDate, "/")
+		$holidayName = GUICtrlRead($Input_Tag)
+		RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "P" & $holidayName)
+		_Update($SelDate)
+	EndIf
+EndFunc   ;==>_Button_PTO
+
+Func _Button_holiday($Month = "-1", $Day = "-1", $CYear = "-1")
+	ConsoleWrite("##### ----->>>>> Holiday" & @CRLF)
+	If $Month = "-1" Then
+		$SelDate = GUICtrlRead($Calendar)
+	Else
+		$SelDate = $CYear & "/" & $Month & "/" & $Day
+	EndIf
+	$CheckDate_Return = _CheckDate($SelDate, "H")
+	If $CheckDate_Return = 0 Then
+		$SelDate_slipt = StringSplit($SelDate, "/")
+		$holidayName = GUICtrlRead($Input_Tag)
+		RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "H" & $holidayName)
+		_Update($SelDate)
+	EndIf
+EndFunc   ;==>_Button_holiday
+
+Func _Button_Sick($Month = "-1", $Day = "-1", $CYear = "-1")
+	ConsoleWrite("##### ----->>>>> Sick" & @CRLF)
+	If $Month = "-1" Then
+		$SelDate = GUICtrlRead($Calendar)
+	Else
+		$SelDate = $CYear & "/" & $Month & "/" & $Day
+	EndIf
+	$CheckDate_Return = _CheckDate($SelDate, "S")
+	If $CheckDate_Return = 0 Then
+		$SelDate_slipt = StringSplit($SelDate, "/")
+		$holidayName = GUICtrlRead($Input_Tag)
+		RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "S" & $holidayName)
+		_Update($SelDate)
+	EndIf
+EndFunc   ;==>_Button_Sick
+
+Func _Button_Weekend($Month = "-1", $Day = "-1", $CYear = "-1")
+	ConsoleWrite("##### ----->>>>> Weekend" & @CRLF)
+	If $Month = "-1" Then
+		$SelDate = GUICtrlRead($Calendar)
+	Else
+		$SelDate = $CYear & "/" & $Month & "/" & $Day
+	EndIf
+	$CheckDate_Return = _CheckDate($SelDate, "W")
+	If $CheckDate_Return = 0 Then
+		$SelDate_slipt = StringSplit($SelDate, "/")
+
+		$WeekDayNum = _DateToDayOfWeek($SelDate_slipt[1], $SelDate_slipt[2], $SelDate_slipt[3])
+
+		$WeekEnd = 0
+		If $WeekDayNum <> "1" And $WeekDayNum <> "7" Then
+			$WeekEnd = 1
+		EndIf
+
+		If $WeekEnd = 1 Then
+			MsgBox(262160, "Weekend", "This date is not a weekend.")
+		Else
+			$holidayName = GUICtrlRead($Input_Tag)
+			RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", "W" & $holidayName)
+			_Update($SelDate)
+		EndIf
+	EndIf
+EndFunc   ;==>_Button_Weekend
 
 Func _CalendarTag($DateToTag)
 
@@ -739,16 +1007,14 @@ EndFunc   ;==>_CalendarTag
 
 Func _CreateMenu()
 
-;~ 	GUICtrlDelete($DBpMenu_Report)
 	GUICtrlDelete($DBpMenu_Report_Simple)
 	GUICtrlDelete($DBpMenu_Report_Detailed)
 	GUICtrlDelete($DBpMenu_Delete)
-;~ 	GUICtrlDelete($BkpMenu_reset_1)
 	GUICtrlDelete($BkpMenu_Exit)
+
 	Global $DBpMenu_Delete = GUICtrlCreateMenu("Delete Specific year", $BkpMenu_reset_all1)
 	Global $DBpMenu_Report_Simple = GUICtrlCreateMenu("Simple", $DBpMenu_Report)
 	Global $DBpMenu_Report_Detailed = GUICtrlCreateMenu("Detailed", $DBpMenu_Report)
-
 
 	Local $sSubKey = ""
 	For $i = 1 To 12
@@ -757,14 +1023,11 @@ Func _CreateMenu()
 		If @error Then ExitLoop
 
 		$DBpMenu_Delete_Year[$i] = GUICtrlCreateMenuItem($sSubKey, $DBpMenu_Delete)
-;~ 		$DBpMenu_Report_Year[$i] = GUICtrlCreateMenuItem($sSubKey, $DBpMenu_Report)
 		$DBpMenu_Report_simple_Year[$i] = GUICtrlCreateMenuItem($sSubKey, $DBpMenu_Report_Simple)
 		$DBpMenu_Report_detailed_Year[$i] = GUICtrlCreateMenuItem($sSubKey, $DBpMenu_Report_Detailed)
 
-
 	Next
 
-;~ 	Global $BkpMenu_reset_1 = GUICtrlCreateMenuItem("", $DBpMenu_db)
 	Global $BkpMenu_Exit = GUICtrlCreateMenuItem("&Exit", $DBpMenu_db)
 
 EndFunc   ;==>_CreateMenu
@@ -884,14 +1147,14 @@ Func _RestoreBackup()
 				Else
 					If $ImportCount > 15 Then
 						_ClearScreen()
+						MsgBox(262208, "Import", "**Success!** The command was executed successfully." & @CRLF & @CRLF & $ImportCount & " lines imported.")
 						_ReadColors()
 						_ReadINI(@YEAR)
-						MsgBox(262208, "Import", "**Success!** The command was executed successfully." & @CRLF & @CRLF & $ImportCount & " lines imported.")
 					Else
+						MsgBox(262208, "Import", "**Success!** The command was executed successfully." & @CRLF & "The following lines was imported:" & @CRLF & @CRLF & $HolidaysSucess)
 						_ClearScreen()
 						_ReadColors()
 						_ReadINI(@YEAR)
-						MsgBox(262208, "Import", "**Success!** The command was executed successfully." & @CRLF & "The following lines was imported:" & @CRLF & @CRLF & $HolidaysSucess)
 					EndIf
 				EndIf
 
@@ -939,7 +1202,24 @@ Func _Update($SelDate)
 	EndIf
 
 	GUICtrlSetData($Inputs[$Data_day][$Data_month], $Data_Register)
-	GUICtrlSetTip($Inputs[$Data_day][$Data_month], StringReplace($tip, "/n", @CRLF & "-"), $WeekDayName & " - " & $Data_year & "/" & $Data_month & "/" & $Data_day)
+
+	If $Data_Register = "W" Then $StatusName = "WEEKEND"
+	If $Data_Register = "O" Then $StatusName = "ON-SITE"
+	If $Data_Register = "R" Then $StatusName = "REMOTE"
+	If $Data_Register = "T" Then $StatusName = "TRAVEL"
+	If $Data_Register = "P" Then $StatusName = "PTO"
+	If $Data_Register = "H" Then $StatusName = "HOLIDAY"
+	If $Data_Register = "S" Then $StatusName = "SICK DAY"
+	If $Data_Register = "B" Then $StatusName = "BLANK"
+	If $Data_Register = "" Then $StatusName = "BLANK"
+
+	If $tip <> "" Then
+		GUICtrlSetTip($Inputs[$Data_day][$Data_month], StringReplace($tip, "/n", @CRLF & "-"), $WeekDayName & " - " & $Data_year & "/" & $Data_month & "/" & $Data_day & " - " & $StatusName); & " - TODAY")
+	Else
+		GUICtrlSetTip($Inputs[$Data_day][$Data_month], $StatusName, $WeekDayName & " - " & $Data_year & "/" & $Data_month & "/" & $Data_day); & " - TODAY")
+	EndIf
+
+
 
 	If $tip <> "" Then
 		GUICtrlSetFont($Inputs[$Data_day][$Data_month], 9, 900, 6, "", 2)
@@ -1023,7 +1303,14 @@ Func _Update($SelDate)
 			GUICtrlSetFont($Inputs[$Data_day][$Data_month], 9, 100, 0, "", 2)
 		EndIf
 
-		GUICtrlSetTip($Inputs[$Data_day][$Data_month], StringReplace($tip, "/n", @CRLF & "-"), $WeekDayName & " - " & $Data_year & "/" & $Data_month & "/" & $Data_day & " - TODAY")
+;~ 		GUICtrlSetTip($Inputs[$Data_day][$Data_month], StringReplace($tip, "/n", @CRLF & "-"), $WeekDayName & " - " & $Data_year & "/" & $Data_month & "/" & $Data_day & " - TODAY")
+
+		If $tip <> "" Then
+		GUICtrlSetTip($Inputs[$Data_day][$Data_month], StringReplace($tip, "/n", @CRLF & "-"), $WeekDayName & " - " & $Data_year & "/" & $Data_month & "/" & $Data_day & " - " & $StatusName & " - TODAY")
+	Else
+		GUICtrlSetTip($Inputs[$Data_day][$Data_month], $StatusName, $WeekDayName & " - " & $Data_year & "/" & $Data_month & "/" & $Data_day & " - TODAY")
+	EndIf
+
 		If $Data_Register = "" Then
 			$Data_Register = "X"
 			GUICtrlSetColor($Inputs[$Data_day][$Data_month], 0xFF0000)             ; today
@@ -1131,8 +1418,6 @@ EndFunc   ;==>_ImportHolidays
 
 Func _ResetDatabase($step = "0")
 
-	_CreateMenu()
-
 	$sKey = $DB & "\"
 	If $step = "0" Then
 		If Not IsDeclared("iMsgBoxAnswer") Then Local $iMsgBoxAnswer
@@ -1141,23 +1426,28 @@ Func _ResetDatabase($step = "0")
 			Case $iMsgBoxAnswer = 6 ;Yes
 				RegDelete($sKey)
 				If @error Then
+					_CreateMenu()
 					MsgBox(262160, "Reset Database", "Oops! Something went wrong. Please try again." & @CRLF & "Error code: " & @error)
 					Return
 				Else
+					_CreateMenu()
 					MsgBox(262208, "Reset Database", "**Success!** The command was executed successfully. All data has been removed.")
 					Return
 				EndIf
 
 			Case $iMsgBoxAnswer = 7 ;No
+				_CreateMenu()
 				Return
 
 		EndSelect
 	Else
 		RegDelete($sKey)
 		If @error Then
+			_CreateMenu()
 			MsgBox(262160, "Reset Database", "Oops! Something went wrong. Please try again." & @CRLF & "Error code: " & @error)
 			Return 0
 		Else
+			_CreateMenu()
 			Return 1
 		EndIf
 
@@ -1223,8 +1513,9 @@ Func _ClearScreen()
 		For $i = 1 To 31
 			GUICtrlDelete($Inputs[$i][$j])
 
-			If $Contextual_Menu = 1 Then
+			If $Debug = 9 Then
 				GUICtrlDelete($Context[$i][$j])
+				GUICtrlDelete($ContextItem_Date[$i][$j])
 				GUICtrlDelete($ContextItem_OnSite[$i][$j])
 				GUICtrlDelete($ContextItem_Remote[$i][$j])
 				GUICtrlDelete($ContextItem_Holiday[$i][$j])
@@ -1786,10 +2077,10 @@ Func _ReadStatistics($Year)
 	GUICtrlSetData($Input_E_Onsite_q3, Ceiling(($Counta_WD_q3 / 5) * 3))
 	GUICtrlSetData($Input_E_Onsite_q4, Ceiling(($Counta_WD_q4 / 5) * 3))
 
-	GUICtrlSetData($Input_R_Onsite_q1, Round($Counta_R_Onsite_q1,2)) ;## Real On-Site ##
-	GUICtrlSetData($Input_R_Onsite_q2, Round($Counta_R_Onsite_q2,2))
-	GUICtrlSetData($Input_R_Onsite_q3, Round($Counta_R_Onsite_q3,2))
-	GUICtrlSetData($Input_R_Onsite_q4, Round($Counta_R_Onsite_q4,2))
+	GUICtrlSetData($Input_R_Onsite_q1, Round($Counta_R_Onsite_q1, 2)) ;## Real On-Site ##
+	GUICtrlSetData($Input_R_Onsite_q2, Round($Counta_R_Onsite_q2, 2))
+	GUICtrlSetData($Input_R_Onsite_q3, Round($Counta_R_Onsite_q3, 2))
+	GUICtrlSetData($Input_R_Onsite_q4, Round($Counta_R_Onsite_q4, 2))
 
 	$Remaining_q1 = Ceiling(($Counta_WD_q1 / 5) * 3) - $Counta_R_Onsite_q1
 	$Remaining_q2 = Ceiling(($Counta_WD_q2 / 5) * 3) - $Counta_R_Onsite_q2
@@ -1942,13 +2233,12 @@ Func _ReadINI($Year)
 
 			If _DateIsValid($Year & "/" & $X & "/" & $i) = 1 Then
 
-				$SelectLabel[$i][$j] = GUICtrlCreateLabel("", -3 + ($i * 35), 202 + $Skip + ($j * 25), 36, 28) ;,$SS_BLACKFRAME)
+				$SelectLabel[$i][$j] = GUICtrlCreateLabel("", -3 + ($i * 35), 202 + $Skip + ($j * 25), 36, 28) ;Select Day label
 				GUICtrlSetBkColor($SelectLabel[$i][$j], $Color_bk_Selected)
 				GUICtrlSetState($SelectLabel[$i][$j], $gui_disable)
 				GUICtrlSetState($SelectLabel[$i][$j], $gui_hide)
 
-
-				$TodayLabel[$i][$j] = GUICtrlCreateLabel("", -1 + ($i * 35), 204 + $Skip + ($j * 25), 32, 24) ;,$SS_BLACKFRAME)
+				$TodayLabel[$i][$j] = GUICtrlCreateLabel("", -1 + ($i * 35), 204 + $Skip + ($j * 25), 32, 24) ;Today Label
 				GUICtrlSetBkColor($TodayLabel[$i][$j], $Color_bk_Today)
 				GUICtrlSetColor($TodayLabel[$i][$j], $Color_bk_Today)
 				GUICtrlSetState($TodayLabel[$i][$j], $gui_disable)
@@ -1957,16 +2247,10 @@ Func _ReadINI($Year)
 
 				$Inputs[$i][$j] = GUICtrlCreateButton("", 0 + ($i * 35), 205 + $Skip + ($j * 25), 30, 22, BitOR($ES_READONLY, $ES_CENTER, $BS_FLAT, $BS_BOTTOM))
 
-				If $Contextual_Menu = 1 Then
-					$Context[$i][$j] = GUICtrlCreateContextMenu($Inputs[$i][$j])
-					$ContextItem_OnSite[$i][$j] = GUICtrlCreateMenuItem("On-Site", $Context[$i][$j])
-					$ContextItem_Remote[$i][$j] = GUICtrlCreateMenuItem("Remote", $Context[$i][$j])
-					$ContextItem_Holiday[$i][$j] = GUICtrlCreateMenuItem("Holiday", $Context[$i][$j])
-					$ContextItem_PTO[$i][$j] = GUICtrlCreateMenuItem("PTO", $Context[$i][$j])
-					$ContextItem_Travel[$i][$j] = GUICtrlCreateMenuItem("Travel", $Context[$i][$j])
-					$ContextItem_Sick[$i][$j] = GUICtrlCreateMenuItem("Sick", $Context[$i][$j])
-					$ContextItem_Blank[$i][$j] = GUICtrlCreateMenuItem("Blank / Weekends", $Context[$i][$j])
-				EndIf
+
+				_MenuContextual($i, $j)
+
+
 
 				$WeekDayNum = _DateToDayOfWeek($Year, $X, $i)
 				$WeekDayName = _DateDayOfWeek($WeekDayNum, 1)
@@ -1980,7 +2264,22 @@ Func _ReadINI($Year)
 					GUICtrlSetFont($Inputs[$i][$j], 9, 100, 0, "", 2)
 				EndIf
 
-				GUICtrlSetTip($Inputs[$i][$j], StringReplace($tip, "/n", @CRLF & "-"), $WeekDayName & " - " & $Year & "/" & $X & "/" & $n)
+				If $Status = "W" Then $StatusName = "WEEKEND"
+				If $Status = "O" Then $StatusName = "ON-SITE"
+				If $Status = "R" Then $StatusName = "REMOTE"
+				If $Status = "T" Then $StatusName = "TRAVEL"
+				If $Status = "P" Then $StatusName = "PTO"
+				If $Status = "H" Then $StatusName = "HOLIDAY"
+				If $Status = "S" Then $StatusName = "SICK DAY"
+				If $Status = "B" Then $StatusName = "BLANK"
+				If $Status = "" Then $StatusName = "BLANK"
+
+				If $tip <> "" Then
+					GUICtrlSetTip($Inputs[$i][$j], StringReplace($tip, "/n", @CRLF & "-"), $WeekDayName & " - " & $Year & "/" & $X & "/" & $n & " - " & $StatusName)
+				Else
+					GUICtrlSetTip($Inputs[$i][$j], $StatusName, $WeekDayName & " - " & $Year & "/" & $X & "/" & $n)
+				EndIf
+
 
 				If $Status = "B" Then
 					If $tip <> "" Then
@@ -1990,108 +2289,91 @@ Func _ReadINI($Year)
 					EndIf
 				EndIf
 
-
 				GUICtrlSetData($Inputs[$i][$j], $Status)
-;~ 				#cs
+
 				If $Status = "W" Then
 					GUICtrlSetBkColor($Inputs[$i][$j], $Color_bk_Weekend) ; Weekend
-
 					$Font_Weekend = $Black
 					If $Picker_Font_Weekend_Read = 1 Then
 						$Font_Weekend = $White
 					EndIf
 					GUICtrlSetColor($Inputs[$i][$j], $Font_Weekend)
-
 				EndIf
-;~ 				#ce
 
 				If $Status = "O" Then
 					GUICtrlSetBkColor($Inputs[$i][$j], $Color_bk_OnSite) ; On-site
-
 					$Font_OnSite = $Black
 					If $Picker_Font_OnSite_Read = 1 Then
 						$Font_OnSite = $White
 					EndIf
 					GUICtrlSetColor($Inputs[$i][$j], $Font_OnSite)
-
 				EndIf
 
 				If $Status = "R" Then
 					GUICtrlSetBkColor($Inputs[$i][$j], $Color_bk_Remote) ; Remote
-
 					$Font_Remote = $Black
 					If $Picker_Font_Remote_Read = 1 Then
 						$Font_Remote = $White
 					EndIf
 					GUICtrlSetColor($Inputs[$i][$j], $Font_Remote)
-
-
 				EndIf
 
 				If $Status = "T" Then
 					GUICtrlSetBkColor($Inputs[$i][$j], $Color_bk_Travel) ; Travel
-
 					$Font_Travel = $Black
 					If $Picker_Font_Travel_Read = 1 Then
 						$Font_Travel = $White
 					EndIf
 					GUICtrlSetColor($Inputs[$i][$j], $Font_Travel)
-
 				EndIf
 
 				If $Status = "P" Then
 					GUICtrlSetBkColor($Inputs[$i][$j], $Color_bk_PTO) ; PTO
-
 					$Font_PTO = $Black
 					If $Picker_Font_PTO_Read = 1 Then
 						$Font_PTO = $White
 					EndIf
 					GUICtrlSetColor($Inputs[$i][$j], $Font_PTO)
-
 				EndIf
 
 				If $Status = "H" Then
 					GUICtrlSetBkColor($Inputs[$i][$j], $Color_bk_holiday) ; holiday
-
 					$Font_Holiday = $Black
 					If $Picker_Font_Holiday_Read = 1 Then
 						$Font_Holiday = $White
 					EndIf
 					GUICtrlSetColor($Inputs[$i][$j], $Font_Holiday)
-
 				EndIf
 
 				If $Status = "" Or $Status = "   " Then
 					GUICtrlSetBkColor($Inputs[$i][$j], $Color_bk_Blank) ; Weekend
-
 					$Font_Blank = $Black
 					If $Picker_Font_Blank_Read = 1 Then
 						$Font_Blank = $White
 					EndIf
 					GUICtrlSetColor($Inputs[$i][$j], $Font_Blank)
-
 				EndIf
 
 				If $Status = "S" Then
 					GUICtrlSetBkColor($Inputs[$i][$j], $Color_bk_Sick) ; Sick
-
 					$Font_Sick = $Black
 					If $Picker_Font_Sick_Read = 1 Then
 						$Font_Sick = $White
 					EndIf
 					GUICtrlSetColor($Inputs[$i][$j], $Font_Sick)
-
 				EndIf
 
 				If $Year & "/" & $X & "/" & $n = @YEAR & "/" & @MON & "/" & @MDAY Then
-
-;~ 					GUICtrlSetTip($Inputs[$i][$j], $WeekDayName & " - " & $Year & "/" & $X & "/" & $n & " - TODAY" & StringReplace($tip,"/n",@CRLF & "- "))
-					GUICtrlSetTip($Inputs[$i][$j], StringReplace($tip, "/n", @CRLF & "-"), $WeekDayName & " - " & $Year & "/" & $X & "/" & $n & " - TODAY")
+;~ 					GUICtrlSetTip($Inputs[$i][$j], StringReplace($tip, "/n", @CRLF & "-"), $WeekDayName & " - " & $Year & "/" & $X & "/" & $n & " - TODAY")
 					GUICtrlSetState($TodayLabel[$i][$j], $gui_show)
 
+					If $tip <> "" Then
+						GUICtrlSetTip($Inputs[$i][$j], StringReplace($tip, "/n", @CRLF & "-"), $WeekDayName & " - " & $Year & "/" & $X & "/" & $n & " - " & $StatusName & " - TODAY")
+					Else
+						GUICtrlSetTip($Inputs[$i][$j], $StatusName, $WeekDayName & " - " & $Year & "/" & $X & "/" & $n & " - TODAY")
+					EndIf
 
 				EndIf
-
 			EndIf
 		Next
 
@@ -2102,6 +2384,8 @@ Func _ReadINI($Year)
 		EndIf
 
 	Next
+	$XCount += 1
+	ConsoleWrite("$XCount: " & $XCount & @CRLF)
 	_CreateMenu()
 	Return
 
@@ -2162,23 +2446,11 @@ Func _CheckQuarter()
 		EndIf
 	EndIf
 
-;~ 	ConsoleWrite("$Ratio_Q1: " & $Ratio_Q1 & @CRLF)
-;~ 	ConsoleWrite("$Ratio_Q2: " & $Ratio_Q2 & @CRLF)
-;~ 	ConsoleWrite("$Ratio_Q3: " & $Ratio_Q3 & @CRLF)
-;~ 	ConsoleWrite("$Ratio_Q4: " & $Ratio_Q4 & @CRLF)
 
 	$SelDate_slipt = StringSplit($SelDate, "/")
 	If $SelDate_slipt[1] = @YEAR Then
 
 		If @MON = "01" Or @MON = "02" Or @MON = "03" Then
-;~ 			GUICtrlSetData($Label_3_q1, "Ratio:")
-;~ 			GUICtrlSetColor($Label_3_q1, $Color_bk_Black)
-;~ 			GUICtrlSetData($Label_3_q2, "Ratio:")
-;~ 			GUICtrlSetColor($Label_3_q2, $Color_bk_Black)
-;~ 			GUICtrlSetData($Label_3_q3, "Ratio:")
-;~ 			GUICtrlSetColor($Label_3_q3, $Color_bk_Black)
-;~ 			GUICtrlSetData($Label_3_q4, "Ratio:")
-;~ 			GUICtrlSetColor($Label_3_q4, $Color_bk_Black)
 
 			GUICtrlSetState($Label_ratio_q1, $gui_show)
 			GUICtrlSetState($Label_Ratio_q2, $gui_hide)
@@ -2190,23 +2462,9 @@ Func _CheckQuarter()
 			GUICtrlSetState($Input_RaTio_q3, $gui_hide)
 			GUICtrlSetState($Input_RaTio_q4, $gui_hide)
 
-;~ 			GUICtrlSetBkColor($Input_Remaining_q1, _GetColorFromValue($Remaining_q1))
-;~ 			GUICtrlSetBkColor($Input_Remaining_q2, _GetColorFromValue($Remaining_q2))
-;~ 			GUICtrlSetBkColor($Input_Remaining_q3, _GetColorFromValue($Remaining_q3))
-;~ 			GUICtrlSetBkColor($Input_Remaining_q4, _GetColorFromValue($Remaining_q4))
-
-
 		EndIf
 
 		If @MON = "04" Or @MON = "05" Or @MON = "06" Then
-;~ 			GUICtrlSetData($Label_3_q1, "Ratio:")
-;~ 			GUICtrlSetColor($Label_3_q1, $Color_bk_Black)
-;~ 			GUICtrlSetData($Label_3_q2, "Ratio:")
-;~ 			GUICtrlSetColor($Label_3_q2, $Color_bk_Black)
-;~ 			GUICtrlSetData($Label_3_q3, "Ratio:")
-;~ 			GUICtrlSetColor($Label_3_q3, $Color_bk_Black)
-;~ 			GUICtrlSetData($Label_3_q4, "Ratio:")
-;~ 			GUICtrlSetColor($Label_3_q4, $Color_bk_Black)
 
 			GUICtrlSetState($Label_ratio_q1, $gui_hide)
 			GUICtrlSetState($Label_Ratio_q2, $gui_show)
@@ -2218,22 +2476,9 @@ Func _CheckQuarter()
 			GUICtrlSetState($Input_RaTio_q3, $gui_hide)
 			GUICtrlSetState($Input_RaTio_q4, $gui_hide)
 
-;~ 			GUICtrlSetBkColor($Input_Remaining_q1, _GetColorFromValue($Remaining_q1))
-;~ 			GUICtrlSetBkColor($Input_Remaining_q2, _GetColorFromValue($Remaining_q2))
-;~ 			GUICtrlSetBkColor($Input_Remaining_q3, _GetColorFromValue($Remaining_q3))
-;~ 			GUICtrlSetBkColor($Input_Remaining_q4, _GetColorFromValue($Remaining_q4))
-
 		EndIf
 
 		If @MON = "07" Or @MON = "08" Or @MON = "09" Then
-;~ 			GUICtrlSetData($Label_3_q1, "Ratio:")
-;~ 			GUICtrlSetBkColor($Label_3_q1, $Color_bk_Black)
-;~ 			GUICtrlSetData($Label_3_q2, "Ratio:")
-;~ 			GUICtrlSetBkColor($Label_3_q2, $Color_bk_Black)
-;~ 			GUICtrlSetData($Label_3_q3, "Ratio:")
-;~ 			GUICtrlSetBkColor($Label_3_q3, $Color_bk_Black)
-;~ 			GUICtrlSetData($Label_3_q4, "Ratio:")
-;~ 			GUICtrlSetBkColor($Label_3_q4, $Color_bk_Black)
 
 			GUICtrlSetState($Label_ratio_q1, $gui_hide)
 			GUICtrlSetState($Label_Ratio_q2, $gui_hide)
@@ -2245,22 +2490,9 @@ Func _CheckQuarter()
 			GUICtrlSetState($Input_RaTio_q3, $gui_show)
 			GUICtrlSetState($Input_RaTio_q4, $gui_hide)
 
-;~ 			GUICtrlSetBkColor($Input_Remaining_q1, _GetColorFromValue($Remaining_q1))
-;~ 			GUICtrlSetBkColor($Input_Remaining_q2, _GetColorFromValue($Remaining_q2))
-;~ 			GUICtrlSetBkColor($Input_Remaining_q3, _GetColorFromValue($Remaining_q3))
-;~ 			GUICtrlSetBkColor($Input_Remaining_q4, _GetColorFromValue($Remaining_q4))
-
 		EndIf
 
 		If @MON = "10" Or @MON = "11" Or @MON = "12" Then
-;~ 			GUICtrlSetData($Label_3_q1, "Ratio:")
-;~ 			GUICtrlSetBkColor($Label_3_q1, $Color_bk_Black)
-;~ 			GUICtrlSetData($Label_3_q2, "Ratio:")
-;~ 			GUICtrlSetBkColor($Label_3_q2, $Color_bk_Black)
-;~ 			GUICtrlSetData($Label_3_q3, "Ratio:")
-;~ 			GUICtrlSetBkColor($Label_3_q3, $Color_bk_Black)
-;~ 			GUICtrlSetData($Label_3_q4, "Ratio:")
-;~ 			GUICtrlSetBkColor($Label_3_q4, $Color_bk_Black)
 
 			GUICtrlSetState($Label_ratio_q1, $gui_hide)
 			GUICtrlSetState($Label_Ratio_q2, $gui_hide)
@@ -2272,22 +2504,8 @@ Func _CheckQuarter()
 			GUICtrlSetState($Input_RaTio_q3, $gui_hide)
 			GUICtrlSetState($Input_RaTio_q4, $gui_show)
 
-;~ 			GUICtrlSetBkColor($Input_Remaining_q1, _GetColorFromValue($Remaining_q1))
-;~ 			GUICtrlSetBkColor($Input_Remaining_q2, _GetColorFromValue($Remaining_q2))
-;~ 			GUICtrlSetBkColor($Input_Remaining_q3, _GetColorFromValue($Remaining_q3))
-;~ 			GUICtrlSetBkColor($Input_Remaining_q4, _GetColorFromValue($Remaining_q4))
-
 		EndIf
 	Else
-;~ 		GUICtrlSetData($Label_3_q1, "Ratio:")
-;~ 		GUICtrlSetColor($Label_3_q1, $Color_bk_Black)
-;~ 		GUICtrlSetData($Label_3_q2, "Ratio:")
-;~ 		GUICtrlSetColor($Label_3_q2, $Color_bk_Black)
-;~ 		GUICtrlSetData($Label_3_q3, "Ratio:")
-;~ 		GUICtrlSetColor($Label_3_q3, $Color_bk_Black)
-;~ 		GUICtrlSetData($Label_3_q4, "Ratio:")
-;~ 		GUICtrlSetColor($Label_3_q4, $Color_bk_Black)
-
 		GUICtrlSetState($Label_ratio_q1, $gui_hide)
 		GUICtrlSetState($Label_Ratio_q2, $gui_hide)
 		GUICtrlSetState($Label_Ratio_q3, $gui_hide)
@@ -2381,6 +2599,16 @@ Func _BKColorPallet()
 	GUICtrlCreateLabel("Today:", 10, 255)
 	GUICtrlCreateLabel("Selected:", 10, 285)
 
+	$debug_check = GUICtrlCreateCheckbox("Dev tools", 65, 305)
+	If $Debug = 1 Then
+		GUICtrlSetState($debug_check, $gui_checked)
+	Else
+		GUICtrlSetState($debug_check, $gui_unchecked)
+	EndIf
+	GUICtrlSetState($debug_check, $gui_hide)
+
+
+
 	$Picker_OnSite = _GUIColorPicker_Create('', 65, 10, 60, 23, $Color_bk_OnSite, BitOR($CP_FLAG_CHOOSERBUTTON, $CP_FLAG_ARROWSTYLE, $CP_FLAG_MOUSEWHEEL), $aPalette, 4, 5, 0, '', 'More...')
 	$Picker_Remote = _GUIColorPicker_Create('', 65, 40, 60, 23, $Color_bk_Remote, BitOR($CP_FLAG_CHOOSERBUTTON, $CP_FLAG_ARROWSTYLE, $CP_FLAG_MOUSEWHEEL), $aPalette, 4, 5, 0, '', 'More...')
 	$Picker_Holiday = _GUIColorPicker_Create('', 65, 70, 60, 23, $Color_bk_holiday, BitOR($CP_FLAG_CHOOSERBUTTON, $CP_FLAG_ARROWSTYLE, $CP_FLAG_MOUSEWHEEL), $aPalette, 4, 5, 0, '', 'More...')
@@ -2420,6 +2648,11 @@ Func _BKColorPallet()
 	While 1
 		$Msg = GUIGetMsg()
 		Switch $Msg
+			Case $debug_check
+				RegWrite($DB, "Debug", "REG_SZ", GUICtrlRead($debug_check))
+				$Debug = GUICtrlRead($debug_check)
+
+
 			Case $Colors_Close
 				$Picker_Color_OnSite = _GUIColorPicker_GetColor($Picker_OnSite)
 				$Picker_Color_Remote = _GUIColorPicker_GetColor($Picker_Remote)
@@ -2460,9 +2693,6 @@ Func _BKColorPallet()
 				RegWrite($DB, "Font_Sick", "REG_SZ", $Picker_Font_Sick_Read)
 				RegWrite($DB, "Font_Blank", "REG_SZ", $Picker_Font_Blank_Read)
 				RegWrite($DB, "Font_Weekend", "REG_SZ", $Picker_Font_Weekend_Read)
-
-
-
 
 				$Font_OnSite = $Black
 				If $Picker_Font_OnSite_Read = 1 Then
@@ -2522,8 +2752,6 @@ Func _BKColorPallet()
 				GUICtrlSetColor($Button_Weekend, $Font_Weekend)
 
 				$Original_Color_2 = $Picker_Color_OnSite & $Picker_Color_Remote & $Picker_Color_Holiday & $Picker_Color_PTO & $Picker_Color_Travel & $Picker_Color_Sick & $Picker_Color_Blank & $Picker_Color_Weekend & $Picker_Color_Today & $Picker_Color_Selected & $Picker_Font_OnSite_Read & $Picker_Font_Remote_Read & $Picker_Font_Holiday_Read & $Picker_Font_PTO_Read & $Picker_Font_Travel_Read & $Picker_Font_Sick_Read & $Picker_Font_Blank_Read & $Picker_Font_Weekend_Read
-
-;~ 				ConsoleWrite($Original_Color_2 & @CRLF)
 
 				GUIDelete($Form_Colors)
 				If $Original_Color_1 = $Original_Color_2 Then
@@ -2655,7 +2883,6 @@ Func _CreateBackup($DBBKP = "")
 	If $DBBKP = "" Then
 		Local $sFilePath = FileSaveDialog("Save backup file", @ScriptDir, "All (*.*)", 18, "Backup_" & @YEAR & "_" & @MON & "_" & @MDAY & ".bkp", $Form_WorkDays)
 		If @error Then
-;~ 			MsgBox(262144 + 16, "Error", "Operation aborted.")
 			Return
 		EndIf
 	Else
@@ -2672,7 +2899,6 @@ Func _CreateBackup($DBBKP = "")
 		If @error <> 0 Then ExitLoop
 		$RegRead = RegRead($DB, $sSubKey_settings)
 		FileWriteLine($sFilePath_hwd, $sSubKey_settings & "=" & $RegRead)
-;~ 		ConsoleWrite($sSubKey_settings & "=" & $RegRead & @CRLF)
 	Next
 
 	; Loop from 1 to 10 times, displaying registry keys at the particular instance value.
@@ -2798,5 +3024,33 @@ Func _GetColorFromValue($iValue)
 	Return BitShift($iRed, -16) + BitShift($iGreen, -8) + $iBlue
 EndFunc   ;==>_GetColorFromValue
 
+Func _About()
+
+	Global $AboutFile = @TempDir & "\about.jpg"
+
+	FileInstall("about.jpg", $AboutFile, 1)
+
+	$Form_About = GUICreate("About", 655, 617, -1, -1, $WS_SYSMENU)
+	$Pic_About = GUICtrlCreatePic($AboutFile, 5, 5, 640, 360)
+	$About_Text = "Work Days is a user-friendly calendar-based application for managing and categorizing your workdays—On Site, Remote, and Holiday—throughout the year." & @CRLF & @CRLF & "Developed by Fabricio Zambroni - CURRENT VERSION: " & FileGetVersion(@ScriptFullPath)
+	$Text_About = GUICtrlCreateEdit($About_Text,5,293,640,90, BitOR($ES_MULTILINE,$ES_READONLY),-1)
+	GUICtrlSetFont($Text_About,12)
+	GUICtrlSetColor($Text_About,0x2211FF)
+	$Edit_About = GUICtrlCreateEdit($About, 5, 396, 640, 180, BitOR($ES_MULTILINE,$ES_READONLY),-1)
+
+	GUISetState(@SW_SHOW)
 
 
+	While 1
+		$nMsg = GUIGetMsg()
+		Switch $nMsg
+			Case $GUI_EVENT_CLOSE
+				GUIDelete($Form_About)
+;~ 				exit
+				Return
+
+		EndSwitch
+	WEnd
+
+
+EndFunc   ;==>_About
