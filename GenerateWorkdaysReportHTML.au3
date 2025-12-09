@@ -1,8 +1,13 @@
 Func GenerateWorkdaysReportHTML($Year, $Full)
+
+	Local $oObject = WKHtmlToX() ; Not needed to do WKHtmlToX('pdf') because it's the default option
+
 	; Configs e arquivo de saída
 	Local $RegistryBase = "HKEY_CURRENT_USER\Software\WorkDays\" & $Year
-	Local $OutputPath = @ScriptDir & "\Workdays_Report.html"
-	Local $hFile = FileOpen($OutputPath, 2)
+	Global $OutputPath = "Workdays_Report_" & @MON & "_" & @MDAY & "_" & @YEAR & ".pdf"
+	Global $OutputPath_temp = "Workdays_Report_" & @MON & "_" & @MDAY & "_" & @YEAR & ".html"
+;~ 	Local $hFile = FileOpen($OutputPath, 2)
+	Local $hFile = FileOpen(@ScriptDir & "\" & $OutputPath_temp, 2)
 	If $hFile = -1 Then
 		MsgBox(16, "Error", "Failed to create HTML file.")
 		Return
@@ -193,5 +198,18 @@ Func GenerateWorkdaysReportHTML($Year, $Full)
 	FileWriteLine($hFile, "<p style='color:gray;font-size:small;'>Develop by Fabricio Zambroni - Version: " & FileGetVersion(@ScriptFullPath) & "</p>")
 	FileWriteLine($hFile, "</body></html>")
 	FileClose($hFile)
+
+
+	$oObject.Input = $OutputPath_temp
+	$oObject.Output = $OutputPath ; relative to current working dir
+
+;~ 	MsgBox(0, "WKHtmlToX", "Will now convert google.com to PDF.")
+	$oObject.Convert()
+
+	MsgBox(262208,"Report","The report file was saved on: " & @CRLF & @ScriptDir & "\" & $OutputPath)
+
 	ShellExecute($OutputPath)
+
+
+
 EndFunc   ;==>GenerateWorkdaysReportHTML
