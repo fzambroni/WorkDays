@@ -17,7 +17,28 @@ Func GenerateWorkdaysReportHTML($Year, $Full)
 	EndIf
 
 	Local $CatNames[9] = ["OnSite", "Remote", "Holiday", "PTO", "Travel", "Sick", "Other", "Blank", "Weekends"]
-	Local $Colors[9] = ["#b6fcd5", "#b3d9ff", "#fff5cc", "#ccffff", "#ffd9b3", "#ffcccc", "#dddddd", "#f5f5f5", "#eeeeee"]
+	Local $Colors[9] = [ _
+			_GetReportColorHTML("Color_OnSite", 0x00CC66), _
+			_GetReportColorHTML("Color_Remote", 0x0080FF), _
+			_GetReportColorHTML("Color_holiday", 0xFFFFCC), _
+			_GetReportColorHTML("Color_PTO", 0x66FFFF), _
+			_GetReportColorHTML("Color_Travel", 0xFF8000), _
+			_GetReportColorHTML("Color_Sick", 0xFF6666), _
+			"#DDDDDD", _
+			_GetReportColorHTML("Color_Blank", 0xFFFFFF), _
+			_GetReportColorHTML("Color_Weekend", 0xA0A0A0) _
+	]
+	Local $FontColors[9] = [ _
+			_GetReportFontColorHTML("Font_OnSite"), _
+			_GetReportFontColorHTML("Font_Remote"), _
+			_GetReportFontColorHTML("Font_holiday"), _
+			_GetReportFontColorHTML("Font_PTO"), _
+			_GetReportFontColorHTML("Font_Travel"), _
+			_GetReportFontColorHTML("Font_Sick"), _
+			"#000000", _
+			_GetReportFontColorHTML("Font_Blank"), _
+			_GetReportFontColorHTML("Font_Weekend") _
+	]
 
 	Local $CategoryCount[4][9] = [[0]]
 	Local $CategoryNotes[4][9]
@@ -161,7 +182,7 @@ Func GenerateWorkdaysReportHTML($Year, $Full)
 		For $c = 0 To 8
 			If $CategoryCount[$q][$c] = 0 Then ContinueLoop
 
-			FileWriteLine($hFile, "<tr style='background-color:" & $Colors[$c] & ";'><td><b>" & _HtmlAsciiEntityEncode($CatNames[$c]) & "</b></td><td>" & $CategoryCount[$q][$c] & "</td>")
+			FileWriteLine($hFile, "<tr style='background-color:" & $Colors[$c] & ";color:" & $FontColors[$c] & ";'><td><b>" & _HtmlAsciiEntityEncode($CatNames[$c]) & "</b></td><td>" & $CategoryCount[$q][$c] & "</td>")
 			If $Full = 1 Then
 				If $CategoryNotes[$q][$c] <> "" Then
 					FileWriteLine($hFile, "<td><ul>" & $CategoryNotes[$q][$c] & "</ul></td></tr>")
@@ -184,7 +205,7 @@ Func GenerateWorkdaysReportHTML($Year, $Full)
 	FileWriteLine($hFile, "<table><tr><th>Category</th><th>Total Count</th></tr>")
 	For $c = 0 To 8
 		If $YearlyTotals[$c] > 0 Then
-			FileWriteLine($hFile, "<tr style='background-color:" & $Colors[$c] & ";'><td><b>" & _HtmlAsciiEntityEncode($CatNames[$c]) & "</b></td><td>" & $YearlyTotals[$c] & "</td></tr>")
+			FileWriteLine($hFile, "<tr style='background-color:" & $Colors[$c] & ";color:" & $FontColors[$c] & ";'><td><b>" & _HtmlAsciiEntityEncode($CatNames[$c]) & "</b></td><td>" & $YearlyTotals[$c] & "</td></tr>")
 		EndIf
 	Next
 	FileWriteLine($hFile, "</table>")
@@ -209,6 +230,27 @@ Func GenerateWorkdaysReportHTML($Year, $Full)
 
 	Return 1
 EndFunc   ;==>GenerateWorkdaysReportHTML
+
+Func _GetReportColorHTML($sRegValueName, $iDefaultColor)
+	Local $vColor = RegRead("HKEY_CURRENT_USER\Software\WorkDays", $sRegValueName)
+	If @error Or $vColor = "" Then $vColor = $iDefaultColor
+
+	Local $iColor = Number($vColor)
+	If $iColor < 0 Then $iColor = $iDefaultColor
+
+	Return "#" & Hex($iColor, 6)
+EndFunc   ;==>_GetReportColorHTML
+
+Func _GetReportFontColorHTML($sRegValueName)
+	Local $vFontIsWhite = RegRead("HKEY_CURRENT_USER\Software\WorkDays", $sRegValueName)
+	If @error Then Return "#000000"
+
+	If Number($vFontIsWhite) = 1 Then
+		Return "#FFFFFF"
+	EndIf
+
+	Return "#000000"
+EndFunc   ;==>_GetReportFontColorHTML
 
 Func _HtmlAsciiEntityEncode($sText)
 	If $sText = "" Then Return ""

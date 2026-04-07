@@ -1,7 +1,7 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=xcalendar4.ico
 #AutoIt3Wrapper_Res_Description=Work Day management
-#AutoIt3Wrapper_Res_Fileversion=2.0.0.1
+#AutoIt3Wrapper_Res_Fileversion=2.0.0.2
 #AutoIt3Wrapper_Res_ProductName=Work Days
 #AutoIt3Wrapper_Res_File_Add=E:\GitHub\WorkDays\splash.jpg
 #AutoIt3Wrapper_Res_File_Add=E:\GitHub\WorkDays\Help.pdf
@@ -236,9 +236,10 @@ Global $About = "1.0.1.3 - Custom colors and bug fixes" & @CRLF _
 		 & "1.0.4.1 - Bug fix: 'Ratio to date' metric now calculates correctly." & @CRLF _
 		 & "1.0.4.2 - Bug fix: Import full database when in a different year." & @CRLF _
 		 & "1.0.5.0 - Layout update." & @CRLF _
-		 & "1.0.6.0 - New KPI screen and graphic" & @CRLF _
-		 & "1.0.6.9 - Screen adjustments" & @CRLF _
-		 & "2.0.0.1 - New layout and adjustments"
+		 & "1.0.6.0 - New KPI screen and graphic." & @CRLF _
+		 & "1.0.6.9 - Screen adjustments." & @CRLF _
+		 & "2.0.0.1 - New layout and adjustments." & @CRLF _
+		 & "2.0.0.2 - Report matching color settings and minor bug fixes."
 
 Global $XCount = 0
 
