@@ -1,7 +1,7 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=xcalendar4.ico
 #AutoIt3Wrapper_Res_Description=Work Day management
-#AutoIt3Wrapper_Res_Fileversion=2.0.0.2
+#AutoIt3Wrapper_Res_Fileversion=2.0.0.4
 #AutoIt3Wrapper_Res_ProductName=Work Days
 #AutoIt3Wrapper_Res_File_Add=E:\GitHub\WorkDays\splash.jpg
 #AutoIt3Wrapper_Res_File_Add=E:\GitHub\WorkDays\Help.pdf
@@ -224,6 +224,7 @@ If $Restart <> "" Then
 
 EndIf
 
+_CheckSingleInstance()
 
 FileInstall("splash.jpg", $sSplashPath, 1)
 _splash("on")
@@ -1676,6 +1677,20 @@ Func _AutoBKP()
 
 EndFunc   ;==>_AutoBKP
 
+Func _CheckSingleInstance()
+    Local $aList = ProcessList(@ScriptName)
+    Local $n = 0
+    For $i = 1 To $aList[0][0]
+        If $aList[$i][0] = @ScriptName Then
+            $n += 1
+            If $n > 1 Then
+                MsgBox($MB_OK + $MB_ICONHAND + 262144, "Multiple Instances", "You cannot run multiple instances of this application.", 30)
+;~                 _FileWriteLog($g_sLogPath, "App closed – duplicate instance.")
+                Exit
+            EndIf
+        EndIf
+    Next
+EndFunc
 
 Func _BKColorPallet()
 
@@ -2140,6 +2155,7 @@ Func _Button_Tag($Month = "-1", $Day = "-1", $CYear = "-1")
 				GUIDelete($Form_Tag)
 				Return
 			Case $Button_Tag_Save
+				$SelDate = GUICtrlRead($Calendar)
 				$DateToTag = $CYear & "/" & $Month & "/" & $Day
 				$SelDate_slipt = StringSplit($DateToTag, "/")
 				$holidayName = GUICtrlRead($Edit_Tag)
@@ -2147,6 +2163,7 @@ Func _Button_Tag($Month = "-1", $Day = "-1", $CYear = "-1")
 				If $Register = "" Then $Register = "B"
 				RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", StringLeft($Register, 1) & $holidayName)
 				GUIDelete($Form_Tag)
+;~ 				_Update($SelDate)
 				Return
 
 		EndSwitch
