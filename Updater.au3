@@ -1,7 +1,7 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=xcalendar4.ico
 #AutoIt3Wrapper_Res_Description=Work Day updater
-#AutoIt3Wrapper_Res_Fileversion=1.0.0.0
+#AutoIt3Wrapper_Res_Fileversion=1.0.0.2
 #AutoIt3Wrapper_Res_ProductName=Work Days Updater
 #AutoIt3Wrapper_Res_File_Add=E:\GitHub\WorkDays\splash.jpg
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
@@ -33,7 +33,7 @@ If Not FileExists($Path & "\Workdays.tmp") Then
 	Exit
 Else
 	_splash()
-	Sleep(8000)
+	Sleep(3000)
 	FileMove($Path & "\Workdays.tmp",$Path & "\Workdays.exe",9)
 	Sleep(2000)
 	Run($Path & "\Workdays.exe")
