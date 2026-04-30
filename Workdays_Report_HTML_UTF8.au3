@@ -10,10 +10,10 @@ Func GenerateWorkdaysReportHTML($Year, $Full)
 	Local $RegistryBase = "HKEY_CURRENT_USER\Software\WorkDays\" & $Year
 	Local $OutputPath = "Workdays_" & $ReportType & "_Report_" & $Year & "_" & @MON & "_" & @MDAY & "_" & @YEAR & ".pdf"
 	Local $OutputPathTemp = "Workdays_" & $ReportType & "_Report_" & $Year & "_" & @MON & "_" & @MDAY & "_" & @YEAR & ".html"
-	Local $sHtmlPath = @ScriptDir & "\" & $OutputPathTemp
-	Local $sPdfPath = @ScriptDir & "\" & $OutputPath
+	Local $sHtmlPath = @ScriptDir & "\Reports\" & $OutputPathTemp
+	Local $sPdfPath = @ScriptDir & "\Reports\" & $OutputPath
 
-	Local $hFile = FileOpen($sHtmlPath, 2)
+	Local $hFile = FileOpen($sHtmlPath, 10)
 	If $hFile = -1 Then
 		MsgBox(16, "Error", "Failed to create the HTML report.")
 		Return SetError(1, 0, 0)
@@ -205,8 +205,12 @@ Func GenerateWorkdaysReportHTML($Year, $Full)
 	FileWriteLine($hFile, "</div></body></html>")
 	FileClose($hFile)
 
-	$oObject.Input = $OutputPathTemp
-	$oObject.Output = $OutputPath
+;~ 	$oObject.Input = $OutputPathTemp
+;~ 	$oObject.Output = $OutputPath
+
+	$oObject.Input = $sHtmlPath
+	$oObject.Output = $sPdfPath
+
 	$oObject.Convert()
 
 	If Not FileExists($sPdfPath) Then
@@ -289,10 +293,10 @@ Func GenerateWorkdaysProfessionalReportHTML($Year)
 	Local $RegistryBase = "HKEY_CURRENT_USER\Software\WorkDays\" & $Year
 	Local $OutputPath = "Workdays_Analytical_Report_" & $Year & "_" & @MON & "_" & @MDAY & "_" & @YEAR & ".pdf"
 	Local $OutputPathTemp = "Workdays_Analytical_Report_" & $Year & "_" & @MON & "_" & @MDAY & "_" & @YEAR & ".html"
-	Local $sHtmlPath = @ScriptDir & "\" & $OutputPathTemp
-	Local $sPdfPath = @ScriptDir & "\" & $OutputPath
+	Local $sHtmlPath = @ScriptDir & "\Reports\" & $OutputPathTemp
+	Local $sPdfPath = @ScriptDir & "\Reports\" & $OutputPath
 
-	Local $hFile = FileOpen($sHtmlPath, 2)
+	Local $hFile = FileOpen($sHtmlPath, 10)
 	If $hFile = -1 Then
 		MsgBox(16, "Error", "Failed to create Analytical HTML report.")
 		Return SetError(1, 0, 0)
@@ -420,7 +424,7 @@ Func GenerateWorkdaysProfessionalReportHTML($Year)
 
 	FileWriteLine($hFile, "<html><head><meta charset=""utf-8""><title>Analytical Workdays Report - " & _HtmlAsciiEntityEncode($Year) & "</title>")
 	FileWriteLine($hFile, "<style>")
-	FileWriteLine($hFile, "body{font-family:Arial,Helvetica,sans-serif;color:#1f2933;margin:0;background:#f4f6f8;} .page{width:1040px;margin:0 auto;background:#fff;padding:30px 34px;} h1{margin:0;font-size:28px;color:#102a43;} h2{font-size:18px;margin:28px 0 10px;color:#102a43;border-bottom:2px solid #d9e2ec;padding-bottom:6px;} h3{font-size:14px;margin:16px 0 8px;color:#334e68;} .subtitle{color:#627d98;margin-top:6px;} .header{border-bottom:4px solid #243b53;padding-bottom:18px;margin-bottom:18px;} .cards{width:100%;border-collapse:separate;border-spacing:10px;margin:8px -10px 12px -10px;} .card{border:1px solid #d9e2ec;border-radius:8px;padding:12px;background:#fbfcfd;vertical-align:top;} .label{font-size:11px;text-transform:uppercase;color:#829ab1;letter-spacing:.5px;} .value{font-size:24px;font-weight:bold;margin-top:4px;color:#102a43;} .small{font-size:12px;color:#627d98;} table{border-collapse:collapse;width:100%;margin:10px 0 18px;} th{background:#edf2f7;color:#243b53;text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.4px;} th,td{border:1px solid #d9e2ec;padding:7px 8px;font-size:12px;vertical-align:top;} .right{text-align:right;} .center{text-align:center;} .pill{display:inline-block;border-radius:10px;padding:3px 8px;font-size:11px;font-weight:bold;} .status-ok{color:#0b6b3a;font-weight:bold;} .status-watch{color:#9a5b00;font-weight:bold;} .status-bad{color:#b42318;font-weight:bold;} .callout{border-left:5px solid #486581;background:#f0f4f8;padding:12px 14px;margin:14px 0;font-size:13px;} .recommendation{border-left:5px solid #0f609b;background:#eef8ff;padding:12px 14px;margin:10px 0;font-size:13px;} .muted{color:#829ab1;} .footer{margin-top:28px;border-top:1px solid #d9e2ec;padding-top:10px;color:#829ab1;font-size:11px;} .pagebreak{page-break-before:always;}") 
+	FileWriteLine($hFile, "body{font-family:Arial,Helvetica,sans-serif;color:#1f2933;margin:0;background:#f4f6f8;} .page{width:1040px;margin:0 auto;background:#fff;padding:30px 34px;} h1{margin:0;font-size:28px;color:#102a43;} h2{font-size:18px;margin:28px 0 10px;color:#102a43;border-bottom:2px solid #d9e2ec;padding-bottom:6px;} h3{font-size:14px;margin:16px 0 8px;color:#334e68;} .subtitle{color:#627d98;margin-top:6px;} .header{border-bottom:4px solid #243b53;padding-bottom:18px;margin-bottom:18px;} .cards{width:100%;border-collapse:separate;border-spacing:10px;margin:8px -10px 12px -10px;} .card{border:1px solid #d9e2ec;border-radius:8px;padding:12px;background:#fbfcfd;vertical-align:top;} .label{font-size:11px;text-transform:uppercase;color:#829ab1;letter-spacing:.5px;} .value{font-size:24px;font-weight:bold;margin-top:4px;color:#102a43;} .small{font-size:12px;color:#627d98;} table{border-collapse:collapse;width:100%;margin:10px 0 18px;} th{background:#edf2f7;color:#243b53;text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.4px;} th,td{border:1px solid #d9e2ec;padding:7px 8px;font-size:12px;vertical-align:top;} .right{text-align:right;} .center{text-align:center;} .pill{display:inline-block;border-radius:10px;padding:3px 8px;font-size:11px;font-weight:bold;} .status-ok{color:#0b6b3a;font-weight:bold;} .status-watch{color:#9a5b00;font-weight:bold;} .status-bad{color:#b42318;font-weight:bold;} .callout{border-left:5px solid #486581;background:#f0f4f8;padding:12px 14px;margin:14px 0;font-size:13px;} .recommendation{border-left:5px solid #0f609b;background:#eef8ff;padding:12px 14px;margin:10px 0;font-size:13px;} .muted{color:#829ab1;} .footer{margin-top:28px;border-top:1px solid #d9e2ec;padding-top:10px;color:#829ab1;font-size:11px;} .pagebreak{page-break-before:always;}")
 	FileWriteLine($hFile, "</style></head><body><div class='page'>")
 
 	FileWriteLine($hFile, "<div class='header'><h1>Analytical Workdays Report</h1><div class='subtitle'>Year " & _HtmlAsciiEntityEncode($Year) & " &bull; generated on " & @YEAR & "/" & @MON & "/" & @MDAY & " at " & @HOUR & ":" & @MIN & "</div></div>")
@@ -480,8 +484,15 @@ Func GenerateWorkdaysProfessionalReportHTML($Year)
 	FileWriteLine($hFile, "</div></body></html>")
 	FileClose($hFile)
 
-	$oObject.Input = $OutputPathTemp
-	$oObject.Output = $OutputPath
+;~ Local $sHtmlPath = @ScriptDir & "\Reports\" & $OutputPathTemp
+;~ 	Local $sPdfPath = @ScriptDir & "\Reports\" & $OutputPath
+
+
+;~ 	$oObject.Input = $OutputPathTemp
+;~ 	$oObject.Output = $OutputPath
+
+	$oObject.Input = $sHtmlPath
+	$oObject.Output = $sPdfPath
 	$oObject.Convert()
 
 	If Not FileExists($sPdfPath) Then

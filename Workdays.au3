@@ -2,10 +2,10 @@
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Icon=xcalendar4.ico
 #AutoIt3Wrapper_Res_Description=Work Day management
-#AutoIt3Wrapper_Res_Fileversion=2.1.1.4
+#AutoIt3Wrapper_Res_Fileversion=2.1.1.6
+#AutoIt3Wrapper_Res_ProductVersion=2.1.0.0
 #AutoIt3Wrapper_Res_ProductName=Work Days
 #AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
-#AutoIt3Wrapper_Res_ProductVersion=2.1.1.1
 #AutoIt3Wrapper_Res_LegalCopyright=Copyright © 2026 Fabricio Zambroni
 #AutoIt3Wrapper_Res_File_Add=E:\GitHub\WorkDays\splash.jpg
 #AutoIt3Wrapper_Res_File_Add=E:\GitHub\WorkDays\Help.pdf
@@ -441,9 +441,9 @@ Global $Font_Graphic = 1
 
 
 Global $Picker_Grid_Size_X_Read = RegRead($DB, "Grid_Size_X")
-If @error Or Number($Picker_Grid_Size_X_Read) < 20 Then $Picker_Grid_Size_X_Read = 34
+If @error Or Number($Picker_Grid_Size_X_Read) < 25 Then $Picker_Grid_Size_X_Read = 35
 $Picker_Grid_Size_X_Read = Number($Picker_Grid_Size_X_Read)
-If $Picker_Grid_Size_X_Read > 60 Then $Picker_Grid_Size_X_Read = 60
+If $Picker_Grid_Size_X_Read > 45 Then $Picker_Grid_Size_X_Read = 45
 
 Global $Picker_Grid_Size_Y_Read = RegRead($DB, "Grid_Size_Y")
 If @error Then $Picker_Grid_Size_Y_Read = 0xFF0000
@@ -1856,7 +1856,7 @@ Func _BKColorPallet()
 
 	GUICtrlCreateLabel("Cell size:", 10, 435)
 	$Slider_Cell_Size = GUICtrlCreateSlider(65, 430, 140, 20, BitOR($GUI_SS_DEFAULT_SLIDER, $TBS_FIXEDLENGTH))
-	GUICtrlSetLimit($Slider_Cell_Size, 60, 20)
+	GUICtrlSetLimit($Slider_Cell_Size, 45, 25)
 	GUICtrlSetData($Slider_Cell_Size, $Picker_Grid_Size_X_Read)
 	$Label_Cell_Size = GUICtrlCreateLabel(GUICtrlRead($Slider_Cell_Size), 205, 433)
 
@@ -3336,7 +3336,8 @@ Func _CreateBackup($DBBKP = "")
 	Local $sRegPath = $DB & "\"
 
 	If $DBBKP = "" Then
-		Local $sFilePath = FileSaveDialog("Save backup file", @ScriptDir, "All (*.*)", 18, "Backup_" & @YEAR & "_" & @MON & "_" & @MDAY & ".bkp", $Form_WorkDays)
+		DirCreate (@ScriptDir & "\Backup")
+		Local $sFilePath = FileSaveDialog("Save backup file", @ScriptDir & "\Backup", "All (*.*)", 18, "Backup_" & @YEAR & "_" & @MON & "_" & @MDAY & ".bkp", $Form_WorkDays)
 		If @error Then
 			Return
 		EndIf
