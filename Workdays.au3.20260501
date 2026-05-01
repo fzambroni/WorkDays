@@ -2,7 +2,7 @@
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Icon=xcalendar4.ico
 #AutoIt3Wrapper_Res_Description=Work Day management
-#AutoIt3Wrapper_Res_Fileversion=2.1.2.0
+#AutoIt3Wrapper_Res_Fileversion=2.1.1.6
 #AutoIt3Wrapper_Res_ProductVersion=2.1.0.0
 #AutoIt3Wrapper_Res_ProductName=Work Days
 #AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
@@ -168,7 +168,7 @@ Global $Total, $Count_O, $Count_R, $Count_H, $Count_P, $Count_T, $Count_S, $Coun
 
 
 ;Colors Variables
-Global $Color_bk_OnSite, $Color_bk_Remote, $Color_bk_holiday, $Color_bk_PTO, $Color_bk_Travel, $Color_bk_Sick, $Color_bk_Blank, $Color_bk_Weekend, $Color_HighlightDate
+Global $Color_bk_OnSite, $Color_bk_Remote, $Color_bk_holiday, $Color_bk_PTO, $Color_bk_Travel, $Color_bk_Sick, $Color_bk_Blank, $Color_bk_Weekend
 
 
 Global $DB = "HKEY_CURRENT_USER\Software\WorkDays"
@@ -372,9 +372,6 @@ If @error Then $Color_bk_Today = 0xFF0000
 
 Global $Color_bk_Selected = RegRead($DB, "Color_Selected")
 If @error Then $Color_bk_Selected = 0x00F0F0
-
-Global $Color_HighlightDate = RegRead($DB, "Color_HighlightDate")
-If @error Then $Color_HighlightDate = 0xFF0000
 
 Global $Color_bk_Graphic = RegRead($DB, "Color_Graphic")
 If @error Then $Color_bk_Graphic = 0x000000
@@ -1468,9 +1465,6 @@ While 1
 				$Color_bk_Selected = RegRead($DB, "Color_Selected")
 				If @error Then $Color_bk_Selected = 0x00FFA0
 
-				$Color_HighlightDate = RegRead($DB, "Color_HighlightDate")
-				If @error Then $Color_HighlightDate = 0xFF0000
-
 				GUICtrlSetBkColor($Button_OnSite, $Color_bk_OnSite)
 				GUICtrlSetBkColor($Button_Remote, $Color_bk_Remote)
 				GUICtrlSetBkColor($Button_holiday, $Color_bk_holiday)
@@ -1832,7 +1826,7 @@ Func _BKColorPallet()
 			0x0000FF, 0x000080, 0xFF00FF, 0x800080, _
 			0xC0DCC0, 0xA6CAF0, 0xFFFBF0, 0xA0A0A4]
 
-	$Form_Colors = GUICreate('Colors', 230, 610, 300, 30, $DS_MODALFRAME, BitOR($WS_EX_TOPMOST, $WS_EX_MDICHILD), $Form_WorkDays)
+	$Form_Colors = GUICreate('Colors', 230, 580, 300, 30, $DS_MODALFRAME, BitOR($WS_EX_TOPMOST, $WS_EX_MDICHILD), $Form_WorkDays)
 
 	GUICtrlSetBkColor(-1, 0x50CA1B)
 
@@ -1846,28 +1840,27 @@ Func _BKColorPallet()
 	GUICtrlCreateLabel("Weekend:", 10, 225)
 	GUICtrlCreateLabel("Today:", 10, 255)
 	GUICtrlCreateLabel("Selected:", 10, 285)
-	GUICtrlCreateLabel("Highlight:", 10, 315)
-	GUICtrlCreateLabel("Graphic line:", 10, 345)
-	GUICtrlCreateLabel("Quarter line:", 10, 375)
-	GUICtrlCreateLabel("Border size:", 10, 405)
-	$Slider_Border_Size = GUICtrlCreateSlider(65, 400, 140, 20, BitOR($GUI_SS_DEFAULT_SLIDER, $TBS_FIXEDLENGTH))
+	GUICtrlCreateLabel("Graphic line:", 10, 315)
+	GUICtrlCreateLabel("Quarter line:", 10, 345)
+	GUICtrlCreateLabel("Border size:", 10, 375)
+	$Slider_Border_Size = GUICtrlCreateSlider(65, 370, 140, 20, BitOR($GUI_SS_DEFAULT_SLIDER, $TBS_FIXEDLENGTH))
 	GUICtrlSetLimit($Slider_Border_Size, 5, 0)
 	GUICtrlSetData($Slider_Border_Size, $g_iQuarterBorderSize)
-	$Label_Border_Size = GUICtrlCreateLabel(GUICtrlRead($Slider_Border_Size), 205, 403)
+	$Label_Border_Size = GUICtrlCreateLabel(GUICtrlRead($Slider_Border_Size), 205, 373)
 
-	GUICtrlCreateLabel("Font size:", 10, 435)
-	$Slider_Font_Size = GUICtrlCreateSlider(65, 430, 140, 20, BitOR($GUI_SS_DEFAULT_SLIDER, $TBS_FIXEDLENGTH))
+	GUICtrlCreateLabel("Font size:", 10, 405)
+	$Slider_Font_Size = GUICtrlCreateSlider(65, 400, 140, 20, BitOR($GUI_SS_DEFAULT_SLIDER, $TBS_FIXEDLENGTH))
 	GUICtrlSetLimit($Slider_Font_Size, 25, 10)
 	GUICtrlSetData($Slider_Font_Size, $g_iListViewFontHeight)
-	$Label_Font_Size = GUICtrlCreateLabel(GUICtrlRead($Slider_Font_Size), 205, 433)
+	$Label_Font_Size = GUICtrlCreateLabel(GUICtrlRead($Slider_Font_Size), 205, 403)
 
-	GUICtrlCreateLabel("Cell size:", 10, 465)
-	$Slider_Cell_Size = GUICtrlCreateSlider(65, 460, 140, 20, BitOR($GUI_SS_DEFAULT_SLIDER, $TBS_FIXEDLENGTH))
+	GUICtrlCreateLabel("Cell size:", 10, 435)
+	$Slider_Cell_Size = GUICtrlCreateSlider(65, 430, 140, 20, BitOR($GUI_SS_DEFAULT_SLIDER, $TBS_FIXEDLENGTH))
 	GUICtrlSetLimit($Slider_Cell_Size, 45, 25)
 	GUICtrlSetData($Slider_Cell_Size, $Picker_Grid_Size_X_Read)
-	$Label_Cell_Size = GUICtrlCreateLabel(GUICtrlRead($Slider_Cell_Size), 205, 463)
+	$Label_Cell_Size = GUICtrlCreateLabel(GUICtrlRead($Slider_Cell_Size), 205, 433)
 
-	$Checkbox_ResetScreen = GUICtrlCreateCheckbox("Reset Screen Position", 10, 490)
+	$Checkbox_ResetScreen = GUICtrlCreateCheckbox("Reset Screen Position", 10, 460)
 
 
 
@@ -1894,9 +1887,8 @@ Func _BKColorPallet()
 	$Picker_Weekend = _GUIColorPicker_Create('', 70, 220, 60, 23, $Color_bk_Weekend, BitOR($CP_FLAG_CHOOSERBUTTON, $CP_FLAG_ARROWSTYLE, $CP_FLAG_MOUSEWHEEL), $aPalette, 4, 5, 0, '', 'More...')
 	$Picker_Today = _GUIColorPicker_Create('', 70, 250, 60, 23, $Color_bk_Today, BitOR($CP_FLAG_CHOOSERBUTTON, $CP_FLAG_ARROWSTYLE, $CP_FLAG_MOUSEWHEEL), $aPalette, 4, 5, 0, '', 'More...')
 	$Picker_Selected = _GUIColorPicker_Create('', 70, 280, 60, 23, $Color_bk_Selected, BitOR($CP_FLAG_CHOOSERBUTTON, $CP_FLAG_ARROWSTYLE, $CP_FLAG_MOUSEWHEEL), $aPalette, 4, 5, 0, '', 'More...')
-	$Picker_HighlightDate = _GUIColorPicker_Create('', 70, 310, 60, 23, $Color_HighlightDate, BitOR($CP_FLAG_CHOOSERBUTTON, $CP_FLAG_ARROWSTYLE, $CP_FLAG_MOUSEWHEEL), $aPalette, 4, 5, 0, '', 'More...')
-	$Picker_Graphic = _GUIColorPicker_Create('', 70, 340, 60, 23, $Color_bk_Graphic, BitOR($CP_FLAG_CHOOSERBUTTON, $CP_FLAG_ARROWSTYLE, $CP_FLAG_MOUSEWHEEL), $aPalette, 4, 5, 0, '', 'More...')
-	$Picker_Quarter = _GUIColorPicker_Create('', 70, 370, 60, 23, $g_clrQuarterBorder, BitOR($CP_FLAG_CHOOSERBUTTON, $CP_FLAG_ARROWSTYLE, $CP_FLAG_MOUSEWHEEL), $aPalette, 4, 5, 0, '', 'More...')
+	$Picker_Graphic = _GUIColorPicker_Create('', 70, 310, 60, 23, $Color_bk_Graphic, BitOR($CP_FLAG_CHOOSERBUTTON, $CP_FLAG_ARROWSTYLE, $CP_FLAG_MOUSEWHEEL), $aPalette, 4, 5, 0, '', 'More...')
+	$Picker_Quarter = _GUIColorPicker_Create('', 70, 340, 60, 23, $g_clrQuarterBorder, BitOR($CP_FLAG_CHOOSERBUTTON, $CP_FLAG_ARROWSTYLE, $CP_FLAG_MOUSEWHEEL), $aPalette, 4, 5, 0, '', 'More...')
 
 	$Picker_Font_OnSite = GUICtrlCreateCheckbox("White Font", 135, 10)
 	$Picker_Font_Remote = GUICtrlCreateCheckbox("White Font", 135, 40)
@@ -1906,7 +1898,7 @@ Func _BKColorPallet()
 	$Picker_Font_Sick = GUICtrlCreateCheckbox("White Font", 135, 160)
 	$Picker_Font_Blank = GUICtrlCreateCheckbox("White Font", 135, 190)
 	$Picker_Font_Weekend = GUICtrlCreateCheckbox("White Font", 135, 220)
-	$Picker_Font_Graphic = GUICtrlCreateCheckbox("No Line", 135, 341)
+	$Picker_Font_Graphic = GUICtrlCreateCheckbox("No Line", 135, 311)
 
 	GUICtrlSetState($Picker_Font_OnSite, $Picker_Font_OnSite_Read)
 	GUICtrlSetState($Picker_Font_Remote, $Picker_Font_Remote_Read)
@@ -1926,11 +1918,11 @@ Func _BKColorPallet()
 
 	$Original_Color_1 = $Color_bk_OnSite & $Color_bk_Remote & $Color_bk_holiday & $Color_bk_PTO & _
 			$Color_bk_Travel & $Color_bk_Sick & $Color_bk_Blank & $Color_bk_Weekend & $Color_bk_Today & _
-			$Color_bk_Selected & $Color_HighlightDate & $Color_bk_Graphic & $g_clrQuarterBorder & $Picker_Font_OnSite_Read & $Picker_Font_Remote_Read & $Picker_Font_Holiday_Read & _
+			$Color_bk_Selected & $Color_bk_Graphic & $g_clrQuarterBorder & $Picker_Font_OnSite_Read & $Picker_Font_Remote_Read & $Picker_Font_Holiday_Read & _
 			$Picker_Font_PTO_Read & $Picker_Font_Travel_Read & $Picker_Font_Sick_Read & $Picker_Font_Blank_Read & $Picker_Font_Weekend_Read & $g_iQuarterBorderSize & $g_iListViewFontHeight & $Picker_Grid_Size_X_Read
 
 
-	$Colors_Close = GUICtrlCreateButton("Close", 85, 540, 70, 30)
+	$Colors_Close = GUICtrlCreateButton("Close", 85, 510, 70, 30)
 
 	GUISetState(@SW_SHOW, $Form_Colors)
 
@@ -1971,7 +1963,6 @@ Func _BKColorPallet()
 				$Picker_Color_Weekend = _GUIColorPicker_GetColor($Picker_Weekend)
 				$Picker_Color_Today = _GUIColorPicker_GetColor($Picker_Today)
 				$Picker_Color_Selected = _GUIColorPicker_GetColor($Picker_Selected)
-				$Picker_Color_HighlightDate = _GUIColorPicker_GetColor($Picker_HighlightDate)
 				$Picker_Color_Graphic = _GUIColorPicker_GetColor($Picker_Graphic)
 
 				$Picker_Color_Quarter = _GUIColorPicker_GetColor($Picker_Quarter)
@@ -1990,7 +1981,6 @@ Func _BKColorPallet()
 				RegWrite($DB, "Color_Weekend", "REG_SZ", $Picker_Color_Weekend)
 				RegWrite($DB, "Color_Today", "REG_SZ", $Picker_Color_Today)
 				RegWrite($DB, "Color_Selected", "REG_SZ", $Picker_Color_Selected)
-				RegWrite($DB, "Color_HighlightDate", "REG_SZ", $Picker_Color_HighlightDate)
 				RegWrite($DB, "Color_Graphic", "REG_SZ", $Picker_Color_Graphic)
 				RegWrite($DB, "Color_Quarter", "REG_SZ", $Picker_Color_Quarter)
 
@@ -2069,7 +2059,6 @@ Func _BKColorPallet()
 					$Font_Weekend = $White
 				EndIf
 
-				$Color_HighlightDate = $Picker_Color_HighlightDate
 				$Color_bk_Graphic = $Picker_Color_Graphic
 				$Color_Graphic_Transparent = $Picker_Font_Graphic_Read
 ;~ 				MsgBox(262144, "2", $Color_bk_Graphic & @CRLF & $Picker_Color_Graphic)
@@ -2086,7 +2075,7 @@ Func _BKColorPallet()
 
 				$Original_Color_2 = $Picker_Color_OnSite & $Picker_Color_Remote & $Picker_Color_Holiday & $Picker_Color_PTO & _
 						$Picker_Color_Travel & $Picker_Color_Sick & $Picker_Color_Blank & $Picker_Color_Weekend & $Picker_Color_Today & _
-						$Picker_Color_Selected & $Picker_Color_HighlightDate & $Picker_Color_Graphic & $Picker_Color_Quarter & $Picker_Font_OnSite_Read & $Picker_Font_Remote_Read & $Picker_Font_Holiday_Read & _
+						$Picker_Color_Selected & $Picker_Color_Graphic & $Picker_Color_Quarter & $Picker_Font_OnSite_Read & $Picker_Font_Remote_Read & $Picker_Font_Holiday_Read & _
 						$Picker_Font_PTO_Read & $Picker_Font_Travel_Read & $Picker_Font_Sick_Read & $Picker_Font_Blank_Read & $Picker_Font_Weekend_Read & $g_iQuarterBorderSize & $g_iListViewFontHeight & $Picker_Grid_Size_X_Read
 
 				$Checkbox_ResetScreenStatus = GUICtrlRead($Checkbox_ResetScreen)
@@ -2123,64 +2112,6 @@ Func _BKColorPallet()
 
 
 EndFunc   ;==>_BKColorPallet
-
-
-Func _DateHighlightRegName($CYear, $Month, $Day)
-	Return "Highlight_" & StringFormat("%04d_%02d_%02d", Number($CYear), Number($Month), Number($Day))
-EndFunc   ;==>_DateHighlightRegName
-
-
-Func _IsHighlightedDate($CYear, $Month, $Day)
-	Local $sHighlighted = RegRead($DB, _DateHighlightRegName($CYear, $Month, $Day))
-	If @error Then Return False
-	Return ($sHighlighted = "1")
-EndFunc   ;==>_IsHighlightedDate
-
-
-Func _GetDateFontColor($CYear, $Month, $Day, $Status)
-	If _IsHighlightedDate($CYear, $Month, $Day) Then Return $Color_HighlightDate
-	Return _ColorFromDateFont($Status)
-EndFunc   ;==>_GetDateFontColor
-
-
-Func _GetDateDisplayText($CYear, $Month, $Day, $Status)
-	Local $sDisplay = $Status
-	If $sDisplay = "B" Then $sDisplay = "   "
-
-	; Highlighted blank dates need a visible character. Otherwise the font color
-	; changes correctly, but the user cannot see it because the cell has no text.
-	If _IsHighlightedDate($CYear, $Month, $Day) Then
-		If $sDisplay = "" Or $sDisplay = " " Or $sDisplay = "   " Then Return "X"
-	EndIf
-
-	Return $sDisplay
-EndFunc   ;==>_GetDateDisplayText
-
-
-Func _Button_HighlightDate($Month = "-1", $Day = "-1", $CYear = "-1")
-	Local $SelDate
-	If $Month = "-1" Then
-		$SelDate = GUICtrlRead($Calendar)
-	Else
-		$SelDate = $CYear & "/" & $Month & "/" & $Day
-	EndIf
-
-	Local $aDate = StringSplit($SelDate, "/")
-	If @error Or $aDate[0] <> 3 Then Return 0
-
-	Local $sRegName = _DateHighlightRegName($aDate[1], $aDate[2], $aDate[3])
-	If _IsHighlightedDate($aDate[1], $aDate[2], $aDate[3]) Then
-		RegDelete($DB, $sRegName)
-	Else
-		RegWrite($DB, $sRegName, "REG_SZ", "1")
-	EndIf
-
-	_Update($SelDate)
-	If $g_hLV <> 0 Then _CleanRepaint($g_hLV)
-	_CustomCal_Update()
-
-	Return 1
-EndFunc   ;==>_Button_HighlightDate
 
 
 Func _Button_Blank($Month = "-1", $Day = "-1", $CYear = "-1")
@@ -3358,8 +3289,6 @@ Func _ColorFromDate($Status)
 			Return $Color_bk_Blank
 
 	EndSwitch
-
-	Return $Color_bk_Blank
 EndFunc   ;==>_ColorFromDate
 
 
@@ -3399,8 +3328,6 @@ Func _ColorFromDateFont($Status)
 			Return $Font_Blank
 
 	EndSwitch
-
-	Return $Font_Blank
 EndFunc   ;==>_ColorFromDateFont
 
 
@@ -4345,7 +4272,6 @@ Func _MenuContextual($U, $V, $SelYear)
 	Local $sDay = StringFormat("%02d", Number($U))
 	Local $sMonth = StringFormat("%02d", Number($V))
 
-	Local Const $IDM_HIGHLIGHT = 1001
 	Local Const $IDM_TAG = 1002
 	Local Const $IDM_ONSITE = 1003
 	Local Const $IDM_REMOTE = 1004
@@ -4364,7 +4290,7 @@ Func _MenuContextual($U, $V, $SelYear)
 	Local Const $iMenuW = 190
 	Local Const $iLineH = 24
 	Local Const $iSepH = 6
-	Local Const $iMenuH = 256
+	Local Const $iMenuH = 232
 
 	Local $iX = $mousePosX
 	Local $iY = $mousePosY
@@ -4388,9 +4314,6 @@ Func _MenuContextual($U, $V, $SelYear)
 
 	_CreateColoredContextMenuSeparator($iYPos, $iMenuW)
 	$iYPos += $iSepH
-
-	Local $idHighlight = _CreateColoredContextMenuItem("Highlight date", $iYPos, $iMenuW, $iLineH, 0xFFFFFF, $Color_HighlightDate, True)
-	$iYPos += $iLineH
 
 	Local $idTag = _CreateColoredContextMenuItem("Add/Edit Marker", $iYPos, $iMenuW, $iLineH, 0xFFFFFF, 0x000000, False)
 	$iYPos += $iLineH
@@ -4441,9 +4364,6 @@ Func _MenuContextual($U, $V, $SelYear)
 				Switch $aMsg[0]
 					Case $GUI_EVENT_CLOSE
 						$iSelected = 0
-						ExitLoop
-					Case $idHighlight
-						$iSelected = $IDM_HIGHLIGHT
 						ExitLoop
 					Case $idTag
 						$iSelected = $IDM_TAG
@@ -4504,9 +4424,6 @@ Func _MenuContextual($U, $V, $SelYear)
 	Switch $iSelected
 		Case 0
 			Return 0
-
-		Case $IDM_HIGHLIGHT
-			_Button_HighlightDate($sMonth, $sDay, $SelYear)
 
 		Case $IDM_TAG
 			If _Button_Tag($sMonth, $sDay, $SelYear) Then
@@ -4689,9 +4606,6 @@ Func _ReadColors()
 	Global $Color_bk_Today = RegRead($DB, "Color_Today")
 	If @error Then $Color_bk_Today = 0xFF0000
 
-	Global $Color_HighlightDate = RegRead($DB, "Color_HighlightDate")
-	If @error Then $Color_HighlightDate = 0xFF0000
-
 	Global $g_clrQuarterBorder = RegRead($DB, "Color_Quarter")
 	If @error Then $g_clrQuarterBorder = 0xE0E0E0
 
@@ -4813,14 +4727,12 @@ Func _RefreshMainGridCellStyles($iTargetYear = -1)
 				If @error Then $sStatus1 = ""
 
 				Local $sStatus = StringLeft($sStatus1, 1)
-				Local $sDisplay = _GetDateDisplayText($iTargetYear, $m, $d, $sStatus)
+				If $sStatus = "B" Then $sStatus = "   "
 
-				If $g_hLV <> 0 And Number($iTargetYear) = Number($g_iLVYear) Then _GUICtrlListView_SetItemText($g_hLV, $iItem[$m][0], $sDisplay, $d)
 				$g_aCellColor[$m - 1][$d] = _ColorFromDate($sStatus)
-				$g_aCellColorBK[$m - 1][$d] = _GetDateFontColor($iTargetYear, $m, $d, $sStatus)
+				$g_aCellColorBK[$m - 1][$d] = _ColorFromDateFont($sStatus)
 			Else
 				; Keep unused days visually blank instead of letting stale colors remain.
-				If $g_hLV <> 0 And Number($iTargetYear) = Number($g_iLVYear) Then _GUICtrlListView_SetItemText($g_hLV, $iItem[$m][0], "", $d)
 				$g_aCellColor[$m - 1][$d] = _ColorFromDate("")
 				$g_aCellColorBK[$m - 1][$d] = _ColorFromDateFont("")
 			EndIf
@@ -4847,13 +4759,7 @@ Func _ReadDays($m, $iYear)
 
 		If @error Then
 
-			Local $sDisplayBlank = _GetDateDisplayText($iYear, $m, $d, "")
-			If $sDisplayBlank <> "" Then _GUICtrlListView_AddSubItem($g_hLV, $iItem[$m][0], $sDisplayBlank, $d, 1)
-
-			$g_aCellColor[$m - 1][$d] = _ColorFromDate("")
-			$g_aCellColorBK[$m - 1][$d] = _GetDateFontColor($iYear, $m, $d, "")
-			$g_aCellStatus[$m - 1][$d] = ""
-			$g_aCellTip[$m - 1][$d] = ""
+			$g_aCellColor[$m - 1][$d] = _ColorFromDate("x")
 			; GUIRegisterMsg is called once after all rows are built, not per cell
 
 		Else
@@ -4888,10 +4794,10 @@ Func _ReadDays($m, $iYear)
 			EndIf
 
 
-			Local $sDisplayStatus = _GetDateDisplayText($iYear, $m, $d, $Status)
+			If $Status = "B" Then $Status = "   "
 
 
-			_GUICtrlListView_AddSubItem($g_hLV, $iItem[$m][0], $sDisplayStatus, $d, 1)
+			_GUICtrlListView_AddSubItem($g_hLV, $iItem[$m][0], $Status, $d, 1)
 
 
 
@@ -4901,7 +4807,7 @@ Func _ReadDays($m, $iYear)
 ;~ 		If $m > 8 Then $m  +=1
 
 			$g_aCellColor[$m - 1][$d] = _ColorFromDate($Status)
-			$g_aCellColorBK[$m - 1][$d] = _GetDateFontColor($iYear, $m, $d, $Status)
+			$g_aCellColorBK[$m - 1][$d] = _ColorFromDateFont($Status)
 
 			$g_aCellStatus[$m - 1][$d] = $Status_Comment_1
 			$g_aCellTip[$m - 1][$d] = $Status_Comment
@@ -6208,14 +6114,15 @@ Func _Update($SelDate)
 				$sWeekDayName & " (Week: " & $iWeekDayNumber & ") - " & $sStatusName
 	EndIf
 
-	Local $sDisplay = _GetDateDisplayText($iDataYear, $iDataMonth, $iDataDay, $sDataRegister)
+	Local $sDisplay = $sDataRegister
+	If $sDisplay = "B" Then $sDisplay = "   "
 
 	If $g_hLV <> 0 Then
 		_GUICtrlListView_SetItemText($g_hLV, $iItem[$iDataMonth][0], $sDisplay, $iDataDay)
 	EndIf
 
 	$g_aCellColor[$iDataMonth - 1][$iDataDay] = _ColorFromDate($sDisplay)
-	$g_aCellColorBK[$iDataMonth - 1][$iDataDay] = _GetDateFontColor($iDataYear, $iDataMonth, $iDataDay, $sDisplay)
+	$g_aCellColorBK[$iDataMonth - 1][$iDataDay] = _ColorFromDateFont($sDisplay)
 	$g_aCellStatus[$iDataMonth - 1][$iDataDay] = $sTip
 	$g_aCellTip[$iDataMonth - 1][$iDataDay] = $sStatusComment
 
