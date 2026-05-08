@@ -1,14 +1,19 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
+#AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Icon=xcalendar4.ico
 #AutoIt3Wrapper_Res_Description=Work Day management
-#AutoIt3Wrapper_Res_Fileversion=2.0.0.5
+#AutoIt3Wrapper_Res_Fileversion=2.1.2.0
+#AutoIt3Wrapper_Res_ProductVersion=2.1.0.0
 #AutoIt3Wrapper_Res_ProductName=Work Days
+#AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
+#AutoIt3Wrapper_Res_LegalCopyright=Copyright © 2026 Fabricio Zambroni
 #AutoIt3Wrapper_Res_File_Add=E:\GitHub\WorkDays\splash.jpg
 #AutoIt3Wrapper_Res_File_Add=E:\GitHub\WorkDays\Help.pdf
 #AutoIt3Wrapper_Res_File_Add=E:\GitHub\WorkDays\Updater.exe
 #AutoIt3Wrapper_Res_File_Add=E:\GitHub\WorkDays\About.db
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
-;#AutoIt3Wrapper_Res_File_Add=E:\GitHub\WorkDays\about.jpg
+
+
 #cs ----------------------------------------------------------------------------
 
  AutoIt Version: 3.3.16.1
@@ -75,6 +80,8 @@ Global $hImage[50]
 
 Global Const $g_clrTodayBorder = 0xFF0000 ; vermelho
 Global Const $g_clrSelectedBorder = 0x00AA00 ; verde
+Global Const $g_clrInvalidDayBG = 0xF0F0F0 ; disabled cells for dates that do not exist in the month
+Global Const $g_clrInvalidDayFG = 0xA0A0A0
 
 ; Note: WM_SETREDRAW, RDW_INVALIDATE, RDW_ALLCHILDREN, RDW_UPDATENOW
 ; are already declared by the included WindowsConstants.au3 / WinAPI.au3.
@@ -97,6 +104,11 @@ Global $g_iTipCol = -1
 Global $g_sTipText = ""
 Global $g_bTipVisible = False
 
+; Fast-selection state
+Global $g_iLVYear = 0
+Global $g_iSelDay = 0
+Global $g_iSelMonth = 0
+
 ;Context menu
 Global $mousePosX = 0
 Global $mousePosY = 0
@@ -118,6 +130,30 @@ Global $g_iMenuYear = 0
 
 ; Handles
 Global $g_hGUI = 0, $g_hLV = 0, $g_idLV = 0
+Global $g_hCal = 0   ; MonthCal HWND – hidden, kept for programmatic date access
+
+; Custom calendar widget – replaces the MonthCal visually.
+; Uses labels so GUICtrlSetBkColor works reliably without any GDI/NM_CUSTOMDRAW.
+Global $g_ccYear  = @YEAR
+Global $g_ccMonth = Number(@MON)
+Global $g_ccPrev  = 0              ; "< " button
+Global $g_ccNext  = 0              ; " >" button
+Global $g_ccTitle = 0              ; month+year button (opens picker)
+Global $g_ccToday = 0              ; "Today" button
+Global $g_ccDayCells[42]           ; 6 rows x 7 cols day-cell label IDs (content)
+Global $g_ccFrames[42]             ; border frame labels behind each day cell
+Global $g_ccMarkers[42]            ; 2px bar at bottom of cell = visual note marker
+Global $g_ccWeekNums[6]            ; 6 week-number label IDs
+Global $g_ccDayValues[42]          ; day number in each cell (0 = empty)
+Global $g_ccCacheTitle = Chr(0)
+Global $g_ccCacheWeekNums[6]
+Global $g_ccCacheText[42]
+Global $g_ccCacheDayBG[42]
+Global $g_ccCacheDayFG[42]
+Global $g_ccCacheFontW[42]
+Global $g_ccCacheFrame[42]
+Global $g_ccCacheMarker[42]
+Global $g_ccCacheTip[42]
 
 Global $iYear = @YEAR
 Global $UpdatePath = "\\lp16-fzi1-dsa\WorkDays"
@@ -134,7 +170,7 @@ Global $Total, $Count_O, $Count_R, $Count_H, $Count_P, $Count_T, $Count_S, $Coun
 
 
 ;Colors Variables
-Global $Color_bk_OnSite, $Color_bk_Remote, $Color_bk_holiday, $Color_bk_PTO, $Color_bk_Travel, $Color_bk_Sick, $Color_bk_Blank, $Color_bk_Weekend
+Global $Color_bk_OnSite, $Color_bk_Remote, $Color_bk_holiday, $Color_bk_PTO, $Color_bk_Travel, $Color_bk_Sick, $Color_bk_Blank, $Color_bk_Weekend, $Color_HighlightDate
 
 
 Global $DB = "HKEY_CURRENT_USER\Software\WorkDays"
@@ -273,12 +309,13 @@ Global $ContextItem_Blank[32][32]
 
 Global $TodayLabel[32][32]
 Global $SelectLabel[32][32]
-Global $DBpMenu_Delete_Year[20]
+Global $DBpMenu_Delete_Year[100]
 Global $DBpMenu_Delete_Date[15]
 
-Global $DBpMenu_Report_simple_Year[20]
-Global $DBpMenu_Report_detailed_Year[20]
-Global $DBpMenu_Report_Year[20]
+Global $DBpMenu_Report_simple_Year[100]
+Global $DBpMenu_Report_detailed_Year[100]
+Global $DBpMenu_Report_professional_Year[100]
+Global $DBpMenu_Report_Year[100]
 Global $DBpMenu_Report_Date[15]
 
 Global $Year = @YEAR
@@ -337,6 +374,9 @@ If @error Then $Color_bk_Today = 0xFF0000
 
 Global $Color_bk_Selected = RegRead($DB, "Color_Selected")
 If @error Then $Color_bk_Selected = 0x00F0F0
+
+Global $Color_HighlightDate = RegRead($DB, "Color_HighlightDate")
+If @error Then $Color_HighlightDate = 0xFF0000
 
 Global $Color_bk_Graphic = RegRead($DB, "Color_Graphic")
 If @error Then $Color_bk_Graphic = 0x000000
@@ -406,7 +446,9 @@ Global $Font_Graphic = 1
 
 
 Global $Picker_Grid_Size_X_Read = RegRead($DB, "Grid_Size_X")
-If @error Then $Picker_Grid_Size_X_Read = 34
+If @error Or Number($Picker_Grid_Size_X_Read) < 25 Then $Picker_Grid_Size_X_Read = 35
+$Picker_Grid_Size_X_Read = Number($Picker_Grid_Size_X_Read)
+If $Picker_Grid_Size_X_Read > 45 Then $Picker_Grid_Size_X_Read = 45
 
 Global $Picker_Grid_Size_Y_Read = RegRead($DB, "Grid_Size_Y")
 If @error Then $Picker_Grid_Size_Y_Read = 0xFF0000
@@ -419,24 +461,34 @@ $g_hGUI = $Form_WorkDays
 If $g_hGUI = 0 Then Exit MsgBox(16, "Error", "Failed to store GUI handle.")
 
 Global $DBpMenu_db = GUICtrlCreateMenu("File")
-Global $DBpMenu_backup_Data = GUICtrlCreateMenu("Data")
-Global $DBpMenu_backup = GUICtrlCreateMenuItem("Create Backup", $DBpMenu_backup_Data)
-Global $BkpMenu_Batch = GUICtrlCreateMenuItem("Restore Backup", $DBpMenu_backup_Data)
-Global $DBpMenu_backup_2 = GUICtrlCreateMenuItem("", $DBpMenu_backup_Data)
-Global $BkpMenu_reset_all1 = GUICtrlCreateMenu("Data Management", $DBpMenu_backup_Data)
-Global $BkpMenu_reset_all = GUICtrlCreateMenuItem("Reset Entire Database", $BkpMenu_reset_all1)
-Global $DBpMenu_Delete = GUICtrlCreateMenu("Delete Specific year", $BkpMenu_reset_all1)
-Global $DBpMenu_backup_3 = GUICtrlCreateMenuItem("", $DBpMenu_backup_Data)
-Global $DBpMenu_backup_Data_Holidays = GUICtrlCreateMenuItem("Import Holidays File", $DBpMenu_backup_Data)
-Global $DBpMenu_Report = GUICtrlCreateMenu("Report")
-Global $DBpMenu_Report_Simple = GUICtrlCreateMenu("Simple", $DBpMenu_Report)
-Global $DBpMenu_Report_Detailed = GUICtrlCreateMenu("Detailed", $DBpMenu_Report)
-
-
 Global $BkpMenu_Exit = GUICtrlCreateMenuItem("&Exit", $DBpMenu_db)
+;~ Global $DBpMenu_backup_Data = GUICtrlCreateMenu("Data")
+;~ Global $DBpMenu_backup = GUICtrlCreateMenuItem("Create Backup", $DBpMenu_backup_Data)
+;~ Global $BkpMenu_Batch = GUICtrlCreateMenuItem("Restore Backup", $DBpMenu_backup_Data)
+;~ Global $DBpMenu_backup_2 = GUICtrlCreateMenuItem("", $DBpMenu_backup_Data)
+;~ Global $BkpMenu_reset_all1 = GUICtrlCreateMenu("Data Management", $DBpMenu_backup_Data)
+;~ Global $BkpMenu_reset_all = GUICtrlCreateMenuItem("Reset Entire Database", $BkpMenu_reset_all1)
+;~ Global $DBpMenu_Delete = GUICtrlCreateMenu("Delete Specific year", $BkpMenu_reset_all1)
+;~ Global $DBpMenu_backup_3 = GUICtrlCreateMenuItem("", $DBpMenu_backup_Data)
+;~ Global $DBpMenu_backup_Data_Holidays = GUICtrlCreateMenuItem("Import Holidays File", $DBpMenu_backup_Data)
 
 Global $DBpMenu_settings = GUICtrlCreateMenu("Settings")
 Global $BkpMenu_settings_BKcolors = GUICtrlCreateMenuItem("Options", $DBpMenu_settings)
+Global $DBpMenu_backup_3 = GUICtrlCreateMenuItem("", $DBpMenu_settings)
+Global $DBpMenu_backup = GUICtrlCreateMenuItem("Create Backup", $DBpMenu_settings)
+Global $BkpMenu_Batch = GUICtrlCreateMenuItem("Restore Backup", $DBpMenu_settings)
+Global $DBpMenu_backup_3 = GUICtrlCreateMenuItem("", $DBpMenu_settings)
+Global $DBpMenu_backup_Data_Holidays = GUICtrlCreateMenuItem("Import Holidays File", $DBpMenu_settings)
+Global $DBpMenu_backup_3 = GUICtrlCreateMenuItem("", $DBpMenu_settings)
+Global $BkpMenu_reset_all1 = GUICtrlCreateMenu("Data Management", $DBpMenu_settings)
+Global $BkpMenu_reset_all = GUICtrlCreateMenuItem("Reset Entire Database", $BkpMenu_reset_all1)
+Global $DBpMenu_Delete = GUICtrlCreateMenu("Delete Specific year", $BkpMenu_reset_all1)
+
+Global $DBpMenu_Report = GUICtrlCreateMenu("Report")
+Global $DBpMenu_Report_Simple = GUICtrlCreateMenu("Simple", $DBpMenu_Report)
+Global $DBpMenu_Report_Detailed = GUICtrlCreateMenu("Detailed", $DBpMenu_Report)
+Global $DBpMenu_Report_Professional = GUICtrlCreateMenu("Analytical", $DBpMenu_Report)
+
 ;~ Global $BkpMenu_settings_ResetScreen = GUICtrlCreateMenuItem("Reset Screen Position", $DBpMenu_settings)
 Global $BkpMenu_help = GUICtrlCreateMenu("?")
 Global $BkpMenu_help_help = GUICtrlCreateMenuItem("Help", $BkpMenu_help)
@@ -446,6 +498,10 @@ Global $BkpMenu_help_About = GUICtrlCreateMenuItem("About", $BkpMenu_help)
 #EndRegion GLOBAL
 
 $Calendar = GUICtrlCreateMonthCal(@YEAR & "/" & @MON & "/" & @MDAY, 8, 8, 273, 201, $MCS_WEEKNUMBERS)
+$g_hCal = GUICtrlGetHandle($Calendar)
+; Hide the MonthCal – the custom colored calendar replaces it visually.
+; All GUICtrlRead($Calendar) / GUICtrlSetData($Calendar,...) calls still work on the hidden control.
+GUICtrlSetState($Calendar, $GUI_HIDE)
 
 $Group_Buttons = GUICtrlCreateGroup("", 288, 2, 270, 208)
 
@@ -463,33 +519,40 @@ $Input_Tag = GUICtrlCreateInput("", 296, 54, 175, 21) ;, $ES_READONLY)
 GUICtrlSetState($Input_Tag, $gui_hide)
 
 $Button_Update = GUICtrlCreateButton("UPDATE AVAILABLE - Click to execute", 296, 50, 245, 30, $SS_CENTER)
-GUICtrlSetColor($Button_Update, 0xFF0000)
-GUICtrlSetFont($Button_Update, 8, 700)
+GUICtrlSetColor($Button_Update, 0xFFFFFF)
+GUICtrlSetBkColor($Button_Update, 0xFF0000)
+GUICtrlSetFont($Button_Update, 9, 900)
 GUICtrlSetState($Button_Update, $GUI_HIDE)
 
 
-$Button_OnSite = GUICtrlCreateButton("&On Site", 296, 84, 75, 25)
+;~ $Button_OnSite = GUICtrlCreateButton("&On Site", 296, 84, 75, 25)
+$Button_OnSite = GUICtrlCreateButton("&On Site", 384, 84, 75, 25)
 GUICtrlSetBkColor($Button_OnSite, $Color_bk_OnSite)
 GUICtrlSetColor($Button_OnSite, $Font_OnSite)
 
 
-$Button_Remote = GUICtrlCreateButton("&Remote", 384, 84, 75, 25)
+;~ $Button_Remote = GUICtrlCreateButton("&Remote", 384, 84, 75, 25)
+$Button_Remote = GUICtrlCreateButton("&Remote", 296, 84, 75, 25)
 GUICtrlSetBkColor($Button_Remote, $Color_bk_Remote)
 GUICtrlSetColor($Button_Remote, $Font_Remote)
 
-$Button_holiday = GUICtrlCreateButton("&Holiday", 296, 114, 75, 25)
+;~ $Button_holiday = GUICtrlCreateButton("&Holiday", 296, 114, 75, 25)
+$Button_holiday = GUICtrlCreateButton("&Holiday", 384, 144, 75, 25)
 GUICtrlSetBkColor($Button_holiday, $Color_bk_holiday)
 GUICtrlSetColor($Button_holiday, $Font_Holiday)
 
-$Button_PTO = GUICtrlCreateButton("&PTO", 384, 114, 75, 25)
+;~ $Button_PTO = GUICtrlCreateButton("&PTO", 384, 114, 75, 25)
+$Button_PTO = GUICtrlCreateButton("&PTO", 296, 114, 75, 25)
 GUICtrlSetBkColor($Button_PTO, $Color_bk_PTO)
 GUICtrlSetColor($Button_PTO, $Font_PTO)
 
-$Button_Travel = GUICtrlCreateButton("&Travel", 296, 144, 75, 25)
+;~ $Button_Travel = GUICtrlCreateButton("&Travel", 296, 144, 75, 25)
+$Button_Travel = GUICtrlCreateButton("&Travel", 384, 114, 75, 25)
 GUICtrlSetBkColor($Button_Travel, $Color_bk_Travel)
 GUICtrlSetColor($Button_Travel, $Font_Travel)
 
-$Button_Sick = GUICtrlCreateButton("&Sick", 384, 144, 75, 25)
+;~ $Button_Sick = GUICtrlCreateButton("&Sick", 384, 144, 75, 25)
+$Button_Sick = GUICtrlCreateButton("&Sick", 296, 144, 75, 25)
 GUICtrlSetBkColor($Button_Sick, $Color_bk_Sick)
 GUICtrlSetColor($Button_Sick, $Font_Sick)
 
@@ -944,6 +1007,9 @@ $Pie1 = GUICtrlCreateGraphic($Pie1_left, $Pie1_top, $Pie1_width, $Pie1_height) ;
 
 GUICtrlCreateGroup("", -99, -99, 1, 1)
 
+; Build the custom colored calendar (replaces the hidden MonthCal visually)
+_CustomCal_Create()
+
 $sMessage1 = "Developed by Fabricio Zambroni - VERSION: " & FileGetVersion(@ScriptFullPath) & " - Today: " & @YEAR & "/" & @MON & "/" & @MDAY
 ;~ $sMessage2 = "Update Available - New Version: xxx"
 $StatusBar1 = _GUICtrlStatusBar_Create($Form_WorkDays)
@@ -970,6 +1036,7 @@ If GUICtrlRead($Button_Close_Splash) = $GUI_CHECKED Then
 EndIf
 _ReadINI(@YEAR, 1)
 _ReadStatistics(@YEAR)   ; populate stats panels (normally done by _Update, but startup calls _ReadINI directly)
+_CustomCal_Update()      ; paint custom calendar with initial month's category colors
 GUICtrlSetData($Progress_Splash, 80)
 GUICtrlSetData($Label_Percentage, "80%")
 If GUICtrlRead($Button_Close_Splash) = $GUI_CHECKED Then
@@ -1001,7 +1068,7 @@ $SelDate_slipt = StringSplit($SelDate, "/")
 $Status1 = RegRead($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3])
 $Status = StringTrimLeft($Status1, 1)
 
-GUICtrlSetState($SelectLabel[$SelDate_slipt[3]][$SelDate_slipt[2]], $gui_show)
+_UpdateSelectionHighlight(Number($SelDate_slipt[3]), Number($SelDate_slipt[2]))
 
 $UpdatedVersion = FileGetVersion($UpdatePath & "\WorkDays.exe")
 
@@ -1042,14 +1109,47 @@ While 1
 
 	$nMsg = GUIGetMsg()
 
-	#cs
+	; ── Custom calendar: prev/next navigation and day clicks ─────────
+	If $nMsg = $g_ccPrev Then
+		_CustomCal_Navigate(-1)
+	ElseIf $nMsg = $g_ccNext Then
+		_CustomCal_Navigate(1)
+	ElseIf $nMsg = $g_ccTitle Then
+		_CustomCal_ShowPicker()
+	ElseIf $nMsg = $g_ccToday Then
+		; Navigate to today.
+		; Important: do NOT update $g_ccYear/$g_ccMonth before _CalendarRead().
+		; When the year is the same but the month is different, the fast path inside
+		; _CalendarRead() relies on the *currently displayed* custom-calendar month to
+		; decide whether it needs a full redraw. Pre-setting these globals here makes
+		; the code think the calendar is already on the target month, so the UI may keep
+		; showing the old month even though the selected date changed.
+		Local $sTodayDate = @YEAR & "/" & StringFormat("%02d", @MON) & "/" & StringFormat("%02d", @MDAY)
+		GUICtrlSetData($Calendar, $sTodayDate)
+		_GUICtrlMonthCal_SetCurSel($Calendar, @YEAR, Number(@MON), Number(@MDAY))
+		If @YEAR <> $iYear Then
+			_CriaINI(@YEAR)
+		EndIf
+		_CalendarRead()
+	Else
+		For $__ci = 0 To 41
+			If ($nMsg = $g_ccDayCells[$__ci] Or $nMsg = $g_ccFrames[$__ci]) And $g_ccDayValues[$__ci] > 0 Then
+				Local $__sD = StringFormat("%02d", $g_ccDayValues[$__ci])
+				Local $__sM = StringFormat("%02d", $g_ccMonth)
+				GUICtrlSetData($Calendar, $g_ccYear & "/" & $__sM & "/" & $__sD)
+				_GUICtrlMonthCal_SetCurSel($Calendar, $g_ccYear, $g_ccMonth, $g_ccDayValues[$__ci])
+				_CalendarRead()
+				ExitLoop
+			EndIf
+		Next
+	EndIf
+
 	If $g_bShowCellMenu Then
 		$g_bShowCellMenu = False
 		_MenuContextual($g_iMenuDay, $g_iMenuMonth, $g_iMenuYear)
 	EndIf
-	#ce
 
-	For $j = 1 To 12
+	For $j = 1 To 99
 
 		If $nMsg = $DBpMenu_Report_simple_Year[$j] And $DBpMenu_Report_simple_Year[$j] <> 0 Then
 			$DBpMenu_Report_Date = GUICtrlRead($DBpMenu_Report_simple_Year[$j], 1)
@@ -1059,6 +1159,11 @@ While 1
 		If $nMsg = $DBpMenu_Report_detailed_Year[$j] And $DBpMenu_Report_detailed_Year[$j] <> 0 Then
 			$DBpMenu_Report_Date = GUICtrlRead($DBpMenu_Report_detailed_Year[$j], 1)
 			GenerateWorkdaysReportHTML($DBpMenu_Report_Date, 1)
+		EndIf
+
+		If $nMsg = $DBpMenu_Report_professional_Year[$j] And $DBpMenu_Report_professional_Year[$j] <> 0 Then
+			$DBpMenu_Report_Date = GUICtrlRead($DBpMenu_Report_professional_Year[$j], 1)
+			GenerateWorkdaysProfessionalReportHTML($DBpMenu_Report_Date)
 		EndIf
 
 		If $nMsg = $DBpMenu_Delete_Year[$j] And $DBpMenu_Delete_Year[$j] <> 0 Then
@@ -1077,6 +1182,7 @@ While 1
 						GUICtrlSetData($Calendar, @YEAR & "/" & @MON & "/" & @MDAY)
 						; _Reload handles all state updates - no need to pre-set date fields
 						_Reload()
+
 						MsgBox(262208, "Delete Year", "Year Deleted with Success", 0, $Form_WorkDays)
 
 					Else
@@ -1090,7 +1196,13 @@ While 1
 
 		EndIf
 
-		For $i = 1 To 31
+		Next
+
+		; Day controls and context-menu items only exist for 12 months.
+		; Keep this loop separated from the report/delete year loop above,
+		; otherwise $Inputs[$i][$j] will be accessed with $j > 12.
+		For $j = 1 To 12
+			For $i = 1 To 31
 			If $Inputs[$i][$j] <> 0 And $nMsg = $Inputs[$i][$j] Then ;_CalendarRead
 				If $i < 10 Then
 					$n = "0" & $i
@@ -1358,6 +1470,9 @@ While 1
 				$Color_bk_Selected = RegRead($DB, "Color_Selected")
 				If @error Then $Color_bk_Selected = 0x00FFA0
 
+				$Color_HighlightDate = RegRead($DB, "Color_HighlightDate")
+				If @error Then $Color_HighlightDate = 0xFF0000
+
 				GUICtrlSetBkColor($Button_OnSite, $Color_bk_OnSite)
 				GUICtrlSetBkColor($Button_Remote, $Color_bk_Remote)
 				GUICtrlSetBkColor($Button_holiday, $Color_bk_holiday)
@@ -1466,9 +1581,12 @@ While 1
 
 				$SelDate = GUICtrlRead($Calendar)
 				$SelDate_slipt = StringSplit($SelDate, "/")
-				$Status1 = RegRead($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3])
-				$Status = StringTrimLeft($Status1, 1)
-				GUICtrlSetState($SelectLabel[$SelDate_slipt[3]][$SelDate_slipt[2]], $gui_show)
+				If Not @error And $SelDate_slipt[0] = 3 Then
+					_RefreshMainGridCellStyles(Number($SelDate_slipt[1]))
+					$Status1 = RegRead($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3])
+					$Status = StringTrimLeft($Status1, 1)
+					_UpdateSelectionHighlight(Number($SelDate_slipt[3]), Number($SelDate_slipt[2]))
+				EndIf
 
 			EndIf
 
@@ -1511,7 +1629,9 @@ While 1
 				Case $iMsgBoxAnswer = 6 ;Yes
 					GUICtrlSetData($Calendar, @YEAR & "/" & @MON & "/" & @MDAY)
 					_RestoreBackup()
-					_CalendarRead()
+					Run(@ScriptFullPath)
+					Exit
+;~ 					_CalendarRead()
 					; _CalendarRead -> _Update -> _ReadStatistics -> _Chart already called
 
 				Case $iMsgBoxAnswer = 7 ;No
@@ -1524,7 +1644,9 @@ While 1
 			Select
 				Case $iMsgBoxAnswer = 6 ;Yes
 					_ImportHolidays()
-					_Reload()
+					Run(@ScriptFullPath)
+					Exit
+;~ 					_Reload()
 					; _Reload already calls _Chart() internally
 
 
@@ -1542,10 +1664,12 @@ While 1
 
 		Case $BkpMenu_reset_all
 			_ResetDatabase()
-			$SelDate = GUICtrlRead($Calendar)
-			$SelDate_slipt = StringSplit($SelDate, "/")
-			_CriaINI(@YEAR)
-			_Reload()
+			Run(@ScriptFullPath)
+					Exit
+;~ 			$SelDate = GUICtrlRead($Calendar)
+;~ 			$SelDate_slipt = StringSplit($SelDate, "/")
+;~ 			_CriaINI(@YEAR)
+;~ 			_Reload()
 			; _Reload already calls _Chart() internally
 
 		Case $Button_Reload
@@ -1710,7 +1834,7 @@ Func _BKColorPallet()
 			0x0000FF, 0x000080, 0xFF00FF, 0x800080, _
 			0xC0DCC0, 0xA6CAF0, 0xFFFBF0, 0xA0A0A4]
 
-	$Form_Colors = GUICreate('Colors', 230, 550, 300, 30, $DS_MODALFRAME, BitOR($WS_EX_TOPMOST, $WS_EX_MDICHILD), $Form_WorkDays)
+	$Form_Colors = GUICreate('Colors', 230, 610, 300, 30, $DS_MODALFRAME, BitOR($WS_EX_TOPMOST, $WS_EX_MDICHILD), $Form_WorkDays)
 
 	GUICtrlSetBkColor(-1, 0x50CA1B)
 
@@ -1724,21 +1848,28 @@ Func _BKColorPallet()
 	GUICtrlCreateLabel("Weekend:", 10, 225)
 	GUICtrlCreateLabel("Today:", 10, 255)
 	GUICtrlCreateLabel("Selected:", 10, 285)
-	GUICtrlCreateLabel("Graphic line:", 10, 315)
-	GUICtrlCreateLabel("Quarter line:", 10, 345)
-	GUICtrlCreateLabel("Border size:", 10, 375)
-	$Slider_Border_Size = GUICtrlCreateSlider(65, 370, 140, 20, BitOR($GUI_SS_DEFAULT_SLIDER, $TBS_FIXEDLENGTH))
+	GUICtrlCreateLabel("Highlight:", 10, 315)
+	GUICtrlCreateLabel("Graphic line:", 10, 345)
+	GUICtrlCreateLabel("Quarter line:", 10, 375)
+	GUICtrlCreateLabel("Border size:", 10, 405)
+	$Slider_Border_Size = GUICtrlCreateSlider(65, 400, 140, 20, BitOR($GUI_SS_DEFAULT_SLIDER, $TBS_FIXEDLENGTH))
 	GUICtrlSetLimit($Slider_Border_Size, 5, 0)
 	GUICtrlSetData($Slider_Border_Size, $g_iQuarterBorderSize)
-	$Label_Border_Size = GUICtrlCreateLabel(GUICtrlRead($Slider_Border_Size), 205, 373)
+	$Label_Border_Size = GUICtrlCreateLabel(GUICtrlRead($Slider_Border_Size), 205, 403)
 
-	GUICtrlCreateLabel("Font size:", 10, 405)
-	$Slider_Font_Size = GUICtrlCreateSlider(65, 400, 140, 20, BitOR($GUI_SS_DEFAULT_SLIDER, $TBS_FIXEDLENGTH))
+	GUICtrlCreateLabel("Font size:", 10, 435)
+	$Slider_Font_Size = GUICtrlCreateSlider(65, 430, 140, 20, BitOR($GUI_SS_DEFAULT_SLIDER, $TBS_FIXEDLENGTH))
 	GUICtrlSetLimit($Slider_Font_Size, 25, 10)
 	GUICtrlSetData($Slider_Font_Size, $g_iListViewFontHeight)
-	$Label_Font_Size = GUICtrlCreateLabel(GUICtrlRead($Slider_Font_Size), 205, 403)
+	$Label_Font_Size = GUICtrlCreateLabel(GUICtrlRead($Slider_Font_Size), 205, 433)
 
-	$Checkbox_ResetScreen = GUICtrlCreateCheckbox("Reset Screen Position", 10, 430)
+	GUICtrlCreateLabel("Cell size:", 10, 465)
+	$Slider_Cell_Size = GUICtrlCreateSlider(65, 460, 140, 20, BitOR($GUI_SS_DEFAULT_SLIDER, $TBS_FIXEDLENGTH))
+	GUICtrlSetLimit($Slider_Cell_Size, 45, 25)
+	GUICtrlSetData($Slider_Cell_Size, $Picker_Grid_Size_X_Read)
+	$Label_Cell_Size = GUICtrlCreateLabel(GUICtrlRead($Slider_Cell_Size), 205, 463)
+
+	$Checkbox_ResetScreen = GUICtrlCreateCheckbox("Reset Screen Position", 10, 490)
 
 
 
@@ -1765,8 +1896,9 @@ Func _BKColorPallet()
 	$Picker_Weekend = _GUIColorPicker_Create('', 70, 220, 60, 23, $Color_bk_Weekend, BitOR($CP_FLAG_CHOOSERBUTTON, $CP_FLAG_ARROWSTYLE, $CP_FLAG_MOUSEWHEEL), $aPalette, 4, 5, 0, '', 'More...')
 	$Picker_Today = _GUIColorPicker_Create('', 70, 250, 60, 23, $Color_bk_Today, BitOR($CP_FLAG_CHOOSERBUTTON, $CP_FLAG_ARROWSTYLE, $CP_FLAG_MOUSEWHEEL), $aPalette, 4, 5, 0, '', 'More...')
 	$Picker_Selected = _GUIColorPicker_Create('', 70, 280, 60, 23, $Color_bk_Selected, BitOR($CP_FLAG_CHOOSERBUTTON, $CP_FLAG_ARROWSTYLE, $CP_FLAG_MOUSEWHEEL), $aPalette, 4, 5, 0, '', 'More...')
-	$Picker_Graphic = _GUIColorPicker_Create('', 70, 310, 60, 23, $Color_bk_Graphic, BitOR($CP_FLAG_CHOOSERBUTTON, $CP_FLAG_ARROWSTYLE, $CP_FLAG_MOUSEWHEEL), $aPalette, 4, 5, 0, '', 'More...')
-	$Picker_Quarter = _GUIColorPicker_Create('', 70, 340, 60, 23, $g_clrQuarterBorder, BitOR($CP_FLAG_CHOOSERBUTTON, $CP_FLAG_ARROWSTYLE, $CP_FLAG_MOUSEWHEEL), $aPalette, 4, 5, 0, '', 'More...')
+	$Picker_HighlightDate = _GUIColorPicker_Create('', 70, 310, 60, 23, $Color_HighlightDate, BitOR($CP_FLAG_CHOOSERBUTTON, $CP_FLAG_ARROWSTYLE, $CP_FLAG_MOUSEWHEEL), $aPalette, 4, 5, 0, '', 'More...')
+	$Picker_Graphic = _GUIColorPicker_Create('', 70, 340, 60, 23, $Color_bk_Graphic, BitOR($CP_FLAG_CHOOSERBUTTON, $CP_FLAG_ARROWSTYLE, $CP_FLAG_MOUSEWHEEL), $aPalette, 4, 5, 0, '', 'More...')
+	$Picker_Quarter = _GUIColorPicker_Create('', 70, 370, 60, 23, $g_clrQuarterBorder, BitOR($CP_FLAG_CHOOSERBUTTON, $CP_FLAG_ARROWSTYLE, $CP_FLAG_MOUSEWHEEL), $aPalette, 4, 5, 0, '', 'More...')
 
 	$Picker_Font_OnSite = GUICtrlCreateCheckbox("White Font", 135, 10)
 	$Picker_Font_Remote = GUICtrlCreateCheckbox("White Font", 135, 40)
@@ -1776,7 +1908,7 @@ Func _BKColorPallet()
 	$Picker_Font_Sick = GUICtrlCreateCheckbox("White Font", 135, 160)
 	$Picker_Font_Blank = GUICtrlCreateCheckbox("White Font", 135, 190)
 	$Picker_Font_Weekend = GUICtrlCreateCheckbox("White Font", 135, 220)
-	$Picker_Font_Graphic = GUICtrlCreateCheckbox("No Line", 135, 311)
+	$Picker_Font_Graphic = GUICtrlCreateCheckbox("No Line", 135, 341)
 
 	GUICtrlSetState($Picker_Font_OnSite, $Picker_Font_OnSite_Read)
 	GUICtrlSetState($Picker_Font_Remote, $Picker_Font_Remote_Read)
@@ -1796,11 +1928,11 @@ Func _BKColorPallet()
 
 	$Original_Color_1 = $Color_bk_OnSite & $Color_bk_Remote & $Color_bk_holiday & $Color_bk_PTO & _
 			$Color_bk_Travel & $Color_bk_Sick & $Color_bk_Blank & $Color_bk_Weekend & $Color_bk_Today & _
-			$Color_bk_Selected & $g_clrQuarterBorder & $Picker_Font_OnSite_Read & $Picker_Font_Remote_Read & $Picker_Font_Holiday_Read & _
-			$Picker_Font_PTO_Read & $Picker_Font_Travel_Read & $Picker_Font_Sick_Read & $Picker_Font_Blank_Read & $Picker_Font_Weekend_Read & $g_iQuarterBorderSize
+			$Color_bk_Selected & $Color_HighlightDate & $Color_bk_Graphic & $g_clrQuarterBorder & $Picker_Font_OnSite_Read & $Picker_Font_Remote_Read & $Picker_Font_Holiday_Read & _
+			$Picker_Font_PTO_Read & $Picker_Font_Travel_Read & $Picker_Font_Sick_Read & $Picker_Font_Blank_Read & $Picker_Font_Weekend_Read & $g_iQuarterBorderSize & $g_iListViewFontHeight & $Picker_Grid_Size_X_Read
 
 
-	$Colors_Close = GUICtrlCreateButton("Close", 85, 480, 70, 30)
+	$Colors_Close = GUICtrlCreateButton("Close", 85, 540, 70, 30)
 
 	GUISetState(@SW_SHOW, $Form_Colors)
 
@@ -1813,6 +1945,9 @@ Func _BKColorPallet()
 
 			Case $Slider_Font_Size
 				GUICtrlSetData($Label_Font_Size, GUICtrlRead($Slider_Font_Size))
+
+			Case $Slider_Cell_Size
+				GUICtrlSetData($Label_Cell_Size, GUICtrlRead($Slider_Cell_Size))
 
 
 			Case $Picker_Font_Graphic
@@ -1838,6 +1973,7 @@ Func _BKColorPallet()
 				$Picker_Color_Weekend = _GUIColorPicker_GetColor($Picker_Weekend)
 				$Picker_Color_Today = _GUIColorPicker_GetColor($Picker_Today)
 				$Picker_Color_Selected = _GUIColorPicker_GetColor($Picker_Selected)
+				$Picker_Color_HighlightDate = _GUIColorPicker_GetColor($Picker_HighlightDate)
 				$Picker_Color_Graphic = _GUIColorPicker_GetColor($Picker_Graphic)
 
 				$Picker_Color_Quarter = _GUIColorPicker_GetColor($Picker_Quarter)
@@ -1856,6 +1992,7 @@ Func _BKColorPallet()
 				RegWrite($DB, "Color_Weekend", "REG_SZ", $Picker_Color_Weekend)
 				RegWrite($DB, "Color_Today", "REG_SZ", $Picker_Color_Today)
 				RegWrite($DB, "Color_Selected", "REG_SZ", $Picker_Color_Selected)
+				RegWrite($DB, "Color_HighlightDate", "REG_SZ", $Picker_Color_HighlightDate)
 				RegWrite($DB, "Color_Graphic", "REG_SZ", $Picker_Color_Graphic)
 				RegWrite($DB, "Color_Quarter", "REG_SZ", $Picker_Color_Quarter)
 
@@ -1864,6 +2001,11 @@ Func _BKColorPallet()
 
 				$g_iListViewFontHeight = GUICtrlRead($Slider_Font_Size)
 				RegWrite($DB, "Font_Size", "REG_SZ", $g_iListViewFontHeight)
+
+				$Picker_Grid_Size_X_Read = GUICtrlRead($Slider_Cell_Size)
+				If Number($Picker_Grid_Size_X_Read) < 20 Then $Picker_Grid_Size_X_Read = 20
+				If Number($Picker_Grid_Size_X_Read) > 60 Then $Picker_Grid_Size_X_Read = 60
+				RegWrite($DB, "Grid_Size_X", "REG_SZ", $Picker_Grid_Size_X_Read)
 
 
 
@@ -1929,6 +2071,7 @@ Func _BKColorPallet()
 					$Font_Weekend = $White
 				EndIf
 
+				$Color_HighlightDate = $Picker_Color_HighlightDate
 				$Color_bk_Graphic = $Picker_Color_Graphic
 				$Color_Graphic_Transparent = $Picker_Font_Graphic_Read
 ;~ 				MsgBox(262144, "2", $Color_bk_Graphic & @CRLF & $Picker_Color_Graphic)
@@ -1945,14 +2088,15 @@ Func _BKColorPallet()
 
 				$Original_Color_2 = $Picker_Color_OnSite & $Picker_Color_Remote & $Picker_Color_Holiday & $Picker_Color_PTO & _
 						$Picker_Color_Travel & $Picker_Color_Sick & $Picker_Color_Blank & $Picker_Color_Weekend & $Picker_Color_Today & _
-						$Picker_Color_Selected & $Picker_Quarter & $Picker_Font_OnSite_Read & $Picker_Font_Remote_Read & $Picker_Font_Holiday_Read & _
-						$Picker_Font_PTO_Read & $Picker_Font_Travel_Read & $Picker_Font_Sick_Read & $Picker_Font_Blank_Read & $Picker_Font_Weekend_Read & $g_iQuarterBorderSize
+						$Picker_Color_Selected & $Picker_Color_HighlightDate & $Picker_Color_Graphic & $Picker_Color_Quarter & $Picker_Font_OnSite_Read & $Picker_Font_Remote_Read & $Picker_Font_Holiday_Read & _
+						$Picker_Font_PTO_Read & $Picker_Font_Travel_Read & $Picker_Font_Sick_Read & $Picker_Font_Blank_Read & $Picker_Font_Weekend_Read & $g_iQuarterBorderSize & $g_iListViewFontHeight & $Picker_Grid_Size_X_Read
 
 				$Checkbox_ResetScreenStatus = GUICtrlRead($Checkbox_ResetScreen)
 
 				GUIDelete($Form_Colors)
 
 				WinActivate("Work Days") ;,"",@SW_SHOW )
+				_ApplyMainGridCellSize($Picker_Grid_Size_X_Read)
 
 				_Chart()
 
@@ -1981,6 +2125,65 @@ Func _BKColorPallet()
 
 
 EndFunc   ;==>_BKColorPallet
+
+
+Func _DateHighlightRegName($CYear, $Month, $Day)
+	Return "Highlight_" & StringFormat("%04d_%02d_%02d", Number($CYear), Number($Month), Number($Day))
+EndFunc   ;==>_DateHighlightRegName
+
+
+Func _IsHighlightedDate($CYear, $Month, $Day)
+	Local $sHighlighted = RegRead($DB, _DateHighlightRegName($CYear, $Month, $Day))
+	If @error Then Return False
+	Return ($sHighlighted = "1")
+EndFunc   ;==>_IsHighlightedDate
+
+
+Func _GetDateFontColor($CYear, $Month, $Day, $Status)
+	If _IsHighlightedDate($CYear, $Month, $Day) Then Return $Color_HighlightDate
+	Return _ColorFromDateFont($Status)
+EndFunc   ;==>_GetDateFontColor
+
+
+Func _GetDateDisplayText($CYear, $Month, $Day, $Status)
+	Local $sDisplay = $Status
+	If $sDisplay = "B" Then $sDisplay = "   "
+
+	; Highlighted blank dates need a visible character. Otherwise the font color
+	; changes correctly, but the user cannot see it because the cell has no text.
+	If _IsHighlightedDate($CYear, $Month, $Day) Then
+		If $sDisplay = "" Or $sDisplay = " " Or $sDisplay = "   " Then Return "X"
+	EndIf
+
+	Return $sDisplay
+EndFunc   ;==>_GetDateDisplayText
+
+
+Func _Button_HighlightDate($Month = "-1", $Day = "-1", $CYear = "-1")
+	Local $SelDate
+	If $Month = "-1" Then
+		$SelDate = GUICtrlRead($Calendar)
+	Else
+		$SelDate = $CYear & "/" & $Month & "/" & $Day
+	EndIf
+
+	Local $aDate = StringSplit($SelDate, "/")
+	If @error Or $aDate[0] <> 3 Then Return 0
+	If Not _IsValidCalendarDay($aDate[1], $aDate[2], $aDate[3]) Then Return 0
+
+	Local $sRegName = _DateHighlightRegName($aDate[1], $aDate[2], $aDate[3])
+	If _IsHighlightedDate($aDate[1], $aDate[2], $aDate[3]) Then
+		RegDelete($DB, $sRegName)
+	Else
+		RegWrite($DB, $sRegName, "REG_SZ", "1")
+	EndIf
+
+	_Update($SelDate)
+	If $g_hLV <> 0 Then _CleanRepaint($g_hLV)
+	_CustomCal_Update()
+
+	Return 1
+EndFunc   ;==>_Button_HighlightDate
 
 
 Func _Button_Blank($Month = "-1", $Day = "-1", $CYear = "-1")
@@ -2106,7 +2309,6 @@ Func _Button_Tag($Month = "-1", $Day = "-1", $CYear = "-1")
 	$Mouse_Tag_Pos_X_New = $mousePosX - 125
 	$Mouse_Tag_Pos_Y_New = $mousePosY
 
-
 	If $Mouse_Tag_Pos_X_New + 200 > $Window_Tag_Pos[0] + $Window_Tag_Pos[2] Then
 		$Mouse_Tag_Pos_X_New_calc = ($Mouse_Tag_Pos_X_New + 200) - ($Window_Tag_Pos[0] + $Window_Tag_Pos[2])
 		$Mouse_Tag_Pos_X_New = ($Mouse_Tag_Pos_X_New - $Mouse_Tag_Pos_X_New_calc) - 70
@@ -2114,14 +2316,12 @@ Func _Button_Tag($Month = "-1", $Day = "-1", $CYear = "-1")
 		$Mouse_Tag_Pos_X_New = $mousePosX - 20
 	EndIf
 
-
 	If $Mouse_Tag_Pos_Y_New + 150 > $Window_Tag_Pos[1] + $Window_Tag_Pos[3] Then
 		$Mouse_Tag_Pos_Y_New_calc = ($Mouse_Tag_Pos_Y_New + 200) - ($Window_Tag_Pos[1] + $Window_Tag_Pos[3])
-		$Mouse_Tag_Pos_Y_New = ($Mouse_Tag_Pos_Y_New - $Mouse_Tag_Pos_Y_New_calc) ; - 70
+		$Mouse_Tag_Pos_Y_New = ($Mouse_Tag_Pos_Y_New - $Mouse_Tag_Pos_Y_New_calc)
 	Else
 		$Mouse_Tag_Pos_Y_New = $mousePosY
 	EndIf
-
 
 	$SelDate_slipt = StringSplit($SelDate, "/")
 	$holidayName = GUICtrlRead($Input_Tag)
@@ -2133,47 +2333,40 @@ Func _Button_Tag($Month = "-1", $Day = "-1", $CYear = "-1")
 		EndIf
 	EndIf
 
-;~ 	#cs
-	Global $Form_Tag = GUICreate("Add/Edit Tag", 249, 181, $Mouse_Tag_Pos_X_New, $Mouse_Tag_Pos_Y_New, BitOR($WS_BORDER, $WS_POPUP, $DS_SETFOREGROUND, $DS_MODALFRAME), BitOR($WS_EX_TOPMOST, $WS_EX_TOOLWINDOW), $Form_WorkDays)
+	Local $Form_Tag = GUICreate("Add/Edit Tag", 249, 181, $Mouse_Tag_Pos_X_New, $Mouse_Tag_Pos_Y_New, BitOR($WS_BORDER, $WS_POPUP, $DS_SETFOREGROUND, $DS_MODALFRAME), BitOR($WS_EX_TOPMOST, $WS_EX_TOOLWINDOW), $Form_WorkDays)
+	Local $Label_Tag = GUICtrlCreateLabel("Selected Date (YYYY/MM/DD): " & $CYear & "/" & $Month & "/" & $Day, 8, 10, 250, 15)
+	Local $Button_Tag_Cancel = GUICtrlCreateButton("Cancel", 8, 150, 75, 25)
+	Local $Edit_Tag = GUICtrlCreateEdit("", 8, 38, 233, 105, BitOR($ES_WANTRETURN, $WS_VSCROLL, $WS_HSCROLL, $ES_AUTOVSCROLL, $ES_AUTOHSCROLL, $ES_NOHIDESEL))
+	Local $Button_Tag_Save = GUICtrlCreateButton("Save", 165, 150, 75, 25, $BS_DEFPUSHBUTTON)
+	#forceref $Label_Tag
 
-	$Label_Tag = GUICtrlCreateLabel("Selected Date (YYYY/MM/DD): " & $CYear & "/" & $Month & "/" & $Day, 8, 10, 250, 15)
-	$Button_Tag_Cancel = GUICtrlCreateButton("Cancel", 8, 150, 75, 25)
-	$Edit_Tag = GUICtrlCreateEdit("", 8, 38, 233, 105, BitOR($ES_WANTRETURN, $WS_VSCROLL, $WS_HSCROLL, $ES_AUTOVSCROLL, $ES_AUTOHSCROLL, $ES_NOHIDESEL))
-	$Button_Tag_Save = GUICtrlCreateButton("Save", 165, 150, 75, 25, $BS_DEFPUSHBUTTON)
-;~ 	#ce
-	#cs
-		Global $Form_Tag = GUICreate("Add/Edit Tag", 249, 181, $Mouse_Tag_Pos_X_New, $Mouse_Tag_Pos_Y_New, BitOR($WS_BORDER, $WS_POPUP, $DS_SETFOREGROUND, $DS_MODALFRAME), BitOR($WS_EX_TOPMOST, $WS_EX_TOOLWINDOW), $Form_WorkDays)
-		$Label_Tag = GUICtrlCreateLabel("Selected Date (YYYY/MM/DD): " & $CYear & "/" & $Month & "/" & $Day, 8, 10, 233, 105)
-		$Button_Tag_Cancel = GUICtrlCreateButton("Cancel", 8, 150, 75, 25)
-		$Edit_Tag = GUICtrlCreateEdit("", 8, 38, 233, 105, BitOR($ES_WANTRETURN, $WS_VSCROLL, $WS_HSCROLL, $ES_AUTOVSCROLL, $ES_AUTOHSCROLL, $ES_NOHIDESEL))
-		$Button_Tag_Save = GUICtrlCreateButton("Save", 165, 150, 75, 25);, $BS_DEFPUSHBUTTON)
-	#ce
-	GUICtrlSetData($Edit_Tag, $RegReadTag) ;, 1)
-
+	GUICtrlSetData($Edit_Tag, $RegReadTag)
 	GUISetState(@SW_SHOW, $Form_Tag)
-
+	WinActivate($Form_Tag)
 
 	While 1
-		$nMsg = GUIGetMsg()
-		Switch $nMsg
-			Case $GUI_EVENT_CLOSE
-				GUIDelete($Form_Tag)
-				Return
-			Case $Button_Tag_Cancel
-				GUIDelete($Form_Tag)
-				Return
-			Case $Button_Tag_Save
-				$SelDate = GUICtrlRead($Calendar)
-				$DateToTag = $CYear & "/" & $Month & "/" & $Day
-				$SelDate_slipt = StringSplit($DateToTag, "/")
-				$holidayName = GUICtrlRead($Edit_Tag)
-				$Register = RegRead($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3])
-				If $Register = "" Then $Register = "B"
-				RegWrite($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3], "REG_SZ", StringLeft($Register, 1) & $holidayName)
-				GUIDelete($Form_Tag)
-;~ 				_Update($SelDate)
-				Return
+		Local $aMsg = GUIGetMsg(1)
+		If Not IsArray($aMsg) Then ContinueLoop
 
+		Switch $aMsg[1]
+			Case $Form_Tag
+				Switch $aMsg[0]
+					Case $GUI_EVENT_CLOSE, $Button_Tag_Cancel
+						GUIDelete($Form_Tag)
+						WinActivate($Form_WorkDays)
+						Return 0
+
+					Case $Button_Tag_Save
+						Local $DateToTag = $CYear & "/" & $Month & "/" & $Day
+						Local $aDateToTag = StringSplit($DateToTag, "/")
+						Local $sHolidayName = GUICtrlRead($Edit_Tag)
+						Local $Register = RegRead($DB & "\" & $aDateToTag[1] & "\" & $aDateToTag[2], $aDateToTag[3])
+						If $Register = "" Then $Register = "B"
+						RegWrite($DB & "\" & $aDateToTag[1] & "\" & $aDateToTag[2], $aDateToTag[3], "REG_SZ", StringLeft($Register, 1) & $sHolidayName)
+						GUIDelete($Form_Tag)
+						WinActivate($Form_WorkDays)
+						Return 1
+				EndSwitch
 		EndSwitch
 	WEnd
 
@@ -2226,25 +2419,173 @@ Func _Button_Weekend($Month = "-1", $Day = "-1", $CYear = "-1")
 EndFunc   ;==>_Button_Weekend
 
 
+Func _UpdateSelectionHighlight($iDay, $iMonth)
+	If $g_iSelDay > 0 And $g_iSelMonth > 0 Then
+		If $g_iSelDay <= 31 And $g_iSelMonth <= 12 Then
+			If $SelectLabel[$g_iSelDay][$g_iSelMonth] <> 0 Then GUICtrlSetState($SelectLabel[$g_iSelDay][$g_iSelMonth], $gui_hide)
+		EndIf
+	EndIf
+
+	If $iDay > 0 And $iMonth > 0 Then
+		If $iDay <= 31 And $iMonth <= 12 Then
+			If $SelectLabel[$iDay][$iMonth] <> 0 Then GUICtrlSetState($SelectLabel[$iDay][$iMonth], $gui_show)
+		EndIf
+	EndIf
+
+	$g_iSelDay = $iDay
+	$g_iSelMonth = $iMonth
+EndFunc   ;==>_UpdateSelectionHighlight
+
+
+Func _SetInputQuarterFast($iMonth)
+	Switch Number($iMonth)
+		Case 1 To 3
+			GUICtrlSetData($Input_Quarter, "Q1")
+		Case 4 To 6
+			GUICtrlSetData($Input_Quarter, "Q2")
+		Case 7 To 9
+			GUICtrlSetData($Input_Quarter, "Q3")
+		Case 10 To 12
+			GUICtrlSetData($Input_Quarter, "Q4")
+	EndSwitch
+EndFunc   ;==>_SetInputQuarterFast
+
+
+Func _CustomCal_GetCellIndex($iYear, $iMonth, $iDay)
+	If $g_ccPrev = 0 Then Return -1
+	If Number($iYear) <> Number($g_ccYear) Or Number($iMonth) <> Number($g_ccMonth) Then Return -1
+	If $iDay < 1 Or $iDay > _DaysInMonth2($iYear, $iMonth) Then Return -1
+
+	Local Const $iFirstDow = 6
+	Local $iDay1MCM = Mod(_DateToDayOfWeek($iYear, $iMonth, 1) - 2 + 7, 7)
+	Local $iDay1Col = Mod($iDay1MCM - $iFirstDow + 7, 7)
+	Local $iOff = $iDay1Col + $iDay - 1
+	Local $iRow = Int($iOff / 7)
+	If $iRow < 0 Or $iRow > 5 Then Return -1
+	Return $iRow * 7 + Mod($iOff, 7)
+EndFunc   ;==>_CustomCal_GetCellIndex
+
+
+Func _CustomCal_ApplyDayVisual($iYear, $iMonth, $iDay, $bSelected)
+	Local $iIdx = _CustomCal_GetCellIndex($iYear, $iMonth, $iDay)
+	If $iIdx < 0 Then Return 0
+
+	Local $iBG = 0xFFFFFF
+	Local $iFG = 0x000000
+	If Number($iYear) = Number($g_iLVYear) Then
+		$iBG = $g_aCellColor[$iMonth - 1][$iDay]
+		$iFG = $g_aCellColorBK[$iMonth - 1][$iDay]
+	EndIf
+
+	Local $bHasNote = (Number($iYear) = Number($g_iLVYear) And $g_aCellStatus[$iMonth - 1][$iDay] <> "")
+	Local $iFW = ($bHasNote) ? 700 : 400
+	Local $iFrameColor = $iBG
+
+	If Number($iYear) = @YEAR And Number($iMonth) = Number(@MON) And Number($iDay) = Number(@MDAY) Then
+		$iFW = 700
+		$iFrameColor = $Color_bk_Today
+	EndIf
+
+	If $bSelected Then
+		$iFW = 700
+		$iFrameColor = $Color_bk_Selected
+	EndIf
+
+	Local $iMarkerColor = ($bHasNote) ? $iFG : $iBG
+	GUICtrlSetFont($g_ccDayCells[$iIdx], 9, $iFW, 0)
+	GUICtrlSetBkColor($g_ccFrames[$iIdx], $iFrameColor)
+	GUICtrlSetBkColor($g_ccMarkers[$iIdx], $iMarkerColor)
+	_CustomCal_RedrawCtrl($g_ccFrames[$iIdx])
+	_CustomCal_RedrawCtrl($g_ccDayCells[$iIdx])
+	_CustomCal_RedrawCtrl($g_ccMarkers[$iIdx])
+	Return 1
+EndFunc   ;==>_CustomCal_ApplyDayVisual
+
+
+Func _CustomCal_SelectDateFast($iOldYear, $iOldMonth, $iOldDay, $iNewYear, $iNewMonth, $iNewDay)
+	; If the calendar must show a different month/year, fall back to the full redraw.
+	If Number($g_ccYear) <> Number($iNewYear) Or Number($g_ccMonth) <> Number($iNewMonth) Then
+		$g_ccYear = $iNewYear
+		$g_ccMonth = $iNewMonth
+		_CustomCal_Update()
+		Return 1
+	EndIf
+
+	If $iOldYear = $iNewYear And $iOldMonth = $iNewMonth And $iOldDay = $iNewDay Then
+		Return 1
+	EndIf
+
+	_CustomCal_ApplyDayVisual($iOldYear, $iOldMonth, $iOldDay, False)
+	_CustomCal_ApplyDayVisual($iNewYear, $iNewMonth, $iNewDay, True)
+	Return 1
+EndFunc   ;==>_CustomCal_SelectDateFast
+
+
+Func _RefreshSelectedDateUI($sSelDate)
+	Local $aOld = StringSplit(GUICtrlRead($Input_SelDate), "/")
+	Local $iOldYear = 0, $iOldMonth = 0, $iOldDay = 0
+	If Not @error And IsArray($aOld) And $aOld[0] = 3 Then
+		$iOldYear = Number($aOld[1])
+		$iOldMonth = Number($aOld[2])
+		$iOldDay = Number($aOld[3])
+	EndIf
+
+	Local $aDate = StringSplit($sSelDate, "/")
+	If @error Or $aDate[0] <> 3 Then Return SetError(1, 0, 0)
+
+	Local $iDataYear = Number($aDate[1])
+	Local $iDataMonth = Number($aDate[2])
+	Local $iDataDay = Number($aDate[3])
+	If Not _IsValidCalendarDay($iDataYear, $iDataMonth, $iDataDay) Then Return SetError(2, 0, 0)
+	Local $sDataMonth = StringFormat("%02d", $iDataMonth)
+	Local $sDataDay = StringFormat("%02d", $iDataDay)
+
+	Local $sDataRegister1 = RegRead($DB & "\" & $iDataYear & "\" & $sDataMonth, $sDataDay)
+	If @error Then $sDataRegister1 = ""
+
+	Local $sTip = ""
+	If StringLen($sDataRegister1) > 1 Then
+		$sTip = StringTrimLeft($sDataRegister1, 1)
+	EndIf
+
+	GUICtrlSetData($Input_SelDate, $iDataYear & "/" & $sDataMonth & "/" & $sDataDay)
+	GUICtrlSetData($Input_Tag, $sTip)
+	_GUICtrlMonthCal_SetCurSel($Calendar, $iDataYear, $iDataMonth, $iDataDay)
+
+	_UpdateSelectionHighlight($iDataDay, $iDataMonth)
+	_SetInputQuarterFast($iDataMonth)
+	_CustomCal_SelectDateFast($iOldYear, $iOldMonth, $iOldDay, $iDataYear, $iDataMonth, $iDataDay)
+
+	If $g_hLV <> 0 Then _WinAPI_InvalidateRect($g_hLV, 0, False)
+
+	Return 1
+EndFunc   ;==>_RefreshSelectedDateUI
+
+
 Func _CalendarRead($i = 0, $j = 0)
 
-	; Freeze the window before hiding/showing selection labels and
-	; rebuilding the ListView, so none of the intermediate states are visible.
+	Local $SelDate = GUICtrlRead($Calendar)
+	Local $SelDateYear = GUICtrlRead($Input_SelDate)
+	Local $SelDate_slipt = StringSplit($SelDate, "/")
+	Local $Input_SelDate_slipt = StringSplit($SelDateYear, "/")
+	If @error Or $SelDate_slipt[0] <> 3 Then Return
+
+	Local $iNewYear = Number($SelDate_slipt[1])
+	Local $iNewMonth = Number($SelDate_slipt[2])
+	Local $iNewDay = Number($SelDate_slipt[3])
+	Local $iOldYear = 0
+	If IsArray($Input_SelDate_slipt) And $Input_SelDate_slipt[0] = 3 Then $iOldYear = Number($Input_SelDate_slipt[1])
+
+	; Fast path: same displayed year -> only refresh selection-dependent UI.
+	If $g_iLVYear = $iNewYear And $iOldYear = $iNewYear Then
+		_RefreshSelectedDateUI($SelDate)
+		Return
+	EndIf
+
+	; Slow path: year changed -> rebuild the ListView once.
 	_LockWindow($Form_WorkDays, False)
 
-	For $a = 1 To 12
-		For $b = 1 To 31
-			If GUICtrlGetState($SelectLabel[$b][$a]) = 144 Then
-				GUICtrlSetState($SelectLabel[$b][$a], $gui_hide)
-			EndIf
-		Next
-	Next
-
-	$SelDate = GUICtrlRead($Calendar)
-	$SelDateYear = GUICtrlRead($Input_SelDate)
-	$SelDate_slipt = StringSplit($SelDate, "/")
-	$Input_SelDate_slipt = StringSplit($SelDateYear, "/")
-	$iYear = $SelDate_slipt[1]
+	$iYear = $iNewYear
 	GUICtrlSetData($Group_Q1, " Q1 - " & $SelDate_slipt[1])
 	GUICtrlSetData($Group_Q2, " Q2 - " & $SelDate_slipt[1])
 	GUICtrlSetData($Group_Q3, " Q3 - " & $SelDate_slipt[1])
@@ -2260,17 +2601,14 @@ Func _CalendarRead($i = 0, $j = 0)
 	GUICtrlSetState($Input_RaTio_q3, $gui_hide)
 	GUICtrlSetState($Input_RaTio_q4, $gui_hide)
 
-	If $SelDate_slipt[1] <> $Input_SelDate_slipt[1] Then
-		_CriaINI($SelDate_slipt[1])
-		$SelDate_slipt = StringSplit($SelDate, "/")
+	If $iNewYear <> $g_iLVYear Then
+		_CriaINI($iNewYear)
 	EndIf
 
-	; _Update handles: ListView rebuild, Input_SelDate, Input_Tag,
-	; _CheckQuarter, _ReadStatistics, _CreateMenu, WM_SETREDRAW=True + repaint.
+	$g_ccYear = $iNewYear
+	$g_ccMonth = $iNewMonth
 	_Update($SelDate)
-
-	; Show selection highlight for the newly selected day (after repaint).
-	GUICtrlSetState($SelectLabel[$SelDate_slipt[3]][$SelDate_slipt[2]], $gui_show)
+	_UpdateSelectionHighlight($iNewDay, $iNewMonth)
 
 	Return
 
@@ -2711,6 +3049,8 @@ EndFunc   ;==>_Chart
 Func _CheckDate($DateToCheck, $NewStatus)
 
 	$DateToCheck_split = StringSplit($DateToCheck, "/")
+	If @error Or $DateToCheck_split[0] <> 3 Then Return 1
+	If Not _IsValidCalendarDay($DateToCheck_split[1], $DateToCheck_split[2], $DateToCheck_split[3]) Then Return 1
 
 	$DateToCheck_Value = RegRead($DB & "\" & $DateToCheck_split[1] & "\" & $DateToCheck_split[2], $DateToCheck_split[3])
 
@@ -2760,6 +3100,8 @@ EndFunc   ;==>_CheckDate
 Func _CheckDateReturn($DateToCheck)
 
 	$DateToCheck_split = StringSplit($DateToCheck, "/")
+	If @error Or $DateToCheck_split[0] <> 3 Then Return ""
+	If Not _IsValidCalendarDay($DateToCheck_split[1], $DateToCheck_split[2], $DateToCheck_split[3]) Then Return ""
 
 	$DateToCheck_Value = RegRead($DB & "\" & $DateToCheck_split[1] & "\" & $DateToCheck_split[2], $DateToCheck_split[3])
 
@@ -3024,6 +3366,8 @@ Func _ColorFromDate($Status)
 			Return $Color_bk_Blank
 
 	EndSwitch
+
+	Return $Color_bk_Blank
 EndFunc   ;==>_ColorFromDate
 
 
@@ -3063,6 +3407,8 @@ Func _ColorFromDateFont($Status)
 			Return $Font_Blank
 
 	EndSwitch
+
+	Return $Font_Blank
 EndFunc   ;==>_ColorFromDateFont
 
 
@@ -3071,7 +3417,8 @@ Func _CreateBackup($DBBKP = "")
 	Local $sRegPath = $DB & "\"
 
 	If $DBBKP = "" Then
-		Local $sFilePath = FileSaveDialog("Save backup file", @ScriptDir, "All (*.*)", 18, "Backup_" & @YEAR & "_" & @MON & "_" & @MDAY & ".bkp", $Form_WorkDays)
+		DirCreate (@ScriptDir & "\Backup")
+		Local $sFilePath = FileSaveDialog("Save backup file", @ScriptDir & "\Backup", "All (*.*)", 18, "Backup_" & @YEAR & "_" & @MON & "_" & @MDAY & ".bkp", $Form_WorkDays)
 		If @error Then
 			Return
 		EndIf
@@ -3135,14 +3482,18 @@ Func _CreateMenu()
 
 	GUICtrlDelete($DBpMenu_Report_Simple)
 	GUICtrlDelete($DBpMenu_Report_Detailed)
+	GUICtrlDelete($DBpMenu_Report_Professional)
 	GUICtrlDelete($DBpMenu_Delete)
+
+;~ 	MsgBox(262144,"","Aqui 3359")
 
 	Global $DBpMenu_Delete = GUICtrlCreateMenu("Delete Specific year", $BkpMenu_reset_all1)
 	Global $DBpMenu_Report_Simple = GUICtrlCreateMenu("Simple", $DBpMenu_Report)
 	Global $DBpMenu_Report_Detailed = GUICtrlCreateMenu("Detailed", $DBpMenu_Report)
+	Global $DBpMenu_Report_Professional = GUICtrlCreateMenu("Analytical", $DBpMenu_Report)
 
 	Local $sSubKey = ""
-	For $i = 1 To 12
+	For $i = 1 To 99
 
 		$sSubKey = RegEnumKey($DB, $i)
 		If @error Then ExitLoop
@@ -3150,6 +3501,7 @@ Func _CreateMenu()
 		$DBpMenu_Delete_Year[$i] = GUICtrlCreateMenuItem($sSubKey, $DBpMenu_Delete)
 		$DBpMenu_Report_simple_Year[$i] = GUICtrlCreateMenuItem($sSubKey, $DBpMenu_Report_Simple)
 		$DBpMenu_Report_detailed_Year[$i] = GUICtrlCreateMenuItem($sSubKey, $DBpMenu_Report_Detailed)
+		$DBpMenu_Report_professional_Year[$i] = GUICtrlCreateMenuItem($sSubKey, $DBpMenu_Report_Professional)
 
 ;~ 		ConsoleWrite("$i: " & $i & @CRLF)
 
@@ -3184,6 +3536,38 @@ Func _CriaINI($Year)
 	Return
 
 EndFunc   ;==>_CriaINI
+
+
+Func _IsValidCalendarDay($iY, $iM, $iD)
+	$iY = Number($iY)
+	$iM = Number($iM)
+	$iD = Number($iD)
+
+	If $iY < 1 Then Return False
+	If $iM < 1 Or $iM > 12 Then Return False
+	If $iD < 1 Then Return False
+	If $iD > _DaysInMonth2($iY, $iM) Then Return False
+
+	Return True
+EndFunc   ;==>_IsValidCalendarDay
+
+
+Func _SetInvalidMainGridCell($iMonth, $iDay)
+	$iMonth = Number($iMonth)
+	$iDay = Number($iDay)
+
+	If $iMonth < 1 Or $iMonth > 12 Then Return 0
+	If $iDay < 1 Or $iDay > 31 Then Return 0
+
+	If $g_hLV <> 0 And $iItem[$iMonth][0] <> 0 Then _GUICtrlListView_SetItemText($g_hLV, $iItem[$iMonth][0], "", $iDay)
+
+	$g_aCellColor[$iMonth - 1][$iDay] = $g_clrInvalidDayBG
+	$g_aCellColorBK[$iMonth - 1][$iDay] = $g_clrInvalidDayFG
+	$g_aCellStatus[$iMonth - 1][$iDay] = ""
+	$g_aCellTip[$iMonth - 1][$iDay] = ""
+
+	Return 1
+EndFunc   ;==>_SetInvalidMainGridCell
 
 
 Func _DaysInMonth2($iY, $iM)
@@ -3368,6 +3752,418 @@ Func _DrawTodayCellBorder()
 
 	_WinAPI_ReleaseDC($g_hLV, $hDC)
 EndFunc   ;==>_DrawTodayCellBorder
+
+
+; ════════════════════════════════════════════════════════════════════════════
+; Custom Calendar – creates a colored label-grid that replaces the MonthCal
+; visually.  GUICtrlSetBkColor on labels is 100 % reliable – no GDI/custom-
+; draw dependency at all.
+;
+; Layout  (fits exactly in the original MonthCal slot: x=8, y=8, 273x201)
+;   Row 0  (h=20) : [ < ]  [ Month Year (centred) ]  [ > ]
+;   Row 1  (h=18) : Wk | Mon Tue Wed Thu Fri Sat Sun
+;   Rows 2-7 (h=27 each, 6 rows) : week-number + 7 day cells
+;   8 columns x 34 px = 272 px  (≈ 273)
+; ════════════════════════════════════════════════════════════════════════════
+Func _CustomCal_Create()
+	Local Const $X   = 8    ; left edge (same as hidden MonthCal)
+	Local Const $CW  = 34   ; column width  (8 cols x 34 = 272)
+	Local Const $TH  = 20   ; title row height
+	Local Const $DNH = 16   ; day-names row height  (reduced: 18→16 to fit Today btn)
+	Local Const $RH  = 24   ; week-row height        (reduced: 27→24 to fit Today btn)
+	; Layout summary:
+	;   Title     y=8..28   (h=20)
+	;   Day names y=28..44  (h=16)
+	;   Grid      y=44..188 (6 rows × 24 = 144)
+	;   Today btn y=190..207 (h=17)  ← safely above ListView which starts at y=210
+
+	Local $Y0 = 8            ; title row top
+	Local $Y1 = $Y0 + $TH    ; day-names row top  (= 28)
+	Local $Y2 = $Y1 + $DNH   ; first week row top (= 46)
+
+	; -- title row: [<]  [Month Year – click to pick]  [>] ------------
+	$g_ccPrev = GUICtrlCreateButton("<", $X, $Y0, $CW, $TH)
+	GUICtrlSetFont($g_ccPrev, 9, 700)
+	GUICtrlSetTip($g_ccPrev, "Previous month")
+
+	; Title is now a Button so it reacts to clicks for the month picker
+	$g_ccTitle = GUICtrlCreateButton("", $X + $CW, $Y0, 6 * $CW, $TH)
+	GUICtrlSetFont($g_ccTitle, 9, 700)
+	GUICtrlSetBkColor($g_ccTitle, 0xDDE5F0)
+	GUICtrlSetTip($g_ccTitle, "Click to jump to a specific month / year")
+
+	$g_ccNext = GUICtrlCreateButton(">", $X + 7 * $CW, $Y0, $CW, $TH)
+	GUICtrlSetFont($g_ccNext, 9, 700)
+	GUICtrlSetTip($g_ccNext, "Next month")
+
+	; -- day-names row  (first day = Sunday, hardcoded per user request)
+	; MCM notation: 6 = Sunday, so columns go Su Mo Tu We Th Fr Sa
+	Local Const $iFirstDow = 6   ; 6 = Sunday in MCM (0=Mon..6=Sun)
+	GUICtrlCreateLabel("Wk", $X, $Y1, $CW, $DNH, $SS_CENTER)
+	GUICtrlSetFont(-1, 7, 700)
+	GUICtrlSetBkColor(-1, 0xC8D2E4)
+	GUICtrlSetColor(-1, 0x404050)
+
+	; Abbreviated names in MCM order (0=Mon..6=Sun)
+	Local $aAbbr[7] = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]
+	For $k = 0 To 6
+		Local $iDI = Mod($iFirstDow + $k, 7)   ; 0=Mon..6=Sun
+		; highlight weekend cols: iDI 5=Sat, 6=Sun
+		Local $iBGDN = ($iDI >= 5) ? 0xB8C4DC : 0xC8D2E4
+		GUICtrlCreateLabel($aAbbr[$iDI], $X + ($k + 1) * $CW, $Y1, $CW, $DNH, $SS_CENTER)
+		GUICtrlSetFont(-1, 8, 700)
+		GUICtrlSetBkColor(-1, $iBGDN)
+		GUICtrlSetColor(-1, 0x303050)
+	Next
+
+	; -- day cells + week-number cells (6 rows x 8 cols) --------------
+	; Each day slot has two stacked labels:
+	;   $g_ccFrames[i]   – full cell size, created FIRST (behind)
+	;   $g_ccDayCells[i] – 1px inset on every side, created SECOND (on top)
+	; The 1px rim of the frame label is always visible, and its background
+	; is set to $Color_bk_Today or $Color_bk_Selected when appropriate.
+	For $r = 0 To 5
+		$g_ccWeekNums[$r] = GUICtrlCreateLabel("", $X, $Y2 + $r * $RH, $CW, $RH, $SS_CENTER)
+		GUICtrlSetFont($g_ccWeekNums[$r], 7, 400)
+		GUICtrlSetBkColor($g_ccWeekNums[$r], 0xC8D2E4)
+		GUICtrlSetColor($g_ccWeekNums[$r], 0x505068)
+		$g_ccCacheWeekNums[$r] = Chr(0)
+
+		For $c = 0 To 6
+			Local $iIdx = $r * 7 + $c
+			Local $iCX = $X + ($c + 1) * $CW
+			Local $iCY = $Y2 + $r * $RH
+
+			; Frame label – created first so content label draws on top of it
+			$g_ccFrames[$iIdx] = GUICtrlCreateLabel("", $iCX, $iCY, $CW, $RH)
+			GUICtrlSetBkColor($g_ccFrames[$iIdx], 0xEEEEEE)
+
+			; Content label – 1px inset so frame rim shows as colored border
+			$g_ccDayCells[$iIdx] = GUICtrlCreateLabel("", _
+					$iCX + 1, $iCY + 1, $CW - 2, $RH - 2, $SS_CENTER)
+			GUICtrlSetFont($g_ccDayCells[$iIdx], 9, 400)
+			GUICtrlSetBkColor($g_ccDayCells[$iIdx], 0xEEEEEE)
+			$g_ccDayValues[$iIdx] = 0
+
+			; Marker bar – 2px tall, at the very bottom of the content area.
+			; Shown (colored) when the day has a note; hidden (matches bg) otherwise.
+;~ 			$g_ccMarkers[$iIdx] = GUICtrlCreateLabel("", $iCX + 2, $iCY + $RH - 3, $CW - 4, 1)
+			$g_ccMarkers[$iIdx] = GUICtrlCreateLabel("", $iCX + 10, $iCY + $RH - 7, $CW - 20, 1)
+			GUICtrlSetBkColor($g_ccMarkers[$iIdx], 0xEEEEEE)
+			$g_ccCacheText[$iIdx] = Chr(0)
+			$g_ccCacheDayBG[$iIdx] = -1
+			$g_ccCacheDayFG[$iIdx] = -1
+			$g_ccCacheFontW[$iIdx] = -1
+			$g_ccCacheFrame[$iIdx] = -1
+			$g_ccCacheMarker[$iIdx] = -1
+			$g_ccCacheTip[$iIdx] = Chr(0)
+		Next
+	Next
+
+	; -- "Today" button at the bottom (full width, 17px tall) ---------
+	; Y2 + 6*RH + 2gap = 44 + 144 + 2 = 190  →  ends at 207  (ListView is at 210)
+	Local $iYToday = $Y2 + 6 * $RH + 2
+;~ 	$g_ccToday = GUICtrlCreateButton("Today  ( " & @YEAR & "/" & @MON & "/" & @MDAY & " )", $X, $iYToday, 8 * $CW, 17)
+	$g_ccToday = GUICtrlCreateButton("Today  ( " & @YEAR & "/" & @MON & "/" & @MDAY & " )", $X, $iYToday, 8 * $CW, 20)
+	GUICtrlSetFont($g_ccToday, 8, 700)
+	GUICtrlSetBkColor($g_ccToday, 0xDDE5F0)
+	GUICtrlSetTip($g_ccToday, "Go to today: " & @YEAR & "/" & @MON & "/" & @MDAY)
+EndFunc   ;==>_CustomCal_Create
+
+
+Func _CustomCal_Update()
+	If $g_ccPrev = 0 Then Return   ; not yet created
+
+	Local $iDYear  = $g_ccYear
+	Local $iDMonth = $g_ccMonth
+	Local $iDays   = _DaysInMonth2($iDYear, $iDMonth)
+
+	; -- title --------------------------------------------------------
+	Local $aMon[12] = ["January", "February", "March", "April", "May", "June", _
+			"July", "August", "September", "October", "November", "December"]
+	Local $sTitle = $aMon[$iDMonth - 1] & "  " & $iDYear
+	If $g_ccCacheTitle <> $sTitle Then
+		GUICtrlSetData($g_ccTitle, $sTitle)
+		$g_ccCacheTitle = $sTitle
+	EndIf
+
+	; -- first day of week: Sunday (hardcoded per user request)
+	; MCM notation: 6 = Sunday (0=Mon..6=Sun)
+	Local Const $iFirstDow = 6
+
+	; -- column of day 1 (0-based, relative to first-day-of-week col) -
+	; AutoIt _DateToDayOfWeek: 1=Sun..7=Sat -> MCM 0-based (0=Mon..6=Sun):
+	;   (autoit - 2 + 7) mod 7
+	Local $iDay1MCM = Mod(_DateToDayOfWeek($iDYear, $iDMonth, 1) - 2 + 7, 7)
+	Local $iDay1Col = Mod($iDay1MCM - $iFirstDow + 7, 7)
+
+	; -- selected date ------------------------------------------------
+	Local $iSelY = 0, $iSelM = 0, $iSelD = 0
+	Local $aSel  = StringSplit(GUICtrlRead($Input_SelDate), "/")
+	If Not @error And $aSel[0] = 3 Then
+		$iSelY = Number($aSel[1])
+		$iSelM = Number($aSel[2])
+		$iSelD = Number($aSel[3])
+	EndIf
+
+	; Build desired state for each visible slot, then update only controls that changed.
+	Local $aDayVal[42], $aText[42], $aDayBG[42], $aDayFG[42], $aFontW[42], $aFrame[42], $aMarker[42], $aTip[42]
+	For $i = 0 To 41
+		$aDayVal[$i] = 0
+		$aText[$i] = ""
+		$aDayBG[$i] = 0xEEEEEE
+		$aDayFG[$i] = 0xBBBBBB
+		$aFontW[$i] = 400
+		$aFrame[$i] = 0xEEEEEE
+		$aMarker[$i] = 0xEEEEEE
+		$aTip[$i] = ""
+	Next
+
+	For $d = 1 To $iDays
+		Local $iOff = $iDay1Col + $d - 1
+		Local $iRow = Int($iOff / 7)
+		Local $iCol = Mod($iOff, 7)
+		If $iRow > 5 Then ContinueLoop
+
+		Local $iIdx = $iRow * 7 + $iCol
+		$aDayVal[$iIdx] = $d
+		$aText[$iIdx] = String($d)
+
+		Local $iBG = 0xFFFFFF
+		Local $iFG = 0x000000
+		If $iDYear = $iYear Then
+			$iBG = $g_aCellColor[$iDMonth - 1][$d]
+			$iFG = $g_aCellColorBK[$iDMonth - 1][$d]
+		EndIf
+
+		Local $bHasNote = ($iDYear = $iYear And $g_aCellStatus[$iDMonth - 1][$d] <> "")
+		Local $iFW = 400
+		If $bHasNote Then $iFW = 700
+
+		Local $iFrameColor = $iBG
+		If $iDYear = @YEAR And $iDMonth = Number(@MON) And $d = Number(@MDAY) Then
+			$iFW = 700
+			$iFrameColor = $Color_bk_Today
+		EndIf
+
+		If $iDYear = $iSelY And $iDMonth = $iSelM And $d = $iSelD Then
+			$iFW = 700
+			$iFrameColor = $Color_bk_Selected
+		EndIf
+
+		Local $iMarkerColor = ($bHasNote) ? $iFG : $iBG
+		Local $sTip = ""
+		If $iDYear = $iYear Then $sTip = $g_aCellTip[$iDMonth - 1][$d]
+
+		$aDayBG[$iIdx] = $iBG
+		$aDayFG[$iIdx] = $iFG
+		$aFontW[$iIdx] = $iFW
+		$aFrame[$iIdx] = $iFrameColor
+		$aMarker[$iIdx] = $iMarkerColor
+		$aTip[$iIdx] = $sTip
+	Next
+
+	; Apply only deltas. Avoid full-form lock/redraw here because that forces a heavy repaint
+	; of the ListView and is slower than updating just the calendar controls.
+	For $i = 0 To 41
+		If $g_ccDayValues[$i] <> $aDayVal[$i] Or $g_ccCacheText[$i] <> $aText[$i] Then
+			GUICtrlSetData($g_ccDayCells[$i], $aText[$i])
+			$g_ccDayValues[$i] = $aDayVal[$i]
+			$g_ccCacheText[$i] = $aText[$i]
+		EndIf
+
+		If $g_ccCacheDayBG[$i] <> $aDayBG[$i] Then
+			GUICtrlSetBkColor($g_ccDayCells[$i], $aDayBG[$i])
+			$g_ccCacheDayBG[$i] = $aDayBG[$i]
+		EndIf
+
+		If $g_ccCacheDayFG[$i] <> $aDayFG[$i] Then
+			GUICtrlSetColor($g_ccDayCells[$i], $aDayFG[$i])
+			$g_ccCacheDayFG[$i] = $aDayFG[$i]
+		EndIf
+
+		If $g_ccCacheFontW[$i] <> $aFontW[$i] Then
+			GUICtrlSetFont($g_ccDayCells[$i], 9, $aFontW[$i], 0)
+			$g_ccCacheFontW[$i] = $aFontW[$i]
+		EndIf
+
+		If $g_ccCacheFrame[$i] <> $aFrame[$i] Then
+			GUICtrlSetBkColor($g_ccFrames[$i], $aFrame[$i])
+			$g_ccCacheFrame[$i] = $aFrame[$i]
+		EndIf
+
+		If $g_ccCacheMarker[$i] <> $aMarker[$i] Then
+			GUICtrlSetBkColor($g_ccMarkers[$i], $aMarker[$i])
+			$g_ccCacheMarker[$i] = $aMarker[$i]
+		EndIf
+
+		; Native tooltips on all hit-testable parts of the small calendar.
+		; This is safer than a manual hover tooltip here and avoids the click/freeze issue.
+		If $g_ccCacheTip[$i] <> $aTip[$i] Then
+			GUICtrlSetTip($g_ccDayCells[$i], $aTip[$i])
+			GUICtrlSetTip($g_ccFrames[$i], $aTip[$i])
+			GUICtrlSetTip($g_ccMarkers[$i], $aTip[$i])
+			$g_ccCacheTip[$i] = $aTip[$i]
+		EndIf
+	Next
+
+	; -- week numbers (left column) -----------------------------------
+	For $r = 0 To 5
+		Local $sWeek = ""
+		Local $iFirst = $r * 7 - $iDay1Col + 1
+		Local $iLast  = ($r + 1) * 7 - $iDay1Col
+		If Not ($iLast < 1 Or $iFirst > $iDays) Then
+			Local $iWD = ($iFirst < 1) ? 1 : $iFirst
+			$sWeek = _WeekNumberISO($iDYear, $iDMonth, $iWD)
+		EndIf
+
+		If $g_ccCacheWeekNums[$r] <> $sWeek Then
+			GUICtrlSetData($g_ccWeekNums[$r], $sWeek)
+			$g_ccCacheWeekNums[$r] = $sWeek
+		EndIf
+	Next
+
+	; Background-color changes on AutoIt labels sometimes need an explicit repaint.
+	; Repaint only the custom calendar controls to keep month navigation responsive.
+	_CustomCal_Repaint()
+EndFunc   ;==>_CustomCal_Update
+
+
+Func _CustomCal_RedrawCtrl($idCtrl)
+	If $idCtrl = 0 Then Return
+	Local $hCtrl = GUICtrlGetHandle($idCtrl)
+	If $hCtrl = 0 Then Return
+	DllCall("user32.dll", "bool", "RedrawWindow", _
+			"hwnd", $hCtrl, _
+			"ptr", 0, _
+			"handle", 0, _
+			"uint", 0x0101) ; RDW_INVALIDATE | RDW_UPDATENOW
+EndFunc   ;==>_CustomCal_RedrawCtrl
+
+
+Func _CustomCal_Repaint()
+	If $g_ccPrev = 0 Then Return
+	_CustomCal_RedrawCtrl($g_ccPrev)
+	_CustomCal_RedrawCtrl($g_ccTitle)
+	_CustomCal_RedrawCtrl($g_ccNext)
+	_CustomCal_RedrawCtrl($g_ccToday)
+	For $r = 0 To 5
+		_CustomCal_RedrawCtrl($g_ccWeekNums[$r])
+	Next
+	For $i = 0 To 41
+		_CustomCal_RedrawCtrl($g_ccFrames[$i])
+		_CustomCal_RedrawCtrl($g_ccDayCells[$i])
+		_CustomCal_RedrawCtrl($g_ccMarkers[$i])
+	Next
+EndFunc   ;==>_CustomCal_Repaint
+
+
+Func _CustomCal_Navigate($iDelta)
+	; Always navigate by selecting the first day of the target month.
+	; Important: calculate the target date without pre-setting $g_ccYear/$g_ccMonth.
+	; _CalendarRead() / _CustomCal_SelectDateFast() use the current displayed month
+	; to decide whether a full custom-calendar repaint is needed. If we update the
+	; globals here first, the UI can think it is already on the new month/year and
+	; skip the redraw, which is what causes colors to appear only after selecting a day.
+	Local $iNewYear = Number($g_ccYear)
+	Local $iNewMonth = Number($g_ccMonth) + Number($iDelta)
+
+	If $iNewMonth > 12 Then
+		$iNewMonth = 1
+		$iNewYear += 1
+	EndIf
+	If $iNewMonth < 1 Then
+		$iNewMonth = 12
+		$iNewYear -= 1
+	EndIf
+
+	Local $sNewDate = $iNewYear & "/" & StringFormat("%02d", $iNewMonth) & "/01"
+
+	; Sync the hidden MonthCal and then let the normal selection pipeline update
+	; Input_SelDate, quarter, ListView year data, selected highlight, tips, and colors.
+	GUICtrlSetData($Calendar, $sNewDate)
+	_GUICtrlMonthCal_SetCurSel($Calendar, $iNewYear, $iNewMonth, 1)
+	_CalendarRead()
+EndFunc   ;==>_CustomCal_Navigate
+
+
+; Opens a small popup MonthCal so the user can jump to any month/year quickly.
+; Positioned just below the title button.  When the user selects a date, the
+; custom calendar navigates to that month and the popup closes automatically.
+Func _CustomCal_ShowPicker()
+	; Position popup under the title button
+	; Title button: screen coords = window pos + (8 + 34, 8) = (42, 8) client
+	Local $aWinPos = WinGetPos($Form_WorkDays)
+	If @error Or Not IsArray($aWinPos) Then Return
+
+	; Approximate title button screen position
+	; Client area starts ~30px from window top (title bar), 4px from left (border)
+	Local $iBorderX = 4
+	Local $iTitleBarH = 30
+	Local $iTitleBtnX = $aWinPos[0] + $iBorderX + 8 + 34          ; = X + CW
+	Local $iTitleBtnY = $aWinPos[1] + $iTitleBarH + 8 + 20 + 2    ; below title row
+
+	Local $hPicker = GUICreate("", 220, 165, $iTitleBtnX, $iTitleBtnY, _
+			BitOR($WS_POPUP, $WS_BORDER), $WS_EX_TOPMOST, $Form_WorkDays)
+
+	; MonthCal in the popup – no week numbers to keep it compact
+	Local $sPickerDate = $g_ccYear & "/" & StringFormat("%02d", $g_ccMonth) & "/01"
+	Local $hPickerCal  = GUICtrlCreateMonthCal($sPickerDate, 2, 2, 215, 160)
+
+	GUISetState(@SW_SHOW, $hPicker)
+	GUISwitch($Form_WorkDays)   ; keep focus on main form
+
+	; Sub-loop: wait for a date click or Escape / close
+	While 1
+		Local $nPick = GUIGetMsg(1)   ; 1 = check all GUIs
+		If Not IsArray($nPick) Then ContinueLoop
+
+		If $nPick[1] = $hPicker Then
+			Select
+				Case $nPick[0] = $GUI_EVENT_CLOSE
+					GUIDelete($hPicker)
+					Return
+				Case $nPick[0] = $hPickerCal
+					; User clicked a day - extract month/year only
+					Local $sPicked = GUICtrlRead($hPickerCal)
+					Local $aPicked = StringSplit($sPicked, "/")
+					If Not @error And $aPicked[0] >= 2 Then
+						$g_ccYear  = Number($aPicked[1])
+						$g_ccMonth = Number($aPicked[2])
+						Local $sNewDate = $g_ccYear & "/" & StringFormat("%02d", $g_ccMonth) & "/01"
+						GUICtrlSetData($Calendar, $sNewDate)
+					EndIf
+					GUIDelete($hPicker)
+
+					If $g_ccYear <> $iYear Then
+						; Year changed: explicitly initialise the registry for the
+						; new year BEFORE _CalendarRead runs.  This is critical for
+						; years that have never been opened before – without it,
+						; _CriaINI would only be called if _CalendarRead's own
+						; year-comparison fires, but that comparison uses $Input_SelDate
+						; which may already reflect the new year in some code paths.
+						_CriaINI($g_ccYear)
+
+						; Do NOT pre-set $Input_SelDate here.  _CalendarRead compares
+						; $Calendar (new year) vs $Input_SelDate (old year) to decide
+						; whether to call _CriaINI.  Pre-setting it would make both
+						; equal and skip the check.  Let _Update set it correctly.
+						_CalendarRead()
+					Else
+						; Same year, just repaint the custom calendar widget.
+						_CustomCal_Update()
+					EndIf
+					Return
+			EndSelect
+		EndIf
+
+		; Close picker if user clicks outside it
+		If _IsPressed("1B") Then   ; Escape
+			GUIDelete($hPicker)
+			Return
+		EndIf
+	WEnd
+EndFunc   ;==>_CustomCal_ShowPicker
 
 
 Func _GetColorFromValue($iValue) ;Defines the bk colors for the Remaning days according to the value
@@ -3559,7 +4355,7 @@ EndFunc   ;==>_IsLeapYear
 Func _Label($LabelName)
 
 	If $LabelName = "" Then Return "Blank"
-	If $LabelName = "O" Then Return "On Site"
+	If $LabelName = "O" Then Return "On Site""On Site"
 	If $LabelName = "R" Then Return "Remote"
 	If $LabelName = "H" Then Return "Holiday"
 	If $LabelName = "P" Then Return "PTO"
@@ -3583,11 +4379,13 @@ EndFunc   ;==>_Log
 Func _MenuContextual($U, $V, $SelYear)
 	; U = day
 	; V = month
+	; Custom popup menu instead of the native Windows popup menu.
+	; This allows each action to use the configured background/font colors.
 
 	Local $sDay = StringFormat("%02d", Number($U))
 	Local $sMonth = StringFormat("%02d", Number($V))
 
-	Local Const $IDM_DATE = 1001
+	Local Const $IDM_HIGHLIGHT = 1001
 	Local Const $IDM_TAG = 1002
 	Local Const $IDM_ONSITE = 1003
 	Local Const $IDM_REMOTE = 1004
@@ -3603,75 +4401,159 @@ Func _MenuContextual($U, $V, $SelYear)
 		Return SetError(100, 0, 0)
 	EndIf
 
-	Local $aMenu = DllCall("user32.dll", "handle", "CreatePopupMenu")
-	If @error Or Not IsArray($aMenu) Or $aMenu[0] = 0 Then
-		ConsoleWrite("_MenuContextual: CreatePopupMenu falhou" & @CRLF)
-		Return SetError(1, 0, 0)
+	Local Const $iMenuW = 190
+	Local Const $iLineH = 24
+	Local Const $iSepH = 6
+	Local Const $iMenuH = 256
+
+	Local $iX = $mousePosX
+	Local $iY = $mousePosY
+
+	; Keep the popup inside the work area of the monitor where the user clicked.
+	; @DesktopWidth/@DesktopHeight only describe the primary desktop in some setups,
+	; so clamping against them can push the menu back to another monitor.
+	_ClampPopupToCurrentMonitor($iX, $iY, $iMenuW, $iMenuH, $hOwner)
+
+	Local $hPopup = GUICreate("", $iMenuW, $iMenuH, $iX, $iY, BitOR($WS_POPUP, $WS_BORDER), BitOR($WS_EX_TOPMOST, $WS_EX_TOOLWINDOW), $hOwner)
+	If $hPopup = 0 Then Return SetError(1, 0, 0)
+
+	GUISetBkColor(0xF4F4F4, $hPopup)
+
+	Local $iYPos = 2
+	Local $idDate = GUICtrlCreateLabel("  Date: " & $sDay & "/" & $sMonth & "/" & $SelYear, 1, $iYPos, $iMenuW - 2, $iLineH, $SS_CENTERIMAGE)
+	GUICtrlSetBkColor($idDate, 0xF0F0F0)
+	GUICtrlSetColor($idDate, 0x666666)
+	GUICtrlSetFont($idDate, 9, 700, 0, "Segoe UI")
+	$iYPos += $iLineH
+
+	_CreateColoredContextMenuSeparator($iYPos, $iMenuW)
+	$iYPos += $iSepH
+
+	Local $idHighlight = _CreateColoredContextMenuItem("Highlight date", $iYPos, $iMenuW, $iLineH, 0xFFFFFF, $Color_HighlightDate, True)
+	$iYPos += $iLineH
+
+	Local $idTag = _CreateColoredContextMenuItem("Add/Edit Marker", $iYPos, $iMenuW, $iLineH, 0xFFFFFF, 0x000000, False)
+	$iYPos += $iLineH
+
+	_CreateColoredContextMenuSeparator($iYPos, $iMenuW)
+	$iYPos += $iSepH
+
+	Local $idOnSite = _CreateColoredContextMenuItem("On-Site", $iYPos, $iMenuW, $iLineH, $Color_bk_OnSite, $Font_OnSite, True)
+	$iYPos += $iLineH
+
+	Local $idRemote = _CreateColoredContextMenuItem("Remote", $iYPos, $iMenuW, $iLineH, $Color_bk_Remote, $Font_Remote, True)
+	$iYPos += $iLineH
+
+	Local $idHoliday = _CreateColoredContextMenuItem("Holiday", $iYPos, $iMenuW, $iLineH, $Color_bk_holiday, $Font_Holiday, True)
+	$iYPos += $iLineH
+
+	Local $idPTO = _CreateColoredContextMenuItem("PTO", $iYPos, $iMenuW, $iLineH, $Color_bk_PTO, $Font_PTO, True)
+	$iYPos += $iLineH
+
+	Local $idTravel = _CreateColoredContextMenuItem("Travel", $iYPos, $iMenuW, $iLineH, $Color_bk_Travel, $Font_Travel, True)
+	$iYPos += $iLineH
+
+	Local $idSick = _CreateColoredContextMenuItem("Sick", $iYPos, $iMenuW, $iLineH, $Color_bk_Sick, $Font_Sick, True)
+	$iYPos += $iLineH
+
+	; The Blank button writes Weekend automatically when the selected date is Saturday/Sunday.
+	; Show the resulting configured color in the menu for that specific date.
+	Local $iBlankMenuBk = $Color_bk_Blank
+	Local $iBlankMenuFont = $Font_Blank
+	Local $iWeekDay = _DateToDayOfWeek(Number($SelYear), Number($sMonth), Number($sDay))
+	If $iWeekDay = 1 Or $iWeekDay = 7 Then
+		$iBlankMenuBk = $Color_bk_Weekend
+		$iBlankMenuFont = $Font_Weekend
 	EndIf
 
-	Local $hMenu = $aMenu[0]
-	ConsoleWrite("_MenuContextual: hMenu = " & $hMenu & @CRLF)
+	Local $idBlank = _CreateColoredContextMenuItem("Blank / Weekends", $iYPos, $iMenuW, $iLineH, $iBlankMenuBk, $iBlankMenuFont, True)
 
-	If Not _AppendPopupMenu($hMenu, BitOR($MF_STRING, $MF_DISABLED, $MF_GRAYED), $IDM_DATE, "Date: " & $sDay & "/" & $sMonth & "/" & $SelYear) Then
-		DllCall("user32.dll", "bool", "DestroyMenu", "handle", $hMenu)
-		ConsoleWrite("Return 1" & @CRLF)
-		Return SetError(2, 0, 0)
-	EndIf
+	GUISetState(@SW_SHOW, $hPopup)
+	WinActivate($hPopup)
 
-	If Not _AppendPopupMenu($hMenu, $MF_SEPARATOR, 0, "") Then
-		DllCall("user32.dll", "bool", "DestroyMenu", "handle", $hMenu)
-		ConsoleWrite("Return 2" & @CRLF)
-		Return SetError(3, 0, 0)
-	EndIf
+	Local $iSelected = 0
+	Local $bMouseReleased = False
 
-	If Not _AppendPopupMenu($hMenu, $MF_STRING, $IDM_TAG, "Add/Edit Marker") Then Return _DestroyPopupFail($hMenu, 4)
-	If Not _AppendPopupMenu($hMenu, $MF_SEPARATOR, 0, "") Then Return _DestroyPopupFail($hMenu, 5)
-	If Not _AppendPopupMenu($hMenu, $MF_STRING, $IDM_ONSITE, "On-Site") Then Return _DestroyPopupFail($hMenu, 6)
-	If Not _AppendPopupMenu($hMenu, $MF_STRING, $IDM_REMOTE, "Remote") Then Return _DestroyPopupFail($hMenu, 7)
-	If Not _AppendPopupMenu($hMenu, $MF_STRING, $IDM_HOLIDAY, "Holiday") Then Return _DestroyPopupFail($hMenu, 8)
-	If Not _AppendPopupMenu($hMenu, $MF_STRING, $IDM_PTO, "PTO") Then Return _DestroyPopupFail($hMenu, 9)
-	If Not _AppendPopupMenu($hMenu, $MF_STRING, $IDM_TRAVEL, "Travel") Then Return _DestroyPopupFail($hMenu, 10)
-	If Not _AppendPopupMenu($hMenu, $MF_STRING, $IDM_SICK, "Sick") Then Return _DestroyPopupFail($hMenu, 11)
-	If Not _AppendPopupMenu($hMenu, $MF_STRING, $IDM_BLANK, "Blank / Weekends") Then Return _DestroyPopupFail($hMenu, 12)
+	While 1
+		Local $aMsg = GUIGetMsg(1)
+		If IsArray($aMsg) Then
+			If $aMsg[1] = $hPopup Then
+				Switch $aMsg[0]
+					Case $GUI_EVENT_CLOSE
+						$iSelected = 0
+						ExitLoop
+					Case $idHighlight
+						$iSelected = $IDM_HIGHLIGHT
+						ExitLoop
+					Case $idTag
+						$iSelected = $IDM_TAG
+						ExitLoop
+					Case $idOnSite
+						$iSelected = $IDM_ONSITE
+						ExitLoop
+					Case $idRemote
+						$iSelected = $IDM_REMOTE
+						ExitLoop
+					Case $idHoliday
+						$iSelected = $IDM_HOLIDAY
+						ExitLoop
+					Case $idPTO
+						$iSelected = $IDM_PTO
+						ExitLoop
+					Case $idTravel
+						$iSelected = $IDM_TRAVEL
+						ExitLoop
+					Case $idSick
+						$iSelected = $IDM_SICK
+						ExitLoop
+					Case $idBlank
+						$iSelected = $IDM_BLANK
+						ExitLoop
+				EndSwitch
+			ElseIf $bMouseReleased And $aMsg[0] <> 0 Then
+				; Any click/control event on another window should dismiss the popup,
+				; matching normal context-menu behavior.
+				ExitLoop
+			EndIf
+		EndIf
 
-;~ 	_WinAPI_SetForegroundWindow($hOwner)
-;~ 	WinActivate($hOwner)
+		; Wait for the original right-click to be released before closing on outside clicks.
+		If Not _IsPressed("01") And Not _IsPressed("02") Then $bMouseReleased = True
 
+		If $bMouseReleased Then
+			If _IsPressed("1B") Then ExitLoop ; ESC
+
+			If _IsPressed("01") Or _IsPressed("02") Then
+				If Not _MouseInsideRect($iX, $iY, $iMenuW, $iMenuH) Then ExitLoop
+			EndIf
+
+			; If the user clicks somewhere else, Windows moves focus away from the
+			; popup. This catches fast clicks that can happen between polling ticks.
+			If Not WinActive($hPopup) Then
+				Local $hForeground = _GetForegroundWindowHandle()
+				If $hForeground <> 0 And $hForeground <> $hPopup And Not _MouseInsideRect($iX, $iY, $iMenuW, $iMenuH) Then ExitLoop
+			EndIf
+		EndIf
+
+		Sleep(10)
+	WEnd
+
+	GUIDelete($hPopup)
 	WinActivate($hOwner)
 
-	Local $aTrack = DllCall("user32.dll", "int", "TrackPopupMenu", _
-			"handle", $hMenu, _
-			"uint", BitOR($TPM_RETURNCMD, $TPM_RIGHTBUTTON), _
-			"int", $mousePosX, _
-			"int", $mousePosY, _
-			"int", 0, _
-			"hwnd", $hOwner, _
-			"ptr", 0)
-
-	DllCall("user32.dll", "lresult", "PostMessageW", _
-			"hwnd", $hOwner, _
-			"uint", 0, _
-			"wparam", 0, _
-			"lparam", 0)
-
-	If @error Or Not IsArray($aTrack) Then
-		DllCall("user32.dll", "bool", "DestroyMenu", "handle", $hMenu)
-		ConsoleWrite("_MenuContextual: TrackPopupMenu falhou" & @CRLF)
-		ConsoleWrite("Return 3" & @CRLF)
-		Return SetError(13, 0, 0)
-	EndIf
-
-;~ 	ConsoleWrite("_MenuContextual: retorno TrackPopupMenu = " & $aTrack[0] & @CRLF)
-
-	DllCall("user32.dll", "bool", "DestroyMenu", "handle", $hMenu)
-
-	Switch $aTrack[0]
+	Switch $iSelected
 		Case 0
 			Return 0
 
+		Case $IDM_HIGHLIGHT
+			_Button_HighlightDate($sMonth, $sDay, $SelYear)
+
 		Case $IDM_TAG
-			_Button_Tag($sMonth, $sDay, $SelYear)
-			_Reload()
+			If _Button_Tag($sMonth, $sDay, $SelYear) Then
+				; Tag edits only affect the selected day tooltip/marker visuals.
+				; A full _Reload() is unnecessary here and previously could freeze the UI.
+				_Update($SelYear & "/" & $sMonth & "/" & $sDay)
+			EndIf
 
 		Case $IDM_ONSITE
 			_Button_OnSite($sMonth, $sDay, $SelYear)
@@ -3697,6 +4579,88 @@ Func _MenuContextual($U, $V, $SelYear)
 
 	Return 1
 EndFunc   ;==>_MenuContextual
+
+
+Func _CreateColoredContextMenuItem($sText, $iY, $iW, $iH, $iBkColor, $iFontColor, $bBold = False)
+	Local $idItem = GUICtrlCreateLabel("  " & $sText, 1, $iY, $iW - 2, $iH, BitOR($SS_NOTIFY, $SS_CENTERIMAGE))
+	GUICtrlSetBkColor($idItem, $iBkColor)
+	GUICtrlSetColor($idItem, $iFontColor)
+	If $bBold Then
+		GUICtrlSetFont($idItem, 9, 700, 0, "Segoe UI")
+	Else
+		GUICtrlSetFont($idItem, 9, 400, 0, "Segoe UI")
+	EndIf
+	Return $idItem
+EndFunc   ;==>_CreateColoredContextMenuItem
+
+
+Func _CreateColoredContextMenuSeparator($iY, $iW)
+	Local $idSep = GUICtrlCreateLabel("", 4, $iY + 2, $iW - 8, 1)
+	GUICtrlSetBkColor($idSep, 0xD0D0D0)
+	Return $idSep
+EndFunc   ;==>_CreateColoredContextMenuSeparator
+
+
+Func _ClampPopupToCurrentMonitor(ByRef $iX, ByRef $iY, $iW, $iH, $hOwner = 0)
+	Local $iLeft = 0
+	Local $iTop = 0
+	Local $iRight = @DesktopWidth
+	Local $iBottom = @DesktopHeight
+
+	; Prefer the monitor under the mouse cursor; fall back to the app window monitor.
+	Local $iMonitor = _Monitor_GetFromPoint($iX, $iY)
+	Local $bMonitorFound = (Not @error And $iMonitor > 0)
+
+	If Not $bMonitorFound And $hOwner <> 0 Then
+		Local $iOwnerMonitor = _Monitor_GetFromWindow($hOwner)
+		If Not @error And $iOwnerMonitor > 0 Then
+			$iMonitor = $iOwnerMonitor
+			$bMonitorFound = True
+		EndIf
+	EndIf
+
+	If $bMonitorFound Then
+		Local $iWorkLeft = 0, $iWorkTop = 0, $iWorkRight = 0, $iWorkBottom = 0
+		If _Monitor_GetWorkArea($iMonitor, $iWorkLeft, $iWorkTop, $iWorkRight, $iWorkBottom) Then
+			$iLeft = $iWorkLeft
+			$iTop = $iWorkTop
+			$iRight = $iWorkRight
+			$iBottom = $iWorkBottom
+		EndIf
+	Else
+		; Last-resort fallback for unusual monitor layouts.
+		Local $aVirtual = _Monitor_GetVirtualBounds()
+		If IsArray($aVirtual) Then
+			$iLeft = $aVirtual[0]
+			$iTop = $aVirtual[1]
+			$iRight = $aVirtual[0] + $aVirtual[2]
+			$iBottom = $aVirtual[1] + $aVirtual[3]
+		EndIf
+	EndIf
+
+	If $iX + $iW > $iRight Then $iX = $iRight - $iW - 4
+	If $iY + $iH > $iBottom Then $iY = $iBottom - $iH - 4
+	If $iX < $iLeft Then $iX = $iLeft + 4
+	If $iY < $iTop Then $iY = $iTop + 4
+EndFunc   ;==>_ClampPopupToCurrentMonitor
+
+
+Func _GetForegroundWindowHandle()
+	Local $aRet = DllCall("user32.dll", "hwnd", "GetForegroundWindow")
+	If @error Or Not IsArray($aRet) Then Return 0
+	Return $aRet[0]
+EndFunc   ;==>_GetForegroundWindowHandle
+
+
+Func _MouseInsideRect($iX, $iY, $iW, $iH)
+	Local $aPos = MouseGetPos()
+	If @error Or Not IsArray($aPos) Then Return False
+	If $aPos[0] < $iX Then Return False
+	If $aPos[0] > ($iX + $iW) Then Return False
+	If $aPos[1] < $iY Then Return False
+	If $aPos[1] > ($iY + $iH) Then Return False
+	Return True
+EndFunc   ;==>_MouseInsideRect
 
 
 Func _Monitor()
@@ -3763,7 +4727,10 @@ Func _ReadColors()
 	If @error Then $Color_bk_Weekend = 0xA0A0A0
 
 	Global $Color_bk_Today = RegRead($DB, "Color_Today")
-	If @error Then $Color_bk_Today = 0xFF000000
+	If @error Then $Color_bk_Today = 0xFF0000
+
+	Global $Color_HighlightDate = RegRead($DB, "Color_HighlightDate")
+	If @error Then $Color_HighlightDate = 0xFF0000
 
 	Global $g_clrQuarterBorder = RegRead($DB, "Color_Quarter")
 	If @error Then $g_clrQuarterBorder = 0xE0E0E0
@@ -3844,75 +4811,139 @@ Func _ReadColors()
 EndFunc   ;==>_ReadColors
 
 
+; Applies the configured main ListView day-cell width.
+Func _ApplyMainGridCellSize($iCellSize = -1)
+	If $iCellSize = -1 Then $iCellSize = $Picker_Grid_Size_X_Read
+
+	$iCellSize = Number($iCellSize)
+	If $iCellSize < 20 Then $iCellSize = 20
+	If $iCellSize > 60 Then $iCellSize = 60
+
+	$Picker_Grid_Size_X_Read = $iCellSize
+
+	If $g_hLV = 0 Then Return 0
+
+	_LockWindow($g_hLV, False)
+	For $iCol = 1 To 31
+		_GUICtrlListView_SetColumnWidth($g_hLV, $iCol, $iCellSize)
+	Next
+	_LockWindow($g_hLV, True)
+	_CleanRepaint($g_hLV)
+
+	Return 1
+EndFunc   ;==>_ApplyMainGridCellSize
+
+
+; Refreshes the in-memory color/font arrays used by NM_CUSTOMDRAW.
+; This is needed after changing category colors in Options because the ListView
+; does not store the colors directly; it paints each cell from $g_aCellColor and
+; $g_aCellColorBK. _Update() only refreshes the selected cell, so without this
+; routine the main grid keeps the old category colors until the year is rebuilt.
+Func _RefreshMainGridCellStyles($iTargetYear = -1)
+	If $iTargetYear = -1 Then $iTargetYear = $iYear
+
+	For $m = 1 To 12
+		Local $sMonth = StringFormat("%02d", $m)
+		Local $iDaysInMonth = _DaysInMonth2($iTargetYear, $m)
+
+		For $d = 1 To 31
+			If $d <= $iDaysInMonth Then
+				Local $sDay = StringFormat("%02d", $d)
+				Local $sStatus1 = RegRead($DB & "\" & $iTargetYear & "\" & $sMonth, $sDay)
+				If @error Then $sStatus1 = ""
+
+				Local $sStatus = StringLeft($sStatus1, 1)
+				Local $sDisplay = _GetDateDisplayText($iTargetYear, $m, $d, $sStatus)
+
+				If $g_hLV <> 0 And Number($iTargetYear) = Number($g_iLVYear) Then _GUICtrlListView_SetItemText($g_hLV, $iItem[$m][0], $sDisplay, $d)
+				$g_aCellColor[$m - 1][$d] = _ColorFromDate($sStatus)
+				$g_aCellColorBK[$m - 1][$d] = _GetDateFontColor($iTargetYear, $m, $d, $sStatus)
+			Else
+				; Keep unused days visually disabled instead of letting stale colors remain.
+				_SetInvalidMainGridCell($m, $d)
+			EndIf
+		Next
+	Next
+
+	; Force the ListView/custom draw and the small calendar to repaint using the
+	; refreshed arrays.
+	If $g_hLV <> 0 Then _CleanRepaint($g_hLV)
+	_CustomCal_Update()
+EndFunc   ;==>_RefreshMainGridCellStyles
+
+
 Func _ReadDays($m, $iYear)
 
+	Local $iMonth = Number($m)
+	Local $sMonth = StringFormat("%02d", $iMonth)
+	Local $iDaysInMonth = _DaysInMonth2($iYear, $iMonth)
 
 	For $d = 1 To 31
-;~ 		ConsoleWrite("$m/$d: " & $m & "/" & $d & @CRLF)
+		Local $iDay = Number($d)
 
-		If $d < 10 And Not StringInStr($d, "0") Then $d = "0" & $d
-		If $m < 10 And Not StringInStr($m, "0") Then $m = "0" & $m
-
-		$Status1 = RegRead($DB & "\" & $iYear & "\" & $m, $d)
-
-		If @error Then
-
-			$g_aCellColor[$m - 1][$d] = _ColorFromDate("x")
-			; GUIRegisterMsg is called once after all rows are built, not per cell
-
-		Else
-
-
-			Global $Status = StringLeft($Status1, 1)
-
-
-			If $Status = "W" Then $StatusName = "WEEKEND"
-			If $Status = "O" Then $StatusName = "ON-SITE"
-			If $Status = "R" Then $StatusName = "REMOTE"
-			If $Status = "T" Then $StatusName = "TRAVEL"
-			If $Status = "P" Then $StatusName = "PTO"
-			If $Status = "H" Then $StatusName = "HOLIDAY"
-			If $Status = "S" Then $StatusName = "SICK DAY"
-
-			If $Status = "B" Then $StatusName = "BLANK"
-			If $Status = "" Then $StatusName = "BLANK"
-			If $Status = "   " Then $StatusName = "BLANK"
-
-			$WeekDayNum = _DateToDayOfWeek($iYear, $m, $d)
-			$WeekDayName = _DateDayOfWeek($WeekDayNum, 1)
-			$WeekDayNumber = _WeekNumberISO($iYear, $m, $d)
-
-
-			Global $Status_Comment_1 = StringTrimLeft($Status1, 1)
-
-			If $Status_Comment_1 <> "" Then
-				$Status_Comment = $iYear & "/" & $m & "/" & $d & @CRLF & $WeekDayName & " (Week: " & $WeekDayNumber & ") - " & $StatusName & @CRLF & "----" & @CRLF & "- " & StringReplace($Status_Comment_1, @CRLF, @CRLF & "- ")
-			Else
-				$Status_Comment = $iYear & "/" & $m & "/" & $d & @CRLF & $WeekDayName & " (Week: " & $WeekDayNumber & ") - " & $StatusName
-			EndIf
-
-
-			If $Status = "B" Then $Status = "   "
-
-
-			_GUICtrlListView_AddSubItem($g_hLV, $iItem[$m][0], $Status, $d, 1)
-
-
-
-
-;~ 		If $m > 2 Then $m  +=1
-;~ 		If $m > 5 Then $m  +=1
-;~ 		If $m > 8 Then $m  +=1
-
-			$g_aCellColor[$m - 1][$d] = _ColorFromDate($Status)
-			$g_aCellColorBK[$m - 1][$d] = _ColorFromDateFont($Status)
-
-			$g_aCellStatus[$m - 1][$d] = $Status_Comment_1
-			$g_aCellTip[$m - 1][$d] = $Status_Comment
-			; GUIRegisterMsg is called once after all rows are built, not per cell
-
+		; The main grid always has 31 day columns, but not every month has 31 days.
+		; Dates that do not exist must be rendered as disabled cells and must not
+		; inherit the normal blank-day style.
+		If $iDay > $iDaysInMonth Then
+			_SetInvalidMainGridCell($iMonth, $iDay)
+			ContinueLoop
 		EndIf
 
+		Local $sDay = StringFormat("%02d", $iDay)
+		Local $Status1 = RegRead($DB & "\" & $iYear & "\" & $sMonth, $sDay)
+
+		If @error Then
+			Local $sDisplayBlank = _GetDateDisplayText($iYear, $iMonth, $iDay, "")
+			If $sDisplayBlank <> "" Then _GUICtrlListView_AddSubItem($g_hLV, $iItem[$iMonth][0], $sDisplayBlank, $iDay, 1)
+
+			$g_aCellColor[$iMonth - 1][$iDay] = _ColorFromDate("")
+			$g_aCellColorBK[$iMonth - 1][$iDay] = _GetDateFontColor($iYear, $iMonth, $iDay, "")
+			$g_aCellStatus[$iMonth - 1][$iDay] = ""
+			$g_aCellTip[$iMonth - 1][$iDay] = ""
+			ContinueLoop
+		EndIf
+
+		Local $Status = StringLeft($Status1, 1)
+		Local $StatusName = "BLANK"
+
+		Switch $Status
+			Case "W"
+				$StatusName = "WEEKEND"
+			Case "O"
+				$StatusName = "ON-SITE"
+			Case "R"
+				$StatusName = "REMOTE"
+			Case "T"
+				$StatusName = "TRAVEL"
+			Case "P"
+				$StatusName = "PTO"
+			Case "H"
+				$StatusName = "HOLIDAY"
+			Case "S"
+				$StatusName = "SICK DAY"
+			Case "B", "", "   "
+				$StatusName = "BLANK"
+		EndSwitch
+
+		Local $WeekDayNum = _DateToDayOfWeek($iYear, $iMonth, $iDay)
+		Local $WeekDayName = _DateDayOfWeek($WeekDayNum, 1)
+		Local $WeekDayNumber = _WeekNumberISO($iYear, $iMonth, $iDay)
+		Local $Status_Comment_1 = StringTrimLeft($Status1, 1)
+		Local $Status_Comment
+
+		If $Status_Comment_1 <> "" Then
+			$Status_Comment = $iYear & "/" & $sMonth & "/" & $sDay & @CRLF & $WeekDayName & " (Week: " & $WeekDayNumber & ") - " & $StatusName & @CRLF & "----" & @CRLF & "- " & StringReplace($Status_Comment_1, @CRLF, @CRLF & "- ")
+		Else
+			$Status_Comment = $iYear & "/" & $sMonth & "/" & $sDay & @CRLF & $WeekDayName & " (Week: " & $WeekDayNumber & ") - " & $StatusName
+		EndIf
+
+		Local $sDisplayStatus = _GetDateDisplayText($iYear, $iMonth, $iDay, $Status)
+		_GUICtrlListView_AddSubItem($g_hLV, $iItem[$iMonth][0], $sDisplayStatus, $iDay, 1)
+
+		$g_aCellColor[$iMonth - 1][$iDay] = _ColorFromDate($Status)
+		$g_aCellColorBK[$iMonth - 1][$iDay] = _GetDateFontColor($iYear, $iMonth, $iDay, $Status)
+		$g_aCellStatus[$iMonth - 1][$iDay] = $Status_Comment_1
+		$g_aCellTip[$iMonth - 1][$iDay] = $Status_Comment
 	Next
 EndFunc   ;==>_ReadDays
 
@@ -3927,6 +4958,7 @@ Func _ReadINI($iYear, $Splash = 0)
 	; For the startup path (_ReadINI called directly), _ReadStatistics
 	; is called by _CheckQuarter() which follows immediately after.
 
+	$g_iLVYear = Number($iYear)
 	$g_idLV = GUICtrlCreateListView("", 7, 210, 1127, 365, BitOR($LVS_REPORT, $LVS_SINGLESEL))
 	If $g_idLV = 0 Then Exit MsgBox(16, "Error", "Failed to create ListView.")
 
@@ -4941,22 +5973,23 @@ EndFunc   ;==>_ReadStatistics
 
 Func _Reload()
 
-	_LockWindow($Form_WorkDays, False)
-
+	; Do not disable redraw unconditionally here.
+	; _Update() already handles WM_SETREDRAW safely when a real ListView rebuild is needed.
+	; Locking the window here caused the UI to remain visually frozen on same-year refreshes
+	; such as Add/Edit Marker -> OK/Cancel.
 	_ReadColors()
 
 	$SelDate = GUICtrlRead($Calendar)
 	$SelDate_slipt = StringSplit($SelDate, "/")
+	If @error Or $SelDate_slipt[0] <> 3 Then Return
 
 	$Status1 = RegRead($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3])
 	$Status = StringTrimLeft($Status1, 1)
-	GUICtrlSetState($SelectLabel[$SelDate_slipt[3]][$SelDate_slipt[2]], $gui_show)
+	_UpdateSelectionHighlight(Number($SelDate_slipt[3]), Number($SelDate_slipt[2]))
 
 	_Chart()
 	_Update($SelDate)
-
-	; _Update already re-enables redraws and does a clean repaint,
-	; so nothing extra is needed here.
+	_CreateMenu()
 
 	Return
 
@@ -5149,17 +6182,17 @@ Func _Update($SelDate)
 	Local $iDataDay = Number($aDate[3])
 
 	If $iDataMonth < 1 Or $iDataMonth > 12 Then Return SetError(2, 0, 0)
-	If $iDataDay < 1 Or $iDataDay > 31 Then Return SetError(3, 0, 0)
+	If Not _IsValidCalendarDay($iDataYear, $iDataMonth, $iDataDay) Then Return SetError(3, 0, 0)
 
-	; ── Freeze the window: suppress ALL intermediate repaints ────────
-	; This prevents the visible flicker caused by the ListView being
-	; destroyed and fully rebuilt inside _ReadINI().
-	_LockWindow($Form_WorkDays, False)
+	Local $bRebuildList = ($g_idLV = 0 Or $g_hLV = 0 Or $g_iLVYear <> $iDataYear)
 
-	GUICtrlDelete($g_idLV)
-	_ReadINI($iDataYear)
+	; Freeze only when we need a structural rebuild.
+	If $bRebuildList Then
+		_LockWindow($Form_WorkDays, False)
+		If $g_idLV <> 0 Then GUICtrlDelete($g_idLV)
+		_ReadINI($iDataYear)
+	EndIf
 
-	; ── Now resolve the updated cell data ────────────────────────────
 	Local $sDataMonth = StringFormat("%02d", $iDataMonth)
 	Local $sDataDay = StringFormat("%02d", $iDataDay)
 
@@ -5210,34 +6243,33 @@ Func _Update($SelDate)
 				$sWeekDayName & " (Week: " & $iWeekDayNumber & ") - " & $sStatusName
 	EndIf
 
-	; Texto mostrado na c�lula
-	Local $sDisplay = $sDataRegister
-	If $sDisplay = "B" Then $sDisplay = "   "
+	Local $sDisplay = _GetDateDisplayText($iDataYear, $iDataMonth, $iDataDay, $sDataRegister)
 
-	; Atualiza o subitem do ListView
 	If $g_hLV <> 0 Then
 		_GUICtrlListView_SetItemText($g_hLV, $iItem[$iDataMonth][0], $sDisplay, $iDataDay)
 	EndIf
 
-	; Atualiza os arrays usados pelo NM_CUSTOMDRAW
 	$g_aCellColor[$iDataMonth - 1][$iDataDay] = _ColorFromDate($sDisplay)
-	$g_aCellColorBK[$iDataMonth - 1][$iDataDay] = _ColorFromDateFont($sDisplay)
+	$g_aCellColorBK[$iDataMonth - 1][$iDataDay] = _GetDateFontColor($iDataYear, $iDataMonth, $iDataDay, $sDisplay)
 	$g_aCellStatus[$iDataMonth - 1][$iDataDay] = $sTip
 	$g_aCellTip[$iDataMonth - 1][$iDataDay] = $sStatusComment
 
-	; Atualiza a data selecionada
 	GUICtrlSetData($Input_SelDate, $iDataYear & "/" & $sDataMonth & "/" & $sDataDay)
 	_GUICtrlMonthCal_SetCurSel($Calendar, $iDataYear, $iDataMonth, $iDataDay)
+	_UpdateSelectionHighlight($iDataDay, $iDataMonth)
 	_CheckQuarter()
 
-	; Recalcula estat�sticas
 	_ReadStatistics($iDataYear)
 
-	_CreateMenu()
+	If $bRebuildList Then
+		_CreateMenu()
+		_LockWindow($Form_WorkDays, True)
+		_CleanRepaint($Form_WorkDays)
+	EndIf
 
-	; ── Unfreeze and do a single clean repaint ───────────────────────
-	_LockWindow($Form_WorkDays, True)
-	_CleanRepaint($Form_WorkDays)
+	$g_ccYear = $iDataYear
+	$g_ccMonth = $iDataMonth
+	_CustomCal_Update()
 
 	Return 1
 
@@ -5251,7 +6283,8 @@ Func _UpdateListViewCellTip()
 		Return
 	EndIf
 
-	; [4] = control ID sob o mouse
+	; Only the main ListView uses the manual tooltip.
+	; The small calendar uses native GUICtrlSetTip on its controls to avoid hover/click instability.
 	If $aCur[4] <> $g_idLV Then
 		_HideListViewCellTip()
 		Return
@@ -5266,7 +6299,6 @@ Func _UpdateListViewCellTip()
 	Local $iRow = $aHit[0]
 	Local $iCol = $aHit[1]
 
-	; s� dias v�lidos, n�o a coluna do m�s
 	If $iRow < 0 Or $iRow > 11 Or $iCol < 1 Or $iCol > 31 Then
 		_HideListViewCellTip()
 		Return
@@ -5281,16 +6313,12 @@ Func _UpdateListViewCellTip()
 	EndIf
 
 	Local $sTip = $g_aCellTip[$iRow][$iCol]
+	If $sTip = "" Then
+		_HideListViewCellTip()
+		Return
+	EndIf
 
-	; sem coment�rio = sem tooltip
-;~ 	If $sTip = "" Then
-;~ 		_HideListViewCellTip()
-;~ 		Return
-;~ 	EndIf
-
-	; evita recriar o tooltip toda hora
-;~ 	If $g_iTipRow = $iRow And $g_iTipCol = $iCol And $g_sTipText = $sTip Then Return
-	If $g_iTipRow = $iRow And $g_iTipCol = $iCol Then Return
+	If $g_iTipRow = $iRow And $g_iTipCol = $iCol And $g_sTipText = $sTip Then Return
 
 	Local $aMouse = MouseGetPos()
 	ToolTip($sTip, $aMouse[0] + 16, $aMouse[1] + 20)
@@ -5305,6 +6333,8 @@ EndFunc   ;==>_UpdateListViewCellTip
 Func _WorkDayInAWeekend($DateToCheck, $NewStatus)
 
 	$DateToCheck_split = StringSplit($DateToCheck, "/")
+	If @error Or $DateToCheck_split[0] <> 3 Then Return 1
+	If Not _IsValidCalendarDay($DateToCheck_split[1], $DateToCheck_split[2], $DateToCheck_split[3]) Then Return 1
 
 	$WeekDayNum = _DateToDayOfWeek($DateToCheck_split[1], $DateToCheck_split[2], $DateToCheck_split[3])
 
@@ -5387,31 +6417,13 @@ Func WM_NOTIFY($hWnd, $iMsg, $wParam, $lParam)
 
 			If $iDay > _DaysInMonth2($iYear, $iMonth) Then Return $GUI_RUNDEFMSG
 
-			$mousePosX = MouseGetPos(0)
-			$mousePosY = MouseGetPos(1)
-
 			Local $sMonth = StringFormat("%02d", $iMonth)
 			Local $sDay = StringFormat("%02d", $iDay)
 			Local $sDate = $iYear & "/" & $sMonth & "/" & $sDay
 
-			GUICtrlSetData($Input_SelDate, $sDate)
-			_GUICtrlMonthCal_SetCurSel($Calendar, $iYear, $iMonth, $iDay)
-			_CheckQuarter()
-
-			Local $sStatus = RegRead($DB & "\" & $iYear & "\" & $sMonth, $sDay)
-			If @error Or $sStatus = "" Then
-				GUICtrlSetData($Input_Tag, "")
-			Else
-				GUICtrlSetData($Input_Tag, StringTrimLeft($sStatus, 1))
-			EndIf
-
-			; Schedule a single clean repaint of the selection border
-			_WinAPI_InvalidateRect($g_hLV, 0, False)
-
-			$g_iMenuDay = $iDay
-			$g_iMenuMonth = $iMonth
-			$g_iMenuYear = $iYear
-			$g_bShowCellMenu = True
+			; Left click must only select the date.
+			; The context menu is queued exclusively by NM_RCLICK.
+			_RefreshSelectedDateUI($sDate)
 			Return 0
 
 		Case $NM_CUSTOMDRAW
@@ -5448,6 +6460,15 @@ Func WM_NOTIFY($hWnd, $iMsg, $wParam, $lParam)
 				EndIf
 
 				If $iSub >= 1 And $iSub <= 31 And $iItem >= 0 And $iItem <= 11 Then
+					; Visually disable calendar dates that do not exist for that month
+					; (for example Apr 31 or Feb 29 in non-leap years).
+					If $iSub > _DaysInMonth2($iYear, $iItem + 1) Then
+						DllStructSetData($tCD, "clrTextBk", _DecColorToRGBHex($g_clrInvalidDayBG))
+						DllStructSetData($tCD, "clrText", _DecColorToRGBHex($g_clrInvalidDayFG))
+						If $hDC <> 0 Then _WinAPI_SelectObject($hDC, $g_hFontNormal)
+						Return $CDRF_NEWFONT
+					EndIf
+
 					Local $clr = _DecColorToRGBHex($g_aCellColor[$iItem][$iSub])
 					Local $clrbk = _DecColorToRGBHex($g_aCellColorBK[$iItem][$iSub])
 					Local $sSelDate = GUICtrlRead($Input_SelDate)
@@ -5505,25 +6526,12 @@ Func WM_NOTIFY($hWnd, $iMsg, $wParam, $lParam)
 			Local $sDay = StringFormat("%02d", $iDay)
 			Local $sDate = $iYear & "/" & $sMonth & "/" & $sDay
 
-			GUICtrlSetData($Input_SelDate, $sDate)
-			_GUICtrlMonthCal_SetCurSel($Calendar, $iYear, $iMonth, $iDay)
-			; NOTE: no InvalidateRect/UpdateWindow here on purpose –
-			; the grid will be fully repainted by _Update after the
-			; user picks an option, avoiding a spurious flash.
-			_CheckQuarter()
-
-			Local $sStatus = RegRead($DB & "\" & $iYear & "\" & $sMonth, $sDay)
-			If @error Or $sStatus = "" Then
-				GUICtrlSetData($Input_Tag, "")
-			Else
-				GUICtrlSetData($Input_Tag, StringTrimLeft($sStatus, 1))
-			EndIf
+			_RefreshSelectedDateUI($sDate)
 
 			$g_iMenuDay = $iDay
 			$g_iMenuMonth = $iMonth
 			$g_iMenuYear = $iYear
-			$g_bShowCellMenu = False
-			_MenuContextual($g_iMenuDay, $g_iMenuMonth, $g_iMenuYear)
+			$g_bShowCellMenu = True
 
 			Return 0
 
