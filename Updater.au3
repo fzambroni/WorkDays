@@ -1,43 +1,95 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
+#AutoIt3Wrapper_UseX64=n
+#AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Icon=xcalendar4.ico
-#AutoIt3Wrapper_Res_Description=Work Day updater
-#AutoIt3Wrapper_Res_Fileversion=1.0.0.2
-#AutoIt3Wrapper_Res_ProductName=Work Days Updater
-#AutoIt3Wrapper_Res_File_Add=E:\GitHub\WorkDays\splash.jpg
+#AutoIt3Wrapper_Res_Description=Updater
+#AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
+#AutoIt3Wrapper_Res_LegalCopyright=Copyright © 2026 Fabricio Zambroni
+#AutoIt3Wrapper_Res_Fileversion=1.1.1.4
+#AutoIt3Wrapper_Res_ProductVersion=1.1.1.1
+#AutoIt3Wrapper_Res_ProductName=Updater
+#AutoIt3Wrapper_Res_File_Add=E:\GitHub\Workdays\splash.jpg
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
-
-#cs ----------------------------------------------------------------------------
-
- AutoIt Version: 3.3.16.1
- Author:         myName
-
- Script Function:
-	Template AutoIt script.
-
-#ce ----------------------------------------------------------------------------
 #pragma compile(inputboxres, true)
 
 Opt("TrayIconHide", 1)
 Opt("TrayAutoPause", 0)
-
 #include <WindowsStylesConstants.au3>
 #include <StaticConstants.au3>
-$sSplashPath = @TempDir & "\splash.jpg"
+
+
+;####################################################
+;####################################################
+Global $AppName = "Workdays"
+;####################################################
+;####################################################
+
+
+Global $g_sUpdaterLogFile = ""
+Global $g_sUpdaterLogBaseDir = @ScriptDir
+
+Func _UpdaterVerboseModeEnabled()
+	Return (IniRead($g_sUpdaterLogBaseDir & "\settings.ini", "Logging", "VerboseMode", "0") = "1")
+EndFunc
+
+Func _UpdaterVerboseLog($sMsg)
+	; Replacement-safe verbose log. It only writes when [Logging] VerboseMode=1.
+	If Not _UpdaterVerboseModeEnabled() Then Return
+
+	Local $sLogDir = $g_sUpdaterLogBaseDir & "\log_Updater"
+	If Not FileExists($sLogDir) Then DirCreate($sLogDir)
+	If $g_sUpdaterLogFile = "" Then $g_sUpdaterLogFile = $sLogDir & "\log_" & @YEAR & @MON & @MDAY & "_" & @HOUR & @MIN & @SEC & ".txt"
+
+	Local $sTimestamp = "[" & @YEAR & "-" & @MON & "-" & @MDAY & " " & @HOUR & ":" & @MIN & ":" & @SEC & "]"
+	Local $hFile = FileOpen($g_sUpdaterLogFile, 1)
+	If $hFile <> -1 Then
+		FileWriteLine($hFile, $sTimestamp & " [VERBOSE] " & StringReplace(StringReplace(String($sMsg), @CRLF, " "), @LF, " "))
+		FileClose($hFile)
+	EndIf
+EndFunc
+
+
+
+$sSplashPath = @ScriptDir & "\splash.jpg"
 FileInstall("splash.jpg", $sSplashPath, 1)
 Sleep(1000)
-$Path = StringReplace($CmdLineRaw,"'","")
 
-;~ MsgBox(262144,"",$Path & "\Workdays.tmp")
+#cs
+If $CmdLine[0] >= 1 Then
+	$Path = $CmdLine[1]
+Else
+	$Path = StringReplace(StringReplace($CmdLineRaw,"'", ""), '"', "")
+EndIf
+#ce
+$Path = @ScriptDir
+$g_sUpdaterLogBaseDir = $Path
+_UpdaterVerboseLog("Updater started. Application path: " & $Path)
+;~ $Path = "E:\Z_Apps\Toolbox"
+;~ MsgBox(262144,"",$Path & "\" & $AppName & ".tmp")
+;~ _splash()
+;~ Sleep(5000)
 
-If Not FileExists($Path & "\Workdays.tmp") Then
+If Not FileExists($Path & "\" & $AppName & ".tmp") Then
+	_UpdaterVerboseLog("Update aborted: staged file not found: " & $Path & "\" & $AppName & ".tmp")
+	FileDelete($sSplashPath)
 	Exit
 Else
+	_UpdaterVerboseLog("Staged file found. Starting replacement.")
 	_splash()
 	Sleep(3000)
-	FileMove($Path & "\Workdays.tmp",$Path & "\Workdays.exe",9)
+	If FileMove($Path & "\" & $AppName & ".tmp",$Path & "\" & $AppName & ".exe",9) Then
+		_UpdaterVerboseLog("Replacement completed: " & $Path & "\" & $AppName & ".exe")
+	Else
+		_UpdaterVerboseLog("Replacement failed. Source=" & $Path & "\" & $AppName & ".tmp" & " | Target=" & $Path & "\" & $AppName & ".exe")
+		FileDelete($sSplashPath)
+		Exit
+	EndIf
 	Sleep(2000)
-	Run($Path & "\Workdays.exe")
+	_UpdaterVerboseLog("Restarting application: " & $Path & "\" & $AppName & ".exe")
+	Run('"' & $Path & "\" & $AppName & ".exe" & '"')
+
 EndIf
+FileDelete($sSplashPath)
 Exit
 
 Func _splash()
@@ -50,11 +102,12 @@ Func _splash()
 
 	Global $Pic_Splash = GUICtrlCreatePic($sSplashPath, 5, 5, 630, 350)
 
-	Global $Label_Percentage = GUICtrlCreateLabel("Updating . . .", 5, 290, 630, 40, $SS_CENTER)
-	GUICtrlSetFont($Label_Percentage, 20)
+	Global $Label_Percentage = GUICtrlCreateLabel("Updating " & $AppName & " . . . Please wait", 5, 330, 630, 25, $SS_CENTER)
+	GUICtrlSetFont($Label_Percentage, 17)
 	GUICtrlSetColor($Label_Percentage, 0xFF0000)
 
 	GUISetState(@SW_SHOW, $Form_Splash)
+	_UpdaterVerboseLog("Splash screen displayed.")
 
 
 EndFunc   ;==>_splash

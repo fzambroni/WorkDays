@@ -1,8 +1,5 @@
 *.bkp
 /BackUp
-*.exe
+/Backups
 autosave.db
-Workdays.exe
-Workdays.exe
-oldxcalendar.ico
 /Reports
