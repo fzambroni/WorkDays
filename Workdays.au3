@@ -3,7 +3,7 @@
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Icon=xcalendar4.ico
 #AutoIt3Wrapper_Res_Description=Work Day management
-#AutoIt3Wrapper_Res_Fileversion=2.1.3.2
+#AutoIt3Wrapper_Res_Fileversion=2.1.3.3
 #AutoIt3Wrapper_Res_ProductVersion=2.1.0.0
 #AutoIt3Wrapper_Res_ProductName=Work Days
 #AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
@@ -196,7 +196,7 @@ EndIf
 
 Global $HelpFile = @ScriptDir & "\Help.html"
 Global $sSplashPath = @ScriptDir & "\splash.jpg"
-Global $AboutFile = @ScriptDir & "\splash.jpg"
+Global $AboutFile = $sSplashPath
 Global $AboutDBFile = @ScriptDir & "\About.db"
 Global $ResetPosition = 0
 Global $Progress_Splash, $Form_Splash, $Label_Percentage, $Splash, $Button_Close_Splash
@@ -6388,7 +6388,7 @@ Func _splash($Mode = "on")
 			Global $Form_Splash = GUICreate("", $splashWin_X, $splashWin_Y, $WinPos_X + Round(($Window_X - $splashWin_X) - (($Window_X - $splashWin_X) / 2), 0), $WinPos_Y + Round(($Window_Y - $splashWin_Y) - (($Window_Y - $splashWin_Y) / 2), 0), $WS_POPUP, BitOR($WS_EX_TOPMOST, $WS_EX_TOOLWINDOW, $WS_EX_LAYERED))
 		EndIf
 
-		Global $Pic_Splash = GUICtrlCreatePic(@TempDir & "\splash.jpg", 5, 5, 630, 350)
+		Global $Pic_Splash = GUICtrlCreatePic($sSplashPath, 5, 5, 630, 350)
 
 		Global $Progress_Splash = GUICtrlCreateProgress(104, 288, 430, 17)
 		Global $Label_Percentage = GUICtrlCreateLabel("0%", 540, 290, 100, -1, $SS_SIMPLE)
