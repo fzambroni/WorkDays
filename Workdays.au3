@@ -3,13 +3,13 @@
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Icon=xcalendar4.ico
 #AutoIt3Wrapper_Res_Description=Work Day management
-#AutoIt3Wrapper_Res_Fileversion=2.1.3.0
+#AutoIt3Wrapper_Res_Fileversion=2.1.3.1
 #AutoIt3Wrapper_Res_ProductVersion=2.1.0.0
 #AutoIt3Wrapper_Res_ProductName=Work Days
 #AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
 #AutoIt3Wrapper_Res_LegalCopyright=Copyright © 2026 Fabricio Zambroni
 #AutoIt3Wrapper_Res_File_Add=E:\GitHub\WorkDays\splash.jpg
-#AutoIt3Wrapper_Res_File_Add=E:\GitHub\WorkDays\Help.pdf
+#AutoIt3Wrapper_Res_File_Add=E:\GitHub\WorkDays\Help.html
 #AutoIt3Wrapper_Res_File_Add=E:\GitHub\WorkDays\Updater.exe
 #AutoIt3Wrapper_Res_File_Add=E:\GitHub\WorkDays\About.db
 #AutoIt3Wrapper_Run_After=E:\GitHub\WorkDays\FileUpdate.exe
@@ -194,10 +194,10 @@ If Not StringInStr(StringLower(@ScriptName), ".au3") Then
 EndIf
 
 
-Global $HelpFile = @TempDir & "\Help.pdf"
-Global $sSplashPath = @TempDir & "\splash.jpg"
-Global $AboutFile = @TempDir & "\splash.jpg"
-Global $AboutDBFile = @TempDir & "\About.db"
+Global $HelpFile = @ScriptDir & "\Help.html"
+Global $sSplashPath = @ScriptDir & "\splash.jpg"
+Global $AboutFile = @ScriptDir & "\splash.jpg"
+Global $AboutDBFile = @ScriptDir & "\About.db"
 Global $ResetPosition = 0
 Global $Progress_Splash, $Form_Splash, $Label_Percentage, $Splash, $Button_Close_Splash
 
@@ -675,7 +675,9 @@ $g_hGUI = $Form_WorkDays
 If $g_hGUI = 0 Then Exit MsgBox(16, "Error", "Failed to store GUI handle.")
 
 Global $DBpMenu_db = GUICtrlCreateMenu("File")
+Global $BkpMenu_Backup = GUICtrlCreateMenu("Backup", $DBpMenu_db)
 Global $BkpMenu_Exit = GUICtrlCreateMenuItem("&Exit", $DBpMenu_db)
+
 ;~ Global $DBpMenu_backup_Data = GUICtrlCreateMenu("Data")
 ;~ Global $DBpMenu_backup = GUICtrlCreateMenuItem("Create Backup", $DBpMenu_backup_Data)
 ;~ Global $BkpMenu_Batch = GUICtrlCreateMenuItem("Restore Backup", $DBpMenu_backup_Data)
@@ -688,9 +690,9 @@ Global $BkpMenu_Exit = GUICtrlCreateMenuItem("&Exit", $DBpMenu_db)
 
 Global $DBpMenu_settings = GUICtrlCreateMenu("Settings")
 Global $BkpMenu_settings_BKcolors = GUICtrlCreateMenuItem("Options", $DBpMenu_settings)
-Global $DBpMenu_backup_3 = GUICtrlCreateMenuItem("", $DBpMenu_settings)
-Global $DBpMenu_backup = GUICtrlCreateMenuItem("Create Backup", $DBpMenu_settings)
-Global $BkpMenu_Batch = GUICtrlCreateMenuItem("Restore Backup", $DBpMenu_settings)
+;~ Global $DBpMenu_backup_3 = GUICtrlCreateMenuItem("", $DBpMenu_settings)
+Global $DBpMenu_backup = GUICtrlCreateMenuItem("Create Backup", $BkpMenu_Backup)
+Global $BkpMenu_Batch = GUICtrlCreateMenuItem("Restore Backup", $BkpMenu_Backup)
 Global $DBpMenu_backup_3 = GUICtrlCreateMenuItem("", $DBpMenu_settings)
 Global $DBpMenu_backup_Data_Holidays = GUICtrlCreateMenuItem("Import Holidays File", $DBpMenu_settings)
 Global $DBpMenu_backup_3 = GUICtrlCreateMenuItem("", $DBpMenu_settings)
@@ -1276,13 +1278,13 @@ GUICtrlSetData($Label_Percentage, "100%")
 If GUICtrlRead($Button_Close_Splash) = $GUI_CHECKED Then
 	Exit
 EndIf
-$SelDate = GUICtrlRead($Calendar)
-$SelDate_slipt = StringSplit($SelDate, "/")
-
-$Status1 = RegRead($DB & "\" & $SelDate_slipt[1] & "\" & $SelDate_slipt[2], $SelDate_slipt[3])
-$Status = StringTrimLeft($Status1, 1)
-
-_UpdateSelectionHighlight(Number($SelDate_slipt[3]), Number($SelDate_slipt[2]))
+; Initialize the selected-day fields with today's persisted data.
+; Startup previously highlighted today's cell, but did not load the associated marker/tag
+; into $Input_Tag until the user clicked a calendar day.
+$SelDate = @YEAR & "/" & StringFormat("%02d", @MON) & "/" & StringFormat("%02d", @MDAY)
+GUICtrlSetData($Calendar, $SelDate)
+_GUICtrlMonthCal_SetCurSel($Calendar, @YEAR, Number(@MON), Number(@MDAY))
+_RefreshSelectedDateUI($SelDate)
 
 ;~ $UpdatedVersion = FileGetVersion($UpdatePath & "\WorkDays.exe")
 
@@ -1810,7 +1812,7 @@ While 1
 
 		Case $BkpMenu_help_help
 
-			FileInstall("Help.pdf", $HelpFile, 1)
+			FileInstall("Help.html", $HelpFile, 1)
 
 			If Not FileExists($HelpFile) Then
 				MsgBox(262160, "Work Days", "Help file not found in the application folder.", 0, $Form_WorkDays)
