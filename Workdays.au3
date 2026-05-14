@@ -3,7 +3,7 @@
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Icon=xcalendar4.ico
 #AutoIt3Wrapper_Res_Description=Work Day management
-#AutoIt3Wrapper_Res_Fileversion=2.1.2.6
+#AutoIt3Wrapper_Res_Fileversion=2.1.3.0
 #AutoIt3Wrapper_Res_ProductVersion=2.1.0.0
 #AutoIt3Wrapper_Res_ProductName=Work Days
 #AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
@@ -6298,27 +6298,45 @@ Func _RestoreBackup()
 						MsgBox(262160, "Import", "Oops! Something went wrong when read the file. Please try again." & @CRLF & "Error code: 3." & @error, 0, $Form_WorkDays)
 						Return
 					EndIf
-					If Not StringInStr($HolidaysLine, "\") Then
-						If Not StringInStr($HolidaysLine, "=") Then
+					; Parse the backup line using the first "=" only.
+					; This prevents settings values that contain backslashes (for example UNC paths)
+					; from being incorrectly treated as calendar keys.
+					Local $iEqualPos = StringInStr($HolidaysLine, "=")
+					If $iEqualPos = 0 Then
+						If StringStripWS($HolidaysLine, 3) <> "" Then $HolidaysError = $HolidaysError & "Error to import line: " & $HolidaysLine & @CRLF
+						ContinueLoop
+					EndIf
+
+					Local $sBackupKey = StringLeft($HolidaysLine, $iEqualPos - 1)
+					Local $sBackupValue = StringMid($HolidaysLine, $iEqualPos + 1)
+					$sBackupValue = StringReplace($sBackupValue, " /n", @CRLF)
+
+					If StringStripWS($sBackupKey, 3) = "" Then
+						$HolidaysError = $HolidaysError & "Error to import line: " & $HolidaysLine & @CRLF
+						ContinueLoop
+					EndIf
+
+					If StringInStr($sBackupKey, "\") Then
+						$HolidaysLine_key = StringSplit($sBackupKey, "\")
+						If @error Or $HolidaysLine_key[0] <> 3 Then
 							$HolidaysError = $HolidaysError & "Error to import line: " & $HolidaysLine & @CRLF
-						Else
-							$HolidaysLine_Setting = StringSplit($HolidaysLine, "=")
-							$RegError = RegWrite($DB, $HolidaysLine_Setting[1], "REG_SZ", StringReplace($HolidaysLine_Setting[2], " /n", @CRLF))
-							If @error Then
-								$HolidaysError = $HolidaysError & "Error to import line: " & $HolidaysLine & @CRLF
-							Else
-								$ImportCount += 1
-							EndIf
+							ContinueLoop
 						EndIf
+
+						If $HolidaysLine_key[1] = "" Or $HolidaysLine_key[2] = "" Or $HolidaysLine_key[3] = "" Then
+							$HolidaysError = $HolidaysError & "Error to import line: " & $HolidaysLine & @CRLF
+							ContinueLoop
+						EndIf
+
+						$RegError = RegWrite($DB & "\" & $HolidaysLine_key[1] & "\" & $HolidaysLine_key[2], $HolidaysLine_key[3], "REG_SZ", $sBackupValue)
 					Else
-						$HolidaysLine_key = StringSplit($HolidaysLine, "\")
-						$HolidaysLine_Value = StringSplit($HolidaysLine_key[3], "=")
-						$RegError = RegWrite($DB & "\" & $HolidaysLine_key[1] & "\" & $HolidaysLine_key[2], $HolidaysLine_Value[1], "REG_SZ", StringReplace($HolidaysLine_Value[2], " /n", @CRLF))
-						If @error Then
-							$HolidaysError = $HolidaysError & "Error to import line: " & $HolidaysLine & @CRLF
-						Else
-							$ImportCount += 1
-						EndIf
+						$RegError = RegWrite($DB, $sBackupKey, "REG_SZ", $sBackupValue)
+					EndIf
+
+					If @error Then
+						$HolidaysError = $HolidaysError & "Error to import line: " & $HolidaysLine & @CRLF
+					Else
+						$ImportCount += 1
 					EndIf
 
 				WEnd
