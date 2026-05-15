@@ -3,7 +3,7 @@
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Icon=xcalendar4.ico
 #AutoIt3Wrapper_Res_Description=Work Day management
-#AutoIt3Wrapper_Res_Fileversion=2.1.3.3
+#AutoIt3Wrapper_Res_Fileversion=2.1.3.4
 #AutoIt3Wrapper_Res_ProductVersion=2.1.0.0
 #AutoIt3Wrapper_Res_ProductName=Work Days
 #AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
@@ -70,6 +70,8 @@ Opt("TrayAutoPause", 0)
 #include <File.au3>
 #include <String.au3>
 #include <InetConstants.au3>
+#include "Updater_lib2.au3"
+
 
 #Region GLOBAL
 ; =======================
@@ -143,10 +145,10 @@ Global $g_hCal = 0   ; MonthCal HWND – hidden, kept for programmatic date acce
 
 ; Custom calendar widget – replaces the MonthCal visually.
 ; Uses labels so GUICtrlSetBkColor works reliably without any GDI/NM_CUSTOMDRAW.
-Global $g_ccYear  = @YEAR
+Global $g_ccYear = @YEAR
 Global $g_ccMonth = Number(@MON)
-Global $g_ccPrev  = 0              ; "< " button
-Global $g_ccNext  = 0              ; " >" button
+Global $g_ccPrev = 0               ; "< " button
+Global $g_ccNext = 0               ; " >" button
 Global $g_ccTitle = 0              ; month+year button (opens picker)
 Global $g_ccToday = 0              ; "Today" button
 Global $g_ccDayCells[42]           ; 6 rows x 7 cols day-cell label IDs (content)
@@ -167,33 +169,6 @@ Global $g_ccCacheTip[42]
 Global $iYear = @YEAR
 Global $DB = "HKEY_CURRENT_USER\Software\WorkDays"
 
-
-;~ Global $UpdatePath = RegRead($DB, "Update_Path") ;Update Path
-;~ If $UpdatePath = "" Then
-;~ 	RegWrite($DB, "Update_Path", "REG_SZ", "\\lp16-fzi1-dsa\WorkDays")
-;~ 	$UpdatePath = "\\lp16-fzi1-dsa\WorkDays"
-;~ EndIf
-
-
-; ----------------------------------------------------------------------------------------------------------------------
-; Updater - GitHub based
-; ----------------------------------------------------------------------------------------------------------------------
-; This updater no longer uses a shared network folder. It reads the latest version from GitHub version.txt,
-; downloads the published Toolbox.exe only when a newer version is available, then lets Updater.exe replace the file.
-Global Const $g_sGitHubDefaultRawBase = "https://raw.githubusercontent.com/fzambroni/WorkDays/main"
-Global $g_sGitHubRawBase = IniRead(@ScriptDir & "\settings.ini", "Update", "github_raw_base", $g_sGitHubDefaultRawBase)
-If StringStripWS($g_sGitHubRawBase, 3) = "" Then $g_sGitHubRawBase = $g_sGitHubDefaultRawBase
-
-; Keep settings.ini explicit and self-documenting. The old [Update] path entry is intentionally ignored.
-IniWrite(@ScriptDir & "\settings.ini", "Update", "source", "github")
-IniWrite(@ScriptDir & "\settings.ini", "Update", "github_raw_base", $g_sGitHubRawBase)
-
-; Skip automatic update checks when running the .au3 directly from SciTE/dev mode.
-If Not StringInStr(StringLower(@ScriptName), ".au3") Then
-    _CheckGitHubUpdate()
-EndIf
-
-
 Global $HelpFile = @ScriptDir & "\Help.html"
 Global $sSplashPath = @ScriptDir & "\splash.jpg"
 Global $AboutFile = $sSplashPath
@@ -208,7 +183,7 @@ Global $Total, $Count_O, $Count_R, $Count_H, $Count_P, $Count_T, $Count_S, $Coun
 ;Colors Variables
 Global $Color_bk_OnSite, $Color_bk_Remote, $Color_bk_holiday, $Color_bk_PTO, $Color_bk_Travel, $Color_bk_Sick, $Color_bk_Blank, $Color_bk_Weekend, $Color_HighlightDate
 
-
+_CheckSingleInstance()
 
 
 Global $WinPos_X = RegRead($DB, "WinPosX")
@@ -233,13 +208,35 @@ Global $Window_Y = 620
 
 $Left_coordinate = 0
 $Top_coordinate = 0
+_PosScreen()
+
+
+FileInstall("splash.jpg", $sSplashPath, 1)
+_splash("on")
+
+
+; ----------------------------------------------------------------------------------------------------------------------
+; Updater - GitHub based
+; ----------------------------------------------------------------------------------------------------------------------
+Global $GitHubAppName = "WorkDays"
+; Skip automatic update checks when running the .au3 directly from SciTE/dev mode.
+If Not StringInStr(StringLower(@ScriptName), ".au3") Then
+	_CheckGitHubUpdate()
+EndIf
 
 
 
-$MonitorInfo = _Monitor_GetLayout()
 
-$Count = 1
-While 1
+
+
+
+
+
+Func _PosScreen()
+	$MonitorInfo = _Monitor_GetLayout()
+
+	$Count = 1
+	While 1
 ;~ 	ConsoleWrite($Count & " - Monitor index: " & $MonitorInfo[$Count][0] & @CRLF)
 ;~ 	ConsoleWrite($Count & " - Left coordinate: " & $MonitorInfo[$Count][1] & @CRLF)
 ;~ 	ConsoleWrite($Count & " - Top coordinate: " & $MonitorInfo[$Count][2] & @CRLF)
@@ -247,255 +244,62 @@ While 1
 ;~ 	ConsoleWrite($Count & " - Height: " & $MonitorInfo[$Count][4] & @CRLF)
 ;~ 	ConsoleWrite($Count & " - IsPrimary: " & $MonitorInfo[$Count][5] & @CRLF)
 
-	If $MonitorInfo[$Count][1] < $Left_coordinate Then
-		$Left_coordinate = $MonitorInfo[$Count][1]
+		If $MonitorInfo[$Count][1] < $Left_coordinate Then
+			$Left_coordinate = $MonitorInfo[$Count][1]
+		EndIf
+
+		If $MonitorInfo[$Count][2] < $Top_coordinate Then
+			$Top_coordinate = $MonitorInfo[$Count][2]
+		EndIf
+
+
+		If $MonitorInfo[0][0] = $Count Then ExitLoop
+		$Count += 1
+	WEnd
+	$Monitor_qnty = $Count
+
+
+	ConsoleWrite("$Monitor_qnty: " & $Monitor_qnty & @CRLF)
+	ConsoleWrite("$Left_coordinate: " & $Left_coordinate & @CRLF)
+	ConsoleWrite("$Top_coordinate: " & $Top_coordinate & @CRLF)
+
+	$Restart = ""
+
+	If Number($WinPos_X) < Number($Left_coordinate) And Number($WinPos_X) <> -1 Then
+		$Restart &= "A"
 	EndIf
 
-	If $MonitorInfo[$Count][2] < $Top_coordinate Then
-		$Top_coordinate = $MonitorInfo[$Count][2]
+	If Number($WinPos_Y) < Number($Top_coordinate) And Number($WinPos_Y) <> -1 Then
+		$Restart &= "B"
 	EndIf
 
+	If Number($WinPos_X) > (Number($MonitorInfo[1][3]) - $Window_X) And $WinPos_X <> -1 Then
+		$Restart &= "C"
+	EndIf
 
-	If $MonitorInfo[0][0] = $Count Then ExitLoop
-	$Count += 1
-WEnd
-$Monitor_qnty = $Count
+	If Number($WinPos_Y) > (Number($MonitorInfo[1][4]) - $Window_Y) And $WinPos_Y <> -1 Then
+		$Restart &= "D"
+	EndIf
 
+	ConsoleWrite("$Restart: " & $Restart & @CRLF)
+	If $Restart <> "" Then
 
-ConsoleWrite("$Monitor_qnty: " & $Monitor_qnty & @CRLF)
-ConsoleWrite("$Left_coordinate: " & $Left_coordinate & @CRLF)
-ConsoleWrite("$Top_coordinate: " & $Top_coordinate & @CRLF)
-
-$Restart = ""
-
-If Number($WinPos_X) < Number($Left_coordinate) And Number($WinPos_X) <> -1 Then
-	$Restart &= "A"
-EndIf
-
-If Number($WinPos_Y) < Number($Top_coordinate) And Number($WinPos_Y) <> -1 Then
-	$Restart &= "B"
-EndIf
-
-If Number($WinPos_X) > (Number($MonitorInfo[1][3]) - $Window_X) And $WinPos_X <> -1 Then
-	$Restart &= "C"
-EndIf
-
-If Number($WinPos_Y) > (Number($MonitorInfo[1][4]) - $Window_Y) And $WinPos_Y <> -1 Then
-	$Restart &= "D"
-EndIf
-
-ConsoleWrite("$Restart: " & $Restart & @CRLF)
-If $Restart <> "" Then
-
-	$WinPos_X = -1
-	$WinPos_Y = -1
+		$WinPos_X = -1
+		$WinPos_Y = -1
 
 ;~ 	RegWrite($DB, "WinPosX", "REG_SZ", $WinPos_X)
 ;~ 	RegWrite($DB, "WinPosY", "REG_SZ", $WinPos_Y)
 
-	RegDelete($DB, "WinPosY") ;, "REG_SZ", $WinPos_Y)
-	RegDelete($DB, "WinPosX") ;, "REG_SZ", $WinPos_X)
+		RegDelete($DB, "WinPosY") ;, "REG_SZ", $WinPos_Y)
+		RegDelete($DB, "WinPosX") ;, "REG_SZ", $WinPos_X)
 
-	ConsoleWrite("@ScriptFullPath: " & @ScriptFullPath & @CRLF)
+		ConsoleWrite("@ScriptFullPath: " & @ScriptFullPath & @CRLF)
 ;~ 	Run(@ScriptFullPath)
 ;~ 	Exit
 
-EndIf
+	EndIf
 
-_CheckSingleInstance()
-
-
-
-
-
-
-
-; ----------------------------------------------------------------------------------------------------------------------
-; Updater
-; ----------------------------------------------------------------------------------------------------------------------
-
-; COM error handler (catches $oConn.Execute failures instead of crashing)
-Global $g_oComErr = ObjEvent("AutoIt.Error", "_ComErrorHandler")
-Global $g_sLastComError = ""
-
-Func _ComErrorHandler()
-    Local $oErr = $g_oComErr
-    $g_sLastComError = "COM Error 0x" & Hex($oErr.number, 8) & ": " & $oErr.description
-EndFunc
-
-Func _CheckGitHubUpdate()
-    Local $sCurrentVersion = FileGetVersion(@ScriptFullPath)
-    If StringStripWS($sCurrentVersion, 3) = "" Then
-;~         _LogConsoleReplacement("GitHub update check skipped: local file version could not be read.")
-        Return
-    EndIf
-
-    Local $sAppName = _FileNameWithoutExtension(@ScriptName)
-    Local $sRemoteVersionUrl = _JoinUrl($g_sGitHubRawBase, "version.txt")
-    Local $sRemoteExeUrl = _JoinUrl($g_sGitHubRawBase, @ScriptName)
-    Local $sRemoteVersionTmp = @ScriptDir & "\" & $sAppName & "_github_version.txt"
-    Local $sRemoteExeTmp = @ScriptDir & "\" & $sAppName & "_github_latest.exe"
-    Local $sLocalTmp = @ScriptDir & "\" & $sAppName & ".tmp"
-    Local $sUpdaterFile = @ScriptDir & "\Updater.exe"
-
-	FileDelete($sUpdaterFile)
-
-;~     _LogConsoleReplacement("Checking for updates from GitHub version file: " & $sRemoteVersionUrl)
-
-    Local $sRemoteVersion = _GetGitHubVersionFromTextFile($sRemoteVersionUrl, $sRemoteVersionTmp)
-    If StringStripWS($sRemoteVersion, 3) = "" Then
-;~         _LogConsoleReplacement("GitHub update check skipped: remote version.txt could not be read.")
-        FileDelete($sRemoteVersionTmp)
-        Return
-    EndIf
-
-;~     _LogConsoleReplacement("Local version: " & $sCurrentVersion & " | GitHub version: " & $sRemoteVersion)
-
-    If _CompareVersions($sRemoteVersion, $sCurrentVersion) <= 0 Then
-;~         _LogConsoleReplacement("No update required.")
-        FileDelete($sRemoteVersionTmp)
-        Return
-    EndIf
-
-;~     _LogConsoleReplacement("Newer GitHub version found. Downloading: " & $sRemoteExeUrl)
-
-    If Not _DownloadFile($sRemoteExeUrl, $sRemoteExeTmp) Then
-        FileDelete($sRemoteVersionTmp)
-        Return
-    EndIf
-
-    ; Validate that the executable we are about to install matches the version announced in version.txt.
-    ; This prevents installing an older exe when version.txt was updated before Toolbox.exe was published.
-    Local $sDownloadedExeVersion = FileGetVersion($sRemoteExeTmp)
-    If StringStripWS($sDownloadedExeVersion, 3) = "" Then
-;~         _LogConsoleReplacement("Update aborted: downloaded executable version could not be read.")
-        FileDelete($sRemoteVersionTmp)
-        FileDelete($sRemoteExeTmp)
-        Return
-    EndIf
-
-    If _CompareVersions($sDownloadedExeVersion, $sRemoteVersion) < 0 Then
-;~         _LogConsoleReplacement("Update aborted: downloaded executable version is older than version.txt. Downloaded=" & $sDownloadedExeVersion & ", version.txt=" & $sRemoteVersion)
-        FileDelete($sRemoteVersionTmp)
-        FileDelete($sRemoteExeTmp)
-        Return
-    EndIf
-
-
-    If _CompareVersions($sDownloadedExeVersion, $sCurrentVersion) <= 0 Then
-;~         _LogConsoleReplacement("Update aborted: downloaded executable version is not newer. Downloaded=" & $sDownloadedExeVersion & ", Local=" & $sCurrentVersion)
-        FileDelete($sRemoteVersionTmp)
-        FileDelete($sRemoteExeTmp)
-        Return
-EndIf
-;~ #ce
-
-    FileDelete($sLocalTmp)
-    If Not FileMove($sRemoteExeTmp, $sLocalTmp, 9) Then
-;~         _LogConsoleReplacement("Update aborted: could not stage downloaded file at " & $sLocalTmp)
-        FileDelete($sRemoteVersionTmp)
-        FileDelete($sRemoteExeTmp)
-        Return
-    EndIf
-
-;~     _LogConsoleReplacement("Update staged at: " & $sLocalTmp)
-    FileInstall("Updater.exe", $sUpdaterFile, 1)
-    Sleep(500)
-    Run($sUpdaterFile & " '" & @ScriptDir & "'")
-    Sleep(100)
-    Exit
-EndFunc
-
-Func _GetGitHubVersionFromTextFile($sUrl, $sDestination)
-    FileDelete($sDestination)
-    If Not _DownloadFile($sUrl, $sDestination) Then Return ""
-
-    Local $sContent = FileRead($sDestination)
-    If @error Then Return ""
-
-    $sContent = StringStripWS($sContent, 3)
-
-    ; version.txt must contain only the version number, for example: 1.1.5.0
-    Local $aMatch = StringRegExp($sContent, "^([0-9]+(?:\.[0-9]+){1,3})$", 1)
-    If @error Or UBound($aMatch) = 0 Then
-;~         _LogConsoleReplacement("Invalid version.txt content: " & $sContent)
-        Return ""
-    EndIf
-
-    Return $aMatch[0]
-EndFunc
-
-Func _DownloadFile($sUrl, $sDestination)
-    FileDelete($sDestination)
-    Local $hDownload = InetGet($sUrl, $sDestination, $INET_FORCERELOAD, $INET_DOWNLOADWAIT)
-    If @error Or $hDownload = 0 Or Not FileExists($sDestination) Or FileGetSize($sDestination) <= 0 Then
-;~         _LogConsoleReplacement("Download failed: " & $sUrl)
-        Return False
-    EndIf
-    Return True
-EndFunc
-
-Func _JoinUrl($sBase, $sFile)
-    Local $sCleanBase = StringStripWS($sBase, 3)
-    While StringRight($sCleanBase, 1) = "/"
-        $sCleanBase = StringTrimRight($sCleanBase, 1)
-    WEnd
-    Return $sCleanBase & "/" & $sFile
-EndFunc
-
-Func _FileNameWithoutExtension($sFileName)
-    Local $iDot = StringInStr($sFileName, ".", 0, -1)
-    If $iDot <= 1 Then Return $sFileName
-    Return StringLeft($sFileName, $iDot - 1)
-EndFunc
-
-Func _CompareVersions($sLeft, $sRight)
-    Local $aLeft = StringSplit(StringStripWS($sLeft, 3), ".")
-    Local $aRight = StringSplit(StringStripWS($sRight, 3), ".")
-    Local $iMax = $aLeft[0]
-    If $aRight[0] > $iMax Then $iMax = $aRight[0]
-
-    For $i = 1 To $iMax
-        Local $nLeft = 0
-        Local $nRight = 0
-        If $i <= $aLeft[0] Then $nLeft = Number($aLeft[$i])
-        If $i <= $aRight[0] Then $nRight = Number($aRight[$i])
-
-        If $nLeft > $nRight Then Return 1
-        If $nLeft < $nRight Then Return -1
-    Next
-
-    Return 0
-EndFunc
-
-
-
-
-
-
-
-
-
-
-
-
-FileInstall("splash.jpg", $sSplashPath, 1)
-_splash("on")
-#cs
-Global $About = "1.0.1.3 - Custom colors and bug fixes" & @CRLF _
-		 & "1.0.1.9 - Report Functionality" & @CRLF _
-		 & "1.0.2.2 - Tag Multiline" & @CRLF _
-		 & "1.0.3.0 - New Contextual Menu, Splash Screen and about" & @CRLF _
-		 & "1.0.4.0 - Report in PDF" & @CRLF _
-		 & "1.0.4.1 - Bug fix: 'Ratio to date' metric now calculates correctly." & @CRLF _
-		 & "1.0.4.2 - Bug fix: Import full database when in a different year." & @CRLF _
-		 & "1.0.5.0 - Layout update." & @CRLF _
-		 & "1.0.6.0 - New KPI screen and graphic." & @CRLF _
-		 & "1.0.6.9 - Screen adjustments." & @CRLF _
-		 & "2.0.0.1 - New layout and adjustments." & @CRLF _
-		 & "2.0.0.2 - Report matching color settings and minor bug fixes." & @CRLF _
-		 & "2.0.0.5 - UI adjustments and bux fixes."
-		 #ce
+EndFunc   ;==>_PosScreen
 
 Global $XCount = 0
 
@@ -1413,13 +1217,13 @@ While 1
 
 		EndIf
 
-		Next
+	Next
 
-		; Day controls and context-menu items only exist for 12 months.
-		; Keep this loop separated from the report/delete year loop above,
-		; otherwise $Inputs[$i][$j] will be accessed with $j > 12.
-		For $j = 1 To 12
-			For $i = 1 To 31
+	; Day controls and context-menu items only exist for 12 months.
+	; Keep this loop separated from the report/delete year loop above,
+	; otherwise $Inputs[$i][$j] will be accessed with $j > 12.
+	For $j = 1 To 12
+		For $i = 1 To 31
 			If $Inputs[$i][$j] <> 0 And $nMsg = $Inputs[$i][$j] Then ;_CalendarRead
 				If $i < 10 Then
 					$n = "0" & $i
@@ -1885,7 +1689,7 @@ While 1
 		Case $BkpMenu_reset_all
 			_ResetDatabase()
 			Run(@ScriptFullPath)
-					Exit
+			Exit
 ;~ 			$SelDate = GUICtrlRead($Calendar)
 ;~ 			$SelDate_slipt = StringSplit($SelDate, "/")
 ;~ 			_CriaINI(@YEAR)
@@ -1963,7 +1767,7 @@ Func _About()
 	$Text_About = GUICtrlCreateEdit($About_Text, 5, 293, 640, 90, BitOR($ES_MULTILINE, $ES_READONLY), -1)
 	GUICtrlSetFont($Text_About, 12)
 	GUICtrlSetColor($Text_About, 0x2211FF)
-	$Edit_About = GUICtrlCreateEdit($About, 5, 396, 640, 180, BitOR($ES_MULTILINE, $ES_READONLY, $ES_AUTOVSCROLL,$WS_VSCROLL), -1)
+	$Edit_About = GUICtrlCreateEdit($About, 5, 396, 640, 180, BitOR($ES_MULTILINE, $ES_READONLY, $ES_AUTOVSCROLL, $WS_VSCROLL), -1)
 
 	GUISetState(@SW_SHOW)
 
@@ -3642,7 +3446,7 @@ Func _CreateBackup($DBBKP = "")
 	Local $sRegPath = $DB & "\"
 
 	If $DBBKP = "" Then
-		DirCreate (@ScriptDir & "\Backup")
+		DirCreate(@ScriptDir & "\Backup")
 		Local $sFilePath = FileSaveDialog("Save backup file", @ScriptDir & "\Backup", "All (*.*)", 18, "Backup_" & @YEAR & "_" & @MON & "_" & @MDAY & ".bkp", $Form_WorkDays)
 		If @error Then
 			Return
@@ -3991,11 +3795,11 @@ EndFunc   ;==>_DrawTodayCellBorder
 ;   8 columns x 34 px = 272 px  (≈ 273)
 ; ════════════════════════════════════════════════════════════════════════════
 Func _CustomCal_Create()
-	Local Const $X   = 8    ; left edge (same as hidden MonthCal)
-	Local Const $CW  = 34   ; column width  (8 cols x 34 = 272)
-	Local Const $TH  = 20   ; title row height
+	Local Const $X = 8      ; left edge (same as hidden MonthCal)
+	Local Const $CW = 34    ; column width  (8 cols x 34 = 272)
+	Local Const $TH = 20    ; title row height
 	Local Const $DNH = 16   ; day-names row height  (reduced: 18→16 to fit Today btn)
-	Local Const $RH  = 24   ; week-row height        (reduced: 27→24 to fit Today btn)
+	Local Const $RH = 24    ; week-row height        (reduced: 27→24 to fit Today btn)
 	; Layout summary:
 	;   Title     y=8..28   (h=20)
 	;   Day names y=28..44  (h=16)
@@ -4099,9 +3903,9 @@ EndFunc   ;==>_CustomCal_Create
 Func _CustomCal_Update()
 	If $g_ccPrev = 0 Then Return   ; not yet created
 
-	Local $iDYear  = $g_ccYear
+	Local $iDYear = $g_ccYear
 	Local $iDMonth = $g_ccMonth
-	Local $iDays   = _DaysInMonth2($iDYear, $iDMonth)
+	Local $iDays = _DaysInMonth2($iDYear, $iDMonth)
 
 	; -- title --------------------------------------------------------
 	Local $aMon[12] = ["January", "February", "March", "April", "May", "June", _
@@ -4124,7 +3928,7 @@ Func _CustomCal_Update()
 
 	; -- selected date ------------------------------------------------
 	Local $iSelY = 0, $iSelM = 0, $iSelD = 0
-	Local $aSel  = StringSplit(GUICtrlRead($Input_SelDate), "/")
+	Local $aSel = StringSplit(GUICtrlRead($Input_SelDate), "/")
 	If Not @error And $aSel[0] = 3 Then
 		$iSelY = Number($aSel[1])
 		$iSelM = Number($aSel[2])
@@ -4236,7 +4040,7 @@ Func _CustomCal_Update()
 	For $r = 0 To 5
 		Local $sWeek = ""
 		Local $iFirst = $r * 7 - $iDay1Col + 1
-		Local $iLast  = ($r + 1) * 7 - $iDay1Col
+		Local $iLast = ($r + 1) * 7 - $iDay1Col
 		If Not ($iLast < 1 Or $iFirst > $iDays) Then
 			Local $iWD = ($iFirst < 1) ? 1 : $iFirst
 			$sWeek = _WeekNumberISO($iDYear, $iDMonth, $iWD)
@@ -4333,7 +4137,7 @@ Func _CustomCal_ShowPicker()
 
 	; MonthCal in the popup – no week numbers to keep it compact
 	Local $sPickerDate = $g_ccYear & "/" & StringFormat("%02d", $g_ccMonth) & "/01"
-	Local $hPickerCal  = GUICtrlCreateMonthCal($sPickerDate, 2, 2, 215, 160)
+	Local $hPickerCal = GUICtrlCreateMonthCal($sPickerDate, 2, 2, 215, 160)
 
 	GUISetState(@SW_SHOW, $hPicker)
 	GUISwitch($Form_WorkDays)   ; keep focus on main form
@@ -4353,7 +4157,7 @@ Func _CustomCal_ShowPicker()
 					Local $sPicked = GUICtrlRead($hPickerCal)
 					Local $aPicked = StringSplit($sPicked, "/")
 					If Not @error And $aPicked[0] >= 2 Then
-						$g_ccYear  = Number($aPicked[1])
+						$g_ccYear = Number($aPicked[1])
 						$g_ccMonth = Number($aPicked[2])
 						Local $sNewDate = $g_ccYear & "/" & StringFormat("%02d", $g_ccMonth) & "/01"
 						GUICtrlSetData($Calendar, $sNewDate)
@@ -5397,7 +5201,7 @@ Func _ReadStatistics($Year)
 			$n = $i
 		EndIf
 	Next
-	$C = 0
+	$c = 0
 	$Skip = 0
 	For $j = 1 To 12
 		If $j < 10 Then
@@ -5990,9 +5794,9 @@ Func _ReadStatistics($Year)
 			EndIf
 		Next
 
-		$C += 1
-		If $C > 2 Then
-			$C = 0
+		$c += 1
+		If $c > 2 Then
+			$c = 0
 			$Skip = $Skip + 10
 		EndIf
 
