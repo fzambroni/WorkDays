@@ -3,7 +3,7 @@
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Icon=xcalendar4.ico
 #AutoIt3Wrapper_Res_Description=Work Day management
-#AutoIt3Wrapper_Res_Fileversion=2.1.3.5
+#AutoIt3Wrapper_Res_Fileversion=2.1.3.6
 #AutoIt3Wrapper_Res_ProductVersion=2.1.0.0
 #AutoIt3Wrapper_Res_ProductName=Work Days
 #AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
@@ -178,6 +178,7 @@ Global $Progress_Splash, $Form_Splash, $Label_Percentage, $Splash, $Button_Close
 
 ;Chart Variables
 Global $Total, $Count_O, $Count_R, $Count_H, $Count_P, $Count_T, $Count_S, $Count_B, $Count_W, $Percentage_O, $Degrees_O, $Percentage_R, $Degrees_R, $Percentage_H, $Degrees_H, $Percentage_P, $Degrees_P, $Percentage_T, $Degrees_T, $Percentage_S, $Degrees_S, $Percentage_B, $Degrees_B, $Percentage_W, $Degrees_W, $Chart, $Color_Graphic_Transparent = 1
+Global $g_sMainGridFilter = "" ; Active Year Summary/chart filter applied to the main grid. Empty = show all categories.
 
 
 ;Colors Variables
@@ -1097,7 +1098,10 @@ GUISetState(@SW_SHOW, $Form_WorkDays)
 ConsoleWrite("Window is visible: " & _Monitor_IsVisibleWindow($Form_WorkDays) & @CRLF)
 
 GUIDelete($Form_Splash)
-FileDelete($sSplashPath)
+If Not StringInStr(StringLower(@ScriptName), ".au3") Then
+	FileDelete($sSplashPath)
+EndIf
+
 
 $currentVersion = FileGetVersion(@ScriptDir & "\WorkDays.exe")
 
@@ -1398,7 +1402,7 @@ While 1
 			Exit
 
 		Case $Label_YSumary_Reset
-			_Chart("")
+			_Chart("", True)
 
 		Case $Label_YSumary_OnSite
 			_Chart("O")
@@ -2644,7 +2648,7 @@ Func _CalendarRead($i = 0, $j = 0)
 EndFunc   ;==>_CalendarRead
 
 
-Func _Chart($Type = "")
+Func _Chart($Type = "", $bReset = False)
 
 
 
@@ -2772,13 +2776,14 @@ Func _Chart($Type = "")
 	GUICtrlSetBkColor($Label_Q4_Sumary_Weekend, $Color_bk_Weekend)
 	GUICtrlSetColor($Label_Q4_Sumary_Weekend, $Font_Weekend)
 
-	If $Type = "" Then
+	If $bReset Then
 		$Chart = ""
-	EndIf
-	If StringInStr($Chart, $Type) Then
-		$Chart = StringReplace($Chart, $Type, "")
-	Else
-		$Chart = $Chart & $Type
+	ElseIf $Type <> "" Then
+		If StringInStr($Chart, $Type) Then
+			$Chart = StringReplace($Chart, $Type, "")
+		Else
+			$Chart = $Chart & $Type
+		EndIf
 	EndIf
 ;~ 	ConsoleWrite("$Type: " & $Type & " - $Chart: " & $Chart & @CRLF)
 
@@ -2886,37 +2891,16 @@ Func _Chart($Type = "")
 	GUICtrlDelete($Pie1)
 	$Pie1 = GUICtrlCreateGraphic($Pie1_left, $Pie1_top, $Pie1_width, $Pie1_height) ;Create the main graphic area
 
-	If $Count_O = 0 And $Chart = "O" Then
-		$Chart = ""
-	EndIf
+	If $Count_O = 0 And StringInStr($Chart, "O") Then $Chart = StringReplace($Chart, "O", "")
+	If $Count_R = 0 And StringInStr($Chart, "R") Then $Chart = StringReplace($Chart, "R", "")
+	If $Count_H = 0 And StringInStr($Chart, "H") Then $Chart = StringReplace($Chart, "H", "")
+	If $Count_P = 0 And StringInStr($Chart, "P") Then $Chart = StringReplace($Chart, "P", "")
+	If $Count_T = 0 And StringInStr($Chart, "T") Then $Chart = StringReplace($Chart, "T", "")
+	If $Count_S = 0 And StringInStr($Chart, "S") Then $Chart = StringReplace($Chart, "S", "")
+	If $Count_B = 0 And StringInStr($Chart, "B") Then $Chart = StringReplace($Chart, "B", "")
+	If $Count_W = 0 And StringInStr($Chart, "W") Then $Chart = StringReplace($Chart, "W", "")
 
-	If $Count_R = 0 And $Chart = "R" Then
-		$Chart = ""
-	EndIf
-
-	If $Count_H = 0 And $Chart = "H" Then
-		$Chart = ""
-	EndIf
-
-	If $Count_P = 0 And $Chart = "P" Then
-		$Chart = ""
-	EndIf
-
-	If $Count_T = 0 And $Chart = "T" Then
-		$Chart = ""
-	EndIf
-
-	If $Count_S = 0 And $Chart = "S" Then
-		$Chart = ""
-	EndIf
-
-	If $Count_B = 0 And $Chart = "B" Then
-		$Chart = ""
-	EndIf
-
-	If $Count_W = 0 And $Chart = "W" Then
-		$Chart = ""
-	EndIf
+	_ApplyMainGridCategoryFilter($Chart)
 
 	If $Count_O > 0 Then
 
@@ -3597,6 +3581,104 @@ Func _SetInvalidMainGridCell($iMonth, $iDay)
 
 	Return 1
 EndFunc   ;==>_SetInvalidMainGridCell
+
+
+Func _NormalizeMainGridFilterStatus($sStatus)
+	$sStatus = StringLeft($sStatus, 1)
+	If $sStatus = "" Or $sStatus = "B" Or $sStatus = " " Then Return "B"
+	Return $sStatus
+EndFunc   ;==>_NormalizeMainGridFilterStatus
+
+
+Func _MainGridStatusName($sStatus)
+	Switch _NormalizeMainGridFilterStatus($sStatus)
+		Case "W"
+			Return "WEEKEND"
+		Case "O"
+			Return "ON-SITE"
+		Case "R"
+			Return "REMOTE"
+		Case "T"
+			Return "TRAVEL"
+		Case "P"
+			Return "PTO"
+		Case "H"
+			Return "HOLIDAY"
+		Case "S"
+			Return "SICK DAY"
+		Case Else
+			Return "BLANK"
+	EndSwitch
+EndFunc   ;==>_MainGridStatusName
+
+
+Func _ApplyMainGridCategoryFilter($sFilter = "")
+	$g_sMainGridFilter = $sFilter
+	If $g_hLV = 0 Then Return 0
+
+	Local $iTargetYear = $iYear
+
+	For $iMonth = 1 To 12
+		Local $sMonth = StringFormat("%02d", $iMonth)
+		Local $iDaysInMonth = _DaysInMonth2($iTargetYear, $iMonth)
+
+		For $iDay = 1 To 31
+			If $iDay > $iDaysInMonth Then
+				_SetInvalidMainGridCell($iMonth, $iDay)
+				ContinueLoop
+			EndIf
+
+			Local $sDay = StringFormat("%02d", $iDay)
+			Local $sRawValue = RegRead($DB & "\" & $iTargetYear & "\" & $sMonth, $sDay)
+			If @error Then $sRawValue = ""
+
+			Local $sStatus = StringLeft($sRawValue, 1)
+			Local $sFilterStatus = _NormalizeMainGridFilterStatus($sStatus)
+
+			If $sFilter <> "" And Not StringInStr($sFilter, $sFilterStatus) Then
+				_GUICtrlListView_SetItemText($g_hLV, $iItem[$iMonth][0], "", $iDay)
+				$g_aCellColor[$iMonth - 1][$iDay] = 0xFFFFFF
+				$g_aCellColorBK[$iMonth - 1][$iDay] = 0x000000
+				$g_aCellStatus[$iMonth - 1][$iDay] = ""
+				$g_aCellTip[$iMonth - 1][$iDay] = ""
+				ContinueLoop
+			EndIf
+
+			Local $sDisplay = _GetDateDisplayText($iTargetYear, $iMonth, $iDay, $sStatus)
+			If $sFilter <> "" And $sFilterStatus = "B" Then $sDisplay = "B"
+			_GUICtrlListView_SetItemText($g_hLV, $iItem[$iMonth][0], $sDisplay, $iDay)
+
+			Local $sComment = ""
+			If StringLen($sRawValue) > 1 Then $sComment = StringTrimLeft($sRawValue, 1)
+
+			Local $iWeekDayNum = _DateToDayOfWeek($iTargetYear, $iMonth, $iDay)
+			Local $sWeekDayName = _DateDayOfWeek($iWeekDayNum, 1)
+			Local $iWeekDayNumber = _WeekNumberISO($iTargetYear, $iMonth, $iDay)
+			Local $sStatusName = _MainGridStatusName($sStatus)
+			Local $sTip = ""
+
+			If $sComment <> "" Then
+				$sTip = $iTargetYear & "/" & $sMonth & "/" & $sDay & @CRLF & _
+						$sWeekDayName & " (Week: " & $iWeekDayNumber & ") - " & $sStatusName & @CRLF & _
+						"----" & @CRLF & "- " & StringReplace($sComment, @CRLF, @CRLF & "- ")
+			Else
+				$sTip = $iTargetYear & "/" & $sMonth & "/" & $sDay & @CRLF & _
+						$sWeekDayName & " (Week: " & $iWeekDayNumber & ") - " & $sStatusName
+			EndIf
+
+			$g_aCellColor[$iMonth - 1][$iDay] = _ColorFromDate($sStatus)
+			$g_aCellColorBK[$iMonth - 1][$iDay] = _GetDateFontColor($iTargetYear, $iMonth, $iDay, $sStatus)
+			$g_aCellStatus[$iMonth - 1][$iDay] = $sComment
+			$g_aCellTip[$iMonth - 1][$iDay] = $sTip
+		Next
+	Next
+
+	_HideListViewCellTip()
+	If $g_hLV <> 0 Then _CleanRepaint($g_hLV)
+	_CustomCal_Update()
+
+	Return 1
+EndFunc   ;==>_ApplyMainGridCategoryFilter
 
 
 Func _DaysInMonth2($iY, $iM)
@@ -4898,7 +4980,13 @@ Func _RefreshMainGridCellStyles($iTargetYear = -1)
 	Next
 
 	; Force the ListView/custom draw and the small calendar to repaint using the
-	; refreshed arrays.
+	; refreshed arrays. If a Year Summary filter is active, keep that filtered
+	; view instead of returning the grid to the full-year view.
+	If $g_sMainGridFilter <> "" Then
+		_ApplyMainGridCategoryFilter($g_sMainGridFilter)
+		Return
+	EndIf
+
 	If $g_hLV <> 0 Then _CleanRepaint($g_hLV)
 	_CustomCal_Update()
 EndFunc   ;==>_RefreshMainGridCellStyles
