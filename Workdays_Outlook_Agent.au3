@@ -3,7 +3,7 @@
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Icon=CalendarSync.ico
 #AutoIt3Wrapper_Res_Description=Work Day Sync Agent
-#AutoIt3Wrapper_Res_Fileversion=1.0.0.3
+#AutoIt3Wrapper_Res_Fileversion=1.0.0.4
 #AutoIt3Wrapper_Res_ProductName=Work Day Sync Agent
 #AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
 #AutoIt3Wrapper_Res_LegalCopyright=Copyright © 2026 Fabricio Zambroni
@@ -469,9 +469,7 @@ Func _IsOutlookCleanupCandidate($oItem)
 	If _Cfg("Safety", "CleanupPrefixOnlyItems", "0") <> "1" Then Return False
 
 	Local $sSubject = String($oItem.Subject)
-	Local $sPrefix = _SubjectPrefix()
-	If StringLeft(StringLower(StringStripWS($sSubject, 3)), StringLen(StringLower($sPrefix))) = StringLower($sPrefix) Then Return True
-	If StringRegExp($sSubject, "(?i)^\s*\[\s*WD\s*[:\-]\s*[A-Z]") Then Return True
+	If _IsWorkDaysSubjectCandidate($sSubject) Then Return True
 	Return False
 EndFunc
 
@@ -546,9 +544,7 @@ Func _IsWorkDaysCandidate($oItem)
 	If _IsKnownStatus(_ParseStatusFromCategories($oItem.Categories)) Then Return True
 
 	Local $sSubject = String($oItem.Subject)
-	Local $sPrefix = _SubjectPrefix()
-	If StringLeft(StringLower(StringStripWS($sSubject, 3)), StringLen(StringLower($sPrefix))) = StringLower($sPrefix) Then Return True
-	If StringRegExp($sSubject, "(?i)^\s*\[\s*WD\s*[:\-]\s*[A-Z]") Then Return True
+	If _IsWorkDaysSubjectCandidate($sSubject) Then Return True
 	Return False
 EndFunc
 
@@ -712,6 +708,55 @@ Func _CategoryPrefix()
 	Return $sPrefix
 EndFunc
 
+Func _IsWorkDaysSubjectCandidate($sSubject)
+	Local $s = StringStripWS(String($sSubject), 3)
+	If $s = "" Then Return False
+
+	Local $sLower = StringLower($s)
+	Local $sPrefix = StringLower(_SubjectPrefix())
+	If StringLeft($sLower, StringLen($sPrefix)) = $sPrefix Then Return True
+
+	; Standard compact format, for example: [WD:R] or [WD - Remote].
+	If StringRegExp($s, "(?i)^\s*\[\s*WD\s*[:\-]\s*[A-Z]") Then Return True
+
+	; User-friendly manual format, for example: W - Remote, WD - Remote, WorkDays - Remote.
+	If _IsKnownStatus(_ParseStatusFromShortcutSubject($s)) Then Return True
+
+	Return False
+EndFunc
+
+Func _ParseStatusFromShortcutSubject($sSubject)
+	Local $sRaw = StringStripWS(String($sSubject), 3)
+	If $sRaw = "" Then Return ""
+
+	; Accept WorkDays shortcut prefixes without forcing the long default subject prefix.
+	; Examples: W - Remote, W: Remote, WD - R, WD: On Site, WorkDay - PTO.
+	Local $aMatch = StringRegExp($sRaw, "(?i)^\s*(?:W|WD|WORKDAY|WORKDAYS)\s*[:\-]\s*(.+?)\s*$", 1)
+	If IsArray($aMatch) And UBound($aMatch) >= 1 Then
+		Local $sAfter = _StripMarkerSuffix($aMatch[0])
+		Local $sStatus = _ParseStatusLabel($sAfter)
+		If _IsKnownStatus($sStatus) Then Return $sStatus
+	EndIf
+
+	Return ""
+EndFunc
+
+Func _StripMarkerSuffix($sText)
+	Local $s = StringStripWS(String($sText), 3)
+	If $s = "" Then Return ""
+
+	Local $sSuffix = StringStripWS(_Cfg("Markers", "MarkerSubjectSuffix", " [Marker]"), 3)
+	If $sSuffix <> "" Then
+		If StringRight(StringLower($s), StringLen(StringLower($sSuffix))) = StringLower($sSuffix) Then
+			$s = StringTrimRight($s, StringLen($sSuffix))
+			$s = StringStripWS($s, 3)
+		EndIf
+	EndIf
+
+	$s = StringRegExpReplace($s, "(?i)\s*\[\s*marker\s*\]\s*$", "")
+	Return StringStripWS($s, 3)
+EndFunc
+
 Func _BuildSubject($sStatus, $sMarker = "")
 	Local $sSubject = _SubjectPrefix() & _StatusLabel($sStatus)
 	If _HasMarker($sMarker) And _Cfg("Markers", "ShowMarkerTagInSubject", "1") = "1" Then
@@ -839,6 +884,9 @@ Func _ParseStatusFromSubject($sSubject)
 	If StringRegExp($s, "(?i)\[\s*WD\s*[:\-]\s*S\s*\]") Then Return "S"
 	If StringRegExp($s, "(?i)\[\s*WD\s*[:\-]\s*B\s*\]") Then Return "B"
 	If StringRegExp($s, "(?i)\[\s*WD\s*[:\-]\s*W\s*\]") Then Return "W"
+
+	Local $sShortcut = _ParseStatusFromShortcutSubject($s)
+	If _IsKnownStatus($sShortcut) Then Return $sShortcut
 
 	If StringInStr($s, "on site") Or StringInStr($s, "onsite") Then Return "O"
 	If StringInStr($s, "remote") Then Return "R"

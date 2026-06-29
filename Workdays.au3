@@ -3,7 +3,7 @@
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Icon=xcalendar4.ico
 #AutoIt3Wrapper_Res_Description=Work Day management
-#AutoIt3Wrapper_Res_Fileversion=2.1.4.1
+#AutoIt3Wrapper_Res_Fileversion=2.1.4.2
 #AutoIt3Wrapper_Res_ProductVersion=2.1.0.0
 #AutoIt3Wrapper_Res_ProductName=Work Days
 #AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
@@ -6808,7 +6808,7 @@ Func _OutlookAgent_Install()
 	; The agent executable is embedded when WorkDays is compiled. Keep this source path aligned with the build folder.
 	FileInstall("Workdays_Outlook_Agent.exe", $g_sOutlookAgentExe, 1)
 	If @error Or Not FileExists($g_sOutlookAgentExe) Then
-		MsgBox($MB_ICONERROR + $MB_TOPMOST, "WorkDays Outlook Agent", "The embedded Outlook Agent could not be installed." & @CRLF & @CRLF & "When compiling WorkDays, confirm this file exists:" & @CRLF & "E:\GitHub\WorkDays\Workdays_Outlook_Agent.exe", 0, $Form_WorkDays)
+		MsgBox($MB_ICONERROR + $MB_TOPMOST, "WorkDays Outlook Agent", "The embedded Outlook Agent could not be installed." & @CRLF & @CRLF & "When compiling WorkDays, confirm this file exists:" & @CRLF & @ScriptDir & "\Workdays_Outlook_Agent.exe", 0, $Form_WorkDays)
 		Return 0
 	EndIf
 
@@ -7009,7 +7009,7 @@ Func _OutlookAgent_SettingsWindow()
 	Local $inpCategoryPrefix = GUICtrlCreateInput(_OA_Read("Outlook", "CategoryPrefix", "WorkDays -"), 430, 314, 180, 22)
 	Local $chkReminderSet = GUICtrlCreateCheckbox("Always use Outlook reminder", 34, 350, 210, 20)
 	Local $chkManagedOnly = GUICtrlCreateCheckbox("Only read items created by the agent", 280, 350, 270, 20)
-	GUICtrlCreateLabel("Appointments are created as all-day Free time events.", 34, 374, 420, 18)
+	GUICtrlCreateLabel("Manual Outlook subjects: W - Remote, WD - On Site, [WD:R]. Leave managed-only unchecked.", 34, 374, 570, 18)
 	GUICtrlSetColor(-1, 0x577590)
 
 	GUICtrlCreateGroup("Marker alerts", 18, 412, 610, 130)
