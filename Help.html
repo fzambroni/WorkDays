@@ -357,6 +357,7 @@
         <a href="#import">Import</a>
         <a href="#backup">Backup and restore</a>
         <a href="#options">Options</a>
+        <a href="#outlook-agent">Outlook Agent</a>
         <a href="#troubleshooting">Troubleshooting</a>
       </nav>
     </aside>
@@ -365,7 +366,7 @@
       <section id="overview">
         <h2>Overview</h2>
         <p><strong>Work Days</strong> is a calendar-based desktop tool used to classify each day of the year as on-site, remote, PTO, travel, sick, holiday, weekend, or blank.</p>
-        <p>The application gives you a full-year view, a monthly calendar, quarterly summaries, a yearly chart, notes for specific dates, visual highlights, import tools, backup/restore, and reports.</p>
+        <p>The application gives you a full-year view, a monthly calendar, quarterly summaries, a yearly chart, notes for specific dates, visual highlights, import tools, backup/restore, reports, and an optional Outlook Agent for calendar synchronization.</p>
         <div class="callout">
           <strong>Most common workflow:</strong> select a date, choose the day type, optionally add a marker/note, then use the quarterly and yearly panels to review your totals.
         </div>
@@ -468,7 +469,7 @@
           <span class="pill"><span class="dot"></span>Category totals</span>
         </div>
         <p>When viewing the current year, the application highlights the current quarter and shows progress to date for the current period.</p>
-        <p>Click a category in the yearly summary to focus the chart on that category. Click <strong>Reset</strong> to restore the full chart.</p>
+        <p>Click a category in the yearly summary to focus the chart and yearly grid on that category. Click <strong>Reset</strong> to restore the full view.</p>
       </section>
 
       <section id="reports">
@@ -542,6 +543,115 @@
         <p>Click <strong>Close</strong> in the Options window to save your changes.</p>
       </section>
 
+
+      <section id="outlook-agent">
+        <h2>Outlook Agent</h2>
+        <p>The <strong>Outlook Agent</strong> is an optional background companion for Work Days. It keeps your Work Days classifications visible in Microsoft Outlook Calendar without forcing you to open the main Work Days screen every time you need to review or adjust a day.</p>
+        <div class="callout">
+          <strong>Key idea:</strong> Work Days remains the main application. Outlook becomes a convenient calendar view and editing surface for your day classifications and markers.
+        </div>
+
+        <h3>What appears in Outlook</h3>
+        <p>The agent creates one all-day Outlook appointment for each synced Work Days entry. These appointments are created as <strong>Free time</strong>, so they do not block your availability.</p>
+        <table>
+          <thead>
+            <tr><th>Outlook field</th><th>What you will see</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Subject</td><td>The day classification, such as <code>WorkDays - On Site</code>, <code>WorkDays - Remote</code>, or <code>WorkDays - PTO</code>. Days with a marker can also show a marker indicator in the subject.</td></tr>
+            <tr><td>Body</td><td>The marker/note saved for that day.</td></tr>
+            <tr><td>Category</td><td>The matching Work Days category. Marker days can also receive a separate marker category.</td></tr>
+            <tr><td>Show as</td><td>Free time.</td></tr>
+            <tr><td>Duration</td><td>All-day appointment.</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Install and control the agent</h3>
+        <p>Open <strong>Settings &gt; Outlook Agent</strong> in Work Days. From there, you can install, update, start, stop, uninstall, and review the agent log.</p>
+        <div class="grid">
+          <div class="card">
+            <h3>Install / Update</h3>
+            <p>Installs the embedded Outlook Agent for the current Windows user. Use this again after a Work Days update to refresh the agent version.</p>
+          </div>
+          <div class="card">
+            <h3>Start / Stop</h3>
+            <p>Starts or stops background synchronization. Stopping the agent does not delete Work Days data or Outlook items.</p>
+          </div>
+          <div class="card">
+            <h3>Open log</h3>
+            <p>Opens the sync log when you need to check what the agent did during recent sync cycles.</p>
+          </div>
+          <div class="card">
+            <h3>Uninstall</h3>
+            <p>Removes the installed agent executable from the Windows profile. Your Work Days data and saved agent settings remain available.</p>
+          </div>
+          <div class="card">
+            <h3>Save</h3>
+            <p>Saves the Outlook Agent settings from Work Days. If the agent is running, it will pick up the new settings on the next sync cycle.</p>
+          </div>
+          <div class="card">
+            <h3>Start with Windows</h3>
+            <p>Lets the agent start automatically when you sign in to Windows, so synchronization continues without manually opening it.</p>
+          </div>
+        </div>
+
+        <h3>Sync behavior</h3>
+        <p>The sync behavior section controls how often the agent runs and how much calendar history/future it should manage.</p>
+        <table>
+          <thead>
+            <tr><th>Setting</th><th>How to use it</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Sync every</td><td>Controls the background sync interval in minutes.</td></tr>
+            <tr><td>Range</td><td>Controls how many past and future days are included in synchronization.</td></tr>
+            <tr><td>Outlook wins when both sides changed before sync</td><td>Useful when you want Outlook edits to be treated as intentional updates.</td></tr>
+            <tr><td>Deleting the Outlook item clears WorkDays</td><td>Use carefully. When enabled, deleting a synced Outlook item can clear the Work Days entry for that date.</td></tr>
+            <tr><td>Sync Blank days / Sync Weekend days</td><td>Publishes blank or weekend entries to Outlook. Most users can leave these off to keep Outlook cleaner.</td></tr>
+            <tr><td>Sync Blank/Weekend only when they have marker</td><td>Good middle ground: blank/weekend dates stay hidden unless they contain a useful note.</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Create or update a day from Outlook</h3>
+        <p>You can create or change a Work Days entry directly from Outlook by creating an all-day appointment on the target date with one of the supported subjects.</p>
+        <div class="pill-row">
+          <span class="pill"><span class="dot"></span>WorkDays - On Site</span>
+          <span class="pill"><span class="dot"></span>WorkDays - Remote</span>
+          <span class="pill"><span class="dot"></span>WorkDays - Travel</span>
+          <span class="pill"><span class="dot"></span>WorkDays - PTO</span>
+          <span class="pill"><span class="dot"></span>WorkDays - Holiday</span>
+          <span class="pill"><span class="dot"></span>WorkDays - Sick</span>
+        </div>
+        <p>Put the marker/note in the Outlook appointment body. On the next sync, the agent updates Work Days.</p>
+        <div class="warning callout">
+          <strong>Tip:</strong> keep the subject format consistent with the prefix configured in Work Days. If the subject does not match a supported Work Days category, the agent may ignore the item.
+        </div>
+
+        <h3>Marker alerts in Outlook</h3>
+        <p>Marker alerts help you notice days that have extra notes to read. In <strong>Settings &gt; Outlook Agent</strong>, you can choose whether Work Days should:</p>
+        <ul>
+          <li>add a marker indicator to the Outlook subject, such as <code>[Marker]</code>;</li>
+          <li>apply a separate Outlook category for marker days;</li>
+          <li>show an Outlook reminder when a marker exists.</li>
+        </ul>
+        <p>The reminder is calculated from the start of the all-day appointment. For all-day calendar items, Outlook treats the start as midnight, so a reminder set many minutes before the event may appear on the previous day.</p>
+
+        <h3>Clean Outlook WorkDays items</h3>
+        <p>Use <strong>Clean Outlook WorkDays items...</strong> when you want to remove Work Days items from Outlook and return to a clean calendar view.</p>
+        <div class="danger callout">
+          <strong>This does not erase the Work Days database.</strong> It removes Work Days calendar items from Outlook only.
+        </div>
+        <p>For safety, cleanup requires confirmation and can leave the agent stopped afterward, preventing the same Outlook items from being recreated immediately.</p>
+
+        <h3>Good defaults for most users</h3>
+        <ul>
+          <li>Sync On Site, Remote, Travel, PTO, Holiday, and Sick.</li>
+          <li>Leave Blank and Weekend hidden unless they have a marker.</li>
+          <li>Keep Outlook items as Free time.</li>
+          <li>Use marker subject/category/reminder alerts if you rely on notes.</li>
+          <li>Keep cleanup enabled, but use it only when you intentionally want to reset the Outlook view.</li>
+        </ul>
+      </section>
+
       <section id="troubleshooting">
         <h2>Troubleshooting</h2>
         <table>
@@ -558,6 +668,11 @@
             <tr><td>Report does not open.</td><td>Check whether the application folder is writable and whether your default browser/report viewer is available.</td></tr>
             <tr><td>The window opens off-screen.</td><td>Go to <strong>Settings &gt; Options</strong>, select <strong>Reset Screen Position</strong>, then close the Options window.</td></tr>
             <tr><td>The yearly view looks too tight or too large.</td><td>Use <strong>Settings &gt; Options</strong> and adjust <strong>Font size</strong> or <strong>Cell size</strong>.</td></tr>
+            <tr><td>Outlook Agent does not create appointments.</td><td>Confirm Microsoft Outlook Desktop is installed and opens normally, then go to <strong>Settings &gt; Outlook Agent</strong>, click <strong>Install / Update</strong>, then <strong>Start</strong>. Use <strong>Open log</strong> if it still does not sync.</td></tr>
+            <tr><td>Outlook appointments appear as Busy.</td><td>Run the agent again or click <strong>Start</strong>. Managed Work Days appointments should be reset to <strong>Free time</strong>.</td></tr>
+            <tr><td>Outlook changes are not coming back to Work Days.</td><td>Use a supported all-day subject such as <code>WorkDays - Remote</code>. Put notes in the body, then wait for the next sync or restart the agent.</td></tr>
+            <tr><td>Marker reminders are too early or too late.</td><td>Open <strong>Settings &gt; Outlook Agent</strong> and adjust <strong>Reminder minutes before all-day event</strong>. Remember that all-day Outlook items start at midnight.</td></tr>
+            <tr><td>Cleaned Outlook items came back.</td><td>Make sure <strong>Keep agent stopped after cleanup</strong> is enabled. If the agent is started again, active Work Days entries may be republished to Outlook.</td></tr>
           </tbody>
         </table>
         <div class="callout">
@@ -565,7 +680,7 @@
         </div>
       </section>
 
-      <p class="footer">Work Days user help — focused on daily use, not implementation details.</p>
+      <p class="footer">Work Days user help — including Outlook Agent daily use and troubleshooting.</p>
     </main>
   </div>
 </body>
