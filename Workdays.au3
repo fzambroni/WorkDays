@@ -3,7 +3,7 @@
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Icon=xcalendar4.ico
 #AutoIt3Wrapper_Res_Description=Work Day management
-#AutoIt3Wrapper_Res_Fileversion=2.1.4.3
+#AutoIt3Wrapper_Res_Fileversion=2.1.4.4
 #AutoIt3Wrapper_Res_ProductVersion=2.1.0.0
 #AutoIt3Wrapper_Res_ProductName=Work Days
 #AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
@@ -6746,6 +6746,7 @@ Func _OutlookAgent_EnsureDefaults()
 	_OA_EnsureDefault("Outlook", "CategoryPrefix", "WorkDays -")
 	_OA_EnsureDefault("Outlook", "ReminderSet", "0")
 	_OA_EnsureDefault("Outlook", "ManagedOnly", "0")
+	_OA_EnsureDefault("Outlook", "DateOrder", "Auto")
 
 	_OA_EnsureDefault("Markers", "ShowMarkerTagInSubject", "1")
 	_OA_EnsureDefault("Markers", "MarkerSubjectSuffix", " [Marker]")
@@ -6781,7 +6782,7 @@ Func _OutlookAgent_StatusText()
 	Local $sRunning = "Stopped"
 	If _OutlookAgent_IsRunning() Then $sRunning = "Running"
 
-	Return "Status: " & $sInstalled & " / " & $sRunning & @CRLF & "Location: " & $g_sOutlookAgentExe & @CRLF & "Log: " & $g_sOutlookAgentLog
+	Return "Status: " & $sInstalled & " / " & $sRunning & @CRLF & "Location: " & $g_sOutlookAgentExe
 EndFunc   ;==>_OutlookAgent_StatusText
 
 Func _OutlookAgent_RunCommand()
@@ -6977,7 +6978,7 @@ EndFunc   ;==>_OutlookAgent_SaveSettings
 Func _OutlookAgent_SettingsWindow()
 	_OutlookAgent_EnsureDefaults()
 
-	Local $hAgent = GUICreate("WorkDays Outlook Agent", 650, 815, -1, -1, $DS_MODALFRAME, BitOR($WS_EX_TOPMOST, $WS_EX_MDICHILD), $Form_WorkDays)
+	Local $hAgent = GUICreate("WorkDays Outlook Agent", 650, 835, -1, -1, $DS_MODALFRAME, BitOR($WS_EX_TOPMOST, $WS_EX_MDICHILD), $Form_WorkDays)
 	GUISetBkColor(0xF7FBFF, $hAgent)
 	GUISetFont(9, 400, 0, "Segoe UI", $hAgent)
 
@@ -6985,14 +6986,14 @@ Func _OutlookAgent_SettingsWindow()
 	GUICtrlSetFont(-1, 13, 700, 0, "Segoe UI")
 	GUICtrlSetColor(-1, 0x0B4F8A)
 
-	Local $lblStatus = GUICtrlCreateLabel(_OutlookAgent_StatusText(), 18, 42, 610, 50)
+	Local $lblStatus = GUICtrlCreateLabel(_OutlookAgent_StatusText(), 18, 42, 610, 38)
 	GUICtrlSetColor($lblStatus, 0x1D3557)
 
-	Local $btnInstall = GUICtrlCreateButton("Install / Update", 18, 100, 120, 28)
-	Local $btnStart = GUICtrlCreateButton("Start", 148, 100, 80, 28)
-	Local $btnStop = GUICtrlCreateButton("Stop", 238, 100, 80, 28)
-	Local $btnOpenLog = GUICtrlCreateButton("Open log", 328, 100, 90, 28)
-	Local $btnUninstall = GUICtrlCreateButton("Uninstall", 508, 100, 120, 28)
+	Local $btnInstall = GUICtrlCreateButton("Install / Update", 18, 88, 120, 28)
+	Local $btnStart = GUICtrlCreateButton("Start", 148, 88, 80, 28)
+	Local $btnStop = GUICtrlCreateButton("Stop", 238, 88, 80, 28)
+	Local $btnOpenLog = GUICtrlCreateButton("Open log", 328, 88, 90, 28)
+	Local $btnUninstall = GUICtrlCreateButton("Uninstall", 508, 88, 120, 28)
 
 	GUICtrlCreateGroup("Sync behavior", 18, 128, 610, 150)
 	GUICtrlCreateLabel("Sync every", 34, 154, 70, 20)
@@ -7041,9 +7042,9 @@ Func _OutlookAgent_SettingsWindow()
 	Local $inpCleanupFuture = GUICtrlCreateInput(_OA_Read("Safety", "CleanupFutureYears", "10"), 530, 610, 42, 22, $ES_NUMBER)
 	GUICtrlCreateLabel("future", 578, 614, 48, 18)
 
-	GUICtrlCreateGroup("Logging", 18, 654, 610, 54)
-	Local $chkVerboseMode = GUICtrlCreateCheckbox("Verbose log", 34, 678, 120, 20)
-	GUICtrlCreateLabel("Writes detailed sync diagnostics. The log is always saved next to the Agent executable.", 160, 682, 450, 18)
+	GUICtrlCreateGroup("Diagnostics", 18, 654, 610, 72)
+	Local $chkVerboseMode = GUICtrlCreateCheckbox("Verbose diagnostic log", 34, 680, 180, 20)
+	GUICtrlCreateLabel("Logs every Outlook item inspected, candidate decision, date parsing, registry write, and state update.", 220, 682, 390, 34)
 	GUICtrlSetColor(-1, 0x577590)
 
 	_OA_SetCheck($chkConflictOutlook, _OA_Read("Sync", "OutlookWinsOnConflict", "1"))
@@ -7062,9 +7063,9 @@ Func _OutlookAgent_SettingsWindow()
 	_OA_SetCheck($chkPauseAfterCleanup, _OA_Read("Safety", "PauseAfterOutlookCleanup", "1"))
 	_OA_SetCheck($chkVerboseMode, _OA_Read("Logging", "VerboseMode", "0"))
 
-	Local $btnClean = GUICtrlCreateButton("Clean Outlook WorkDays items...", 18, 724, 210, 30)
-	Local $btnSave = GUICtrlCreateButton("Save", 408, 760, 100, 30)
-	Local $btnClose = GUICtrlCreateButton("Close", 528, 760, 100, 30)
+	Local $btnClean = GUICtrlCreateButton("Clean Outlook WorkDays items...", 18, 742, 210, 30)
+	Local $btnSave = GUICtrlCreateButton("Save", 408, 786, 100, 30)
+	Local $btnClose = GUICtrlCreateButton("Close", 528, 786, 100, 30)
 
 	GUISetState(@SW_SHOW, $hAgent)
 
