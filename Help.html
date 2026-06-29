@@ -608,11 +608,13 @@
             <tr><td>Deleting the Outlook item clears WorkDays</td><td>Use carefully. When enabled, deleting a synced Outlook item can clear the Work Days entry for that date.</td></tr>
             <tr><td>Sync Blank days / Sync Weekend days</td><td>Publishes blank or weekend entries to Outlook. Most users can leave these off to keep Outlook cleaner.</td></tr>
             <tr><td>Sync Blank/Weekend only when they have marker</td><td>Good middle ground: blank/weekend dates stay hidden unless they contain a useful note.</td></tr>
+            <tr><td>Only read items created by the agent</td><td>Leave this off if you want to create Work Days items manually in Outlook. When enabled, the agent ignores appointments that were not originally created by Work Days.</td></tr>
+            <tr><td>Verbose log</td><td>Turns on detailed troubleshooting messages. Use this when Outlook items are not syncing back to Work Days and you need to see exactly what the agent accepted, ignored, or wrote.</td></tr>
           </tbody>
         </table>
 
         <h3>Create or update a day from Outlook</h3>
-        <p>You can create or change a Work Days entry directly from Outlook by creating an all-day appointment on the target date with one of the supported subjects.</p>
+        <p>You can create or change a Work Days entry directly from Outlook by creating an <strong>all-day appointment</strong> on the target date with one of the supported subjects. The appointment should be shown as <strong>Free time</strong>.</p>
         <div class="pill-row">
           <span class="pill"><span class="dot"></span>WorkDays - On Site</span>
           <span class="pill"><span class="dot"></span>WorkDays - Remote</span>
@@ -621,9 +623,26 @@
           <span class="pill"><span class="dot"></span>WorkDays - Holiday</span>
           <span class="pill"><span class="dot"></span>WorkDays - Sick</span>
         </div>
+        <p>Short formats are also supported for quick manual entries:</p>
+        <div class="pill-row">
+          <span class="pill"><span class="dot"></span>W - On Site</span>
+          <span class="pill"><span class="dot"></span>W - Remote</span>
+          <span class="pill"><span class="dot"></span>W: Travel</span>
+          <span class="pill"><span class="dot"></span>WD - PTO</span>
+          <span class="pill"><span class="dot"></span>WorkDay - Sick</span>
+          <span class="pill"><span class="dot"></span>[WD:O]</span>
+          <span class="pill"><span class="dot"></span>[WD:R]</span>
+        </div>
         <p>Put the marker/note in the Outlook appointment body. On the next sync, the agent updates Work Days.</p>
         <div class="warning callout">
-          <strong>Tip:</strong> keep the subject format consistent with the prefix configured in Work Days. If the subject does not match a supported Work Days category, the agent may ignore the item.
+          <strong>Important:</strong> to import appointments created manually in Outlook, leave <strong>Only read items created by the agent</strong> unchecked in <strong>Settings &gt; Outlook Agent</strong>. Also make sure the appointment date is inside the configured sync range.
+        </div>
+
+        <h3>Verbose log</h3>
+        <p>Verbose logging is a troubleshooting option controlled from <strong>Settings &gt; Outlook Agent</strong>. It follows the same idea as <code>[Logging]</code> / <code>VerboseMode=1</code>, but it is controlled by Work Days instead of manually editing a settings file.</p>
+        <p>When enabled, the agent records more detail about each sync cycle, including the Outlook filter used, all-day items found, subjects and categories read, dates mapped, detected Work Days status, marker text handling, and why an item was ignored.</p>
+        <div class="callout">
+          <strong>Log location:</strong> the log file is always stored in the same folder as the installed agent executable, usually as <code>Workdays_Outlook_Agent.log</code>. Use <strong>Open log</strong> from <strong>Settings &gt; Outlook Agent</strong> to review it.
         </div>
 
         <h3>Marker alerts in Outlook</h3>
@@ -670,7 +689,8 @@
             <tr><td>The yearly view looks too tight or too large.</td><td>Use <strong>Settings &gt; Options</strong> and adjust <strong>Font size</strong> or <strong>Cell size</strong>.</td></tr>
             <tr><td>Outlook Agent does not create appointments.</td><td>Confirm Microsoft Outlook Desktop is installed and opens normally, then go to <strong>Settings &gt; Outlook Agent</strong>, click <strong>Install / Update</strong>, then <strong>Start</strong>. Use <strong>Open log</strong> if it still does not sync.</td></tr>
             <tr><td>Outlook appointments appear as Busy.</td><td>Run the agent again or click <strong>Start</strong>. Managed Work Days appointments should be reset to <strong>Free time</strong>.</td></tr>
-            <tr><td>Outlook changes are not coming back to Work Days.</td><td>Use a supported all-day subject such as <code>WorkDays - Remote</code>. Put notes in the body, then wait for the next sync or restart the agent.</td></tr>
+            <tr><td>Outlook changes are not coming back to Work Days.</td><td>Use a supported all-day subject such as <code>WorkDays - Remote</code> or <code>W - On Site</code>. Make sure the appointment is all-day, the date is inside the sync range, and <strong>Only read items created by the agent</strong> is unchecked. Put notes in the body, then wait for the next sync or click Sync now.</td></tr>
+            <tr><td>A manual Outlook appointment is ignored.</td><td>Turn on <strong>Verbose log</strong>, click Sync now, then open <code>Workdays_Outlook_Agent.log</code>. The log shows whether the item was outside the date range, not all-day, filtered out, or not recognized as a Work Days subject/category.</td></tr>
             <tr><td>Marker reminders are too early or too late.</td><td>Open <strong>Settings &gt; Outlook Agent</strong> and adjust <strong>Reminder minutes before all-day event</strong>. Remember that all-day Outlook items start at midnight.</td></tr>
             <tr><td>Cleaned Outlook items came back.</td><td>Make sure <strong>Keep agent stopped after cleanup</strong> is enabled. If the agent is started again, active Work Days entries may be republished to Outlook.</td></tr>
           </tbody>

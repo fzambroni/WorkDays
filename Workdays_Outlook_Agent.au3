@@ -3,7 +3,7 @@
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Icon=CalendarSync.ico
 #AutoIt3Wrapper_Res_Description=Work Day Sync Agent
-#AutoIt3Wrapper_Res_Fileversion=1.0.0.4
+#AutoIt3Wrapper_Res_Fileversion=1.0.0.5
 #AutoIt3Wrapper_Res_ProductName=Work Day Sync Agent
 #AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
 #AutoIt3Wrapper_Res_LegalCopyright=Copyright © 2026 Fabricio Zambroni
@@ -18,10 +18,10 @@ Opt("MustDeclareVars", 1)
 Opt("TrayMenuMode", 3)
 Opt("TrayOnEventMode", 0)
 
-Global Const $g_sAppTitle = "WorkDays Outlook Agent"
+Global Const $g_sAppTitle = "WorkDays Outlook Agent - Version: " & FileGetVersion(@ScriptFullPath)
 Global Const $g_sDB = "HKEY_CURRENT_USER\Software\WorkDays"
 Global Const $g_sAgentDB = "HKEY_CURRENT_USER\Software\WorkDays\OutlookAgent"
-Global Const $g_sAgentDir = @LocalAppDataDir & "\WorkDays"
+Global Const $g_sAgentDir = @ScriptDir
 Global Const $g_sState = $g_sAgentDir & "\Workdays_Outlook_Agent_State.ini"
 Global Const $g_sLog = $g_sAgentDir & "\Workdays_Outlook_Agent.log"
 Global Const $g_sSep = Chr(29)
@@ -52,7 +52,8 @@ EndIf
 
 _ApplyStartupSetting()
 _CreateTray()
-_Log("Agent started.")
+_Log("Agent started. Executable/script folder: " & @ScriptDir & " | Log: " & $g_sLog & " | Settings: " & $g_sAgentDB)
+_VLog("Verbose mode enabled. State file: " & $g_sState)
 _SyncNow()
 $g_hTimer = TimerInit()
 
@@ -147,6 +148,7 @@ Func _EnsureConfig()
 	_EnsureRegDefault("Safety", "CleanupConfirmationPhrase", "CLEAN WORKDAYS OUTLOOK")
 
 	_EnsureRegDefault("Advanced", "LogLevel", "Normal")
+	_EnsureRegDefault("Logging", "VerboseMode", "0")
 EndFunc
 
 Func _SettingName($sSection, $sKey)
@@ -234,6 +236,7 @@ Func _SyncNow()
 EndFunc
 
 Func _RunSync()
+	_VLog("RunSync started.")
 	Local $oOutlook = _GetOutlookApplication()
 	If Not IsObj($oOutlook) Then Return SetError(1, 0, 0)
 
@@ -250,8 +253,10 @@ Func _RunSync()
 
 	Local $sStartISO = _ISOAddDays(_TodayISO(), -$iPast)
 	Local $sEndISO = _ISOAddDays(_TodayISO(), $iFuture)
+	_VLog("Sync range: " & $sStartISO & " to " & $sEndISO & " | PastDays=" & $iPast & " | FutureDays=" & $iFuture & " | ManagedOnly=" & _Cfg("Outlook", "ManagedOnly", "0"))
 	Local $oOutlookMap = _LoadOutlookMap($oCalendar, $sStartISO, $sEndISO)
 	If Not IsObj($oOutlookMap) Then Return SetError(4, 0, 0)
+	_VLog("Outlook candidate map loaded. Count=" & $oOutlookMap.Count)
 
 	Local $iChanges = 0
 	Local $iDays = _ISODiffDays($sStartISO, $sEndISO)
@@ -469,7 +474,9 @@ Func _IsOutlookCleanupCandidate($oItem)
 	If _Cfg("Safety", "CleanupPrefixOnlyItems", "0") <> "1" Then Return False
 
 	Local $sSubject = String($oItem.Subject)
-	If _IsWorkDaysSubjectCandidate($sSubject) Then Return True
+	Local $sPrefix = _SubjectPrefix()
+	If StringLeft(StringLower(StringStripWS($sSubject, 3)), StringLen(StringLower($sPrefix))) = StringLower($sPrefix) Then Return True
+	If _IsSubjectWorkDaysCandidate($sSubject) Then Return True
 	Return False
 EndFunc
 
@@ -498,22 +505,40 @@ Func _LoadOutlookMap($oCalendar, $sStartISO, $sEndISO)
 	$oItems.Sort("[Start]")
 
 	Local $sFilter = "[Start] >= '" & _OutlookFilterDate($sStartISO) & "' AND [Start] < '" & _OutlookFilterDate(_ISOAddDays($sEndISO, 1)) & "'"
+	_VLog("Outlook Restrict filter: " & $sFilter)
 	Local $oRange = $oItems.Restrict($sFilter)
-	If Not IsObj($oRange) Then Return $oMap
+	If Not IsObj($oRange) Then
+		_Log("Outlook Restrict returned no valid range object. Filter: " & $sFilter)
+		Return $oMap
+	EndIf
 	Local $oItem
 
 	For $oItem In $oRange
 		If Not IsObj($oItem) Then ContinueLoop
-		If Not _IsWorkDaysCandidate($oItem) Then ContinueLoop
+		Local $sSubjectForLog = String($oItem.Subject)
+		Local $sCategoriesForLog = String($oItem.Categories)
+		Local $sReason = _WorkDaysCandidateReason($oItem)
+		If $sReason = "" Then
+			_VLog("Skipped Outlook item: subject='" & $sSubjectForLog & "' start='" & String($oItem.Start) & "' allDay=" & String($oItem.AllDayEvent) & " categories='" & $sCategoriesForLog & "' reason=not a WorkDays candidate")
+			ContinueLoop
+		EndIf
+		_VLog("Accepted Outlook candidate: subject='" & $sSubjectForLog & "' start='" & String($oItem.Start) & "' allDay=" & String($oItem.AllDayEvent) & " categories='" & $sCategoriesForLog & "' reason=" & $sReason)
 
 		Local $sDateISO = _GetUserProp($oItem, "WorkDaysDate")
 		If Not _IsISODate($sDateISO) Then $sDateISO = _OutlookDateToISO($oItem.Start)
-		If Not _IsISODate($sDateISO) Then ContinueLoop
+		If Not _IsISODate($sDateISO) Then
+			_VLog("Skipped Outlook candidate because date could not be converted. subject='" & $sSubjectForLog & "' rawStart='" & String($oItem.Start) & "'")
+			ContinueLoop
+		EndIf
 
 		; Visible Outlook data wins. This lets users change the day classification directly in Outlook.
 		; Internal UserProperties are kept only as a fallback for old/managed items.
 		Local $sStatus = _GetOutlookItemStatus($oItem)
-		If Not _IsKnownStatus($sStatus) Then ContinueLoop
+		If Not _IsKnownStatus($sStatus) Then
+			_VLog("Skipped Outlook candidate because status could not be parsed. date=" & $sDateISO & " subject='" & $sSubjectForLog & "' categories='" & $sCategoriesForLog & "'")
+			ContinueLoop
+		EndIf
+		_VLog("Mapped Outlook candidate: date=" & $sDateISO & " status=" & $sStatus & " markerLen=" & StringLen(_CleanOutlookMarker($oItem.Body)))
 
 		Local $sMarker = _CleanOutlookMarker($oItem.Body)
 		Local $sEntryID = String($oItem.EntryID)
@@ -536,15 +561,36 @@ Func _LoadOutlookMap($oCalendar, $sStartISO, $sEndISO)
 EndFunc
 
 Func _IsWorkDaysCandidate($oItem)
-	If Not IsObj($oItem) Then Return False
-	If _GetUserProp($oItem, "WorkDaysManaged") = "1" Then Return True
+	Return _WorkDaysCandidateReason($oItem) <> ""
+EndFunc
 
-	If _Cfg("Outlook", "ManagedOnly", "0") = "1" Then Return False
+Func _WorkDaysCandidateReason($oItem)
+	If Not IsObj($oItem) Then Return ""
+	If _GetUserProp($oItem, "WorkDaysManaged") = "1" Then Return "managed user property"
 
-	If _IsKnownStatus(_ParseStatusFromCategories($oItem.Categories)) Then Return True
+	If _Cfg("Outlook", "ManagedOnly", "0") = "1" Then Return ""
+
+	Local $sCatStatus = _ParseStatusFromCategories($oItem.Categories)
+	If _IsKnownStatus($sCatStatus) Then Return "category status " & $sCatStatus
 
 	Local $sSubject = String($oItem.Subject)
-	If _IsWorkDaysSubjectCandidate($sSubject) Then Return True
+	If _IsSubjectWorkDaysCandidate($sSubject) Then Return "subject pattern"
+
+	Return ""
+EndFunc
+
+Func _IsSubjectWorkDaysCandidate($sSubject)
+	Local $s = StringStripWS(String($sSubject), 3)
+	If $s = "" Then Return False
+
+	Local $sPrefix = _SubjectPrefix()
+	If StringLeft(StringLower($s), StringLen(StringLower($sPrefix))) = StringLower($sPrefix) Then Return True
+	If StringRegExp($s, "(?i)^\s*\[\s*WD\s*[:\-]\s*[ORHPTSBW]\s*\]") Then Return True
+
+	; Manual Outlook shorthand supported by WorkDays:
+	; W - On Site, W - Remote, W: Travel, WD - PTO, WorkDay - Sick, WorkDays - Holiday, etc.
+	If StringRegExp($s, "(?i)^\s*(W|WD|WORKDAY|WORKDAYS)\s*[:\-]\s*(O|R|H|P|T|S|B|W|ON\s*SITE|ONSITE|REMOTE|HOLIDAY|PTO|PAID\s+TIME\s+OFF|TRAVEL|SICK|BLANK|WEEKEND)\b") Then Return True
+
 	Return False
 EndFunc
 
@@ -636,8 +682,14 @@ Func _WriteRegistryDay($sDateISO, $sStatus, $sMarker)
 	If Not _IsKnownStatus($sStatus) Then Return 0
 	Local $a = StringSplit($sDateISO, "-")
 	If @error Or $a[0] <> 3 Then Return 0
-	RegWrite($g_sDB & "\" & $a[1] & "\" & $a[2], $a[3], "REG_SZ", $sStatus & $sMarker)
-	Return 1
+	Local $sRegPath = $g_sDB & "\" & $a[1] & "\" & $a[2]
+	Local $iWrite = RegWrite($sRegPath, $a[3], "REG_SZ", $sStatus & $sMarker)
+	If $iWrite Then
+		_VLog("Registry write OK: " & $sDateISO & " status=" & $sStatus & " markerLen=" & StringLen($sMarker) & " path=" & $sRegPath)
+	Else
+		_Log("Registry write FAILED: " & $sDateISO & " status=" & $sStatus & " path=" & $sRegPath & " error=" & @error)
+	EndIf
+	Return $iWrite
 EndFunc
 
 Func _ShouldSync($sStatus, $sMarker)
@@ -706,55 +758,6 @@ Func _CategoryPrefix()
 	Local $sPrefix = _Cfg("Outlook", "CategoryPrefix", "WorkDays -")
 	If StringRight($sPrefix, 1) = "-" Then $sPrefix &= " "
 	Return $sPrefix
-EndFunc
-
-Func _IsWorkDaysSubjectCandidate($sSubject)
-	Local $s = StringStripWS(String($sSubject), 3)
-	If $s = "" Then Return False
-
-	Local $sLower = StringLower($s)
-	Local $sPrefix = StringLower(_SubjectPrefix())
-	If StringLeft($sLower, StringLen($sPrefix)) = $sPrefix Then Return True
-
-	; Standard compact format, for example: [WD:R] or [WD - Remote].
-	If StringRegExp($s, "(?i)^\s*\[\s*WD\s*[:\-]\s*[A-Z]") Then Return True
-
-	; User-friendly manual format, for example: W - Remote, WD - Remote, WorkDays - Remote.
-	If _IsKnownStatus(_ParseStatusFromShortcutSubject($s)) Then Return True
-
-	Return False
-EndFunc
-
-Func _ParseStatusFromShortcutSubject($sSubject)
-	Local $sRaw = StringStripWS(String($sSubject), 3)
-	If $sRaw = "" Then Return ""
-
-	; Accept WorkDays shortcut prefixes without forcing the long default subject prefix.
-	; Examples: W - Remote, W: Remote, WD - R, WD: On Site, WorkDay - PTO.
-	Local $aMatch = StringRegExp($sRaw, "(?i)^\s*(?:W|WD|WORKDAY|WORKDAYS)\s*[:\-]\s*(.+?)\s*$", 1)
-	If IsArray($aMatch) And UBound($aMatch) >= 1 Then
-		Local $sAfter = _StripMarkerSuffix($aMatch[0])
-		Local $sStatus = _ParseStatusLabel($sAfter)
-		If _IsKnownStatus($sStatus) Then Return $sStatus
-	EndIf
-
-	Return ""
-EndFunc
-
-Func _StripMarkerSuffix($sText)
-	Local $s = StringStripWS(String($sText), 3)
-	If $s = "" Then Return ""
-
-	Local $sSuffix = StringStripWS(_Cfg("Markers", "MarkerSubjectSuffix", " [Marker]"), 3)
-	If $sSuffix <> "" Then
-		If StringRight(StringLower($s), StringLen(StringLower($sSuffix))) = StringLower($sSuffix) Then
-			$s = StringTrimRight($s, StringLen($sSuffix))
-			$s = StringStripWS($s, 3)
-		EndIf
-	EndIf
-
-	$s = StringRegExpReplace($s, "(?i)\s*\[\s*marker\s*\]\s*$", "")
-	Return StringStripWS($s, 3)
 EndFunc
 
 Func _BuildSubject($sStatus, $sMarker = "")
@@ -876,6 +879,7 @@ EndFunc
 
 Func _ParseStatusFromSubject($sSubject)
 	Local $s = StringLower(StringStripWS(String($sSubject), 3))
+
 	If StringRegExp($s, "(?i)\[\s*WD\s*[:\-]\s*O\s*\]") Then Return "O"
 	If StringRegExp($s, "(?i)\[\s*WD\s*[:\-]\s*R\s*\]") Then Return "R"
 	If StringRegExp($s, "(?i)\[\s*WD\s*[:\-]\s*H\s*\]") Then Return "H"
@@ -885,9 +889,27 @@ Func _ParseStatusFromSubject($sSubject)
 	If StringRegExp($s, "(?i)\[\s*WD\s*[:\-]\s*B\s*\]") Then Return "B"
 	If StringRegExp($s, "(?i)\[\s*WD\s*[:\-]\s*W\s*\]") Then Return "W"
 
-	Local $sShortcut = _ParseStatusFromShortcutSubject($s)
-	If _IsKnownStatus($sShortcut) Then Return $sShortcut
+	; Manual Outlook shorthand. These are only parsed when the subject clearly starts as a WorkDays item.
+	If StringRegExp($s, "(?i)^\s*(w|wd|workday|workdays)\s*[:\-]\s*(o|on\s*site|onsite)\b") Then Return "O"
+	If StringRegExp($s, "(?i)^\s*(w|wd|workday|workdays)\s*[:\-]\s*(r|remote)\b") Then Return "R"
+	If StringRegExp($s, "(?i)^\s*(w|wd|workday|workdays)\s*[:\-]\s*(h|holiday)\b") Then Return "H"
+	If StringRegExp($s, "(?i)^\s*(w|wd|workday|workdays)\s*[:\-]\s*(p|pto|paid\s+time\s+off)\b") Then Return "P"
+	If StringRegExp($s, "(?i)^\s*(w|wd|workday|workdays)\s*[:\-]\s*(t|travel)\b") Then Return "T"
+	If StringRegExp($s, "(?i)^\s*(w|wd|workday|workdays)\s*[:\-]\s*(s|sick)\b") Then Return "S"
+	If StringRegExp($s, "(?i)^\s*(w|wd|workday|workdays)\s*[:\-]\s*(b|blank)\b") Then Return "B"
+	If StringRegExp($s, "(?i)^\s*(w|wd|workday|workdays)\s*[:\-]\s*(w|weekend)\b") Then Return "W"
 
+	; Full WorkDays prefix and short code, for example "WorkDays - O".
+	Local $sPrefix = StringLower(_SubjectPrefix())
+	If StringLeft($s, StringLen($sPrefix)) = $sPrefix Then
+		Local $sAfter = StringStripWS(StringTrimLeft($s, StringLen($sPrefix)), 3)
+		Local $sStatus = _ParseStatusLabel($sAfter)
+		If _IsKnownStatus($sStatus) Then Return $sStatus
+		Local $sCode = StringUpper(StringLeft($sAfter, 1))
+		If _IsKnownStatus($sCode) Then Return $sCode
+	EndIf
+
+	; Fallback for old managed items whose subject may have extra text.
 	If StringInStr($s, "on site") Or StringInStr($s, "onsite") Then Return "O"
 	If StringInStr($s, "remote") Then Return "R"
 	If StringInStr($s, "holiday") Then Return "H"
@@ -896,14 +918,6 @@ Func _ParseStatusFromSubject($sSubject)
 	If StringInStr($s, "sick") Then Return "S"
 	If StringInStr($s, "blank") Then Return "B"
 	If StringInStr($s, "weekend") Then Return "W"
-
-	; Short codes are supported when the user creates an Outlook item like "WorkDays - O".
-	Local $sPrefix = StringLower(_SubjectPrefix())
-	If StringLeft($s, StringLen($sPrefix)) = $sPrefix Then
-		Local $sAfter = StringStripWS(StringTrimLeft($s, StringLen($sPrefix)), 3)
-		Local $sCode = StringUpper(StringLeft($sAfter, 1))
-		If _IsKnownStatus($sCode) Then Return $sCode
-	EndIf
 
 	Return ""
 EndFunc
@@ -977,6 +991,16 @@ Func _OutlookDateToISO($vDate)
 	EndIf
 
 	Return ""
+EndFunc
+
+Func _VerboseEnabled()
+	If _Cfg("Logging", "VerboseMode", "0") = "1" Then Return True
+	If StringLower(_Cfg("Advanced", "LogLevel", "Normal")) = "verbose" Then Return True
+	Return False
+EndFunc
+
+Func _VLog($sText)
+	If _VerboseEnabled() Then _Log("[VERBOSE] " & $sText)
 EndFunc
 
 Func _Log($sText)

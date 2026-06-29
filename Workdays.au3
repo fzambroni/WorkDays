@@ -3,7 +3,7 @@
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Icon=xcalendar4.ico
 #AutoIt3Wrapper_Res_Description=Work Day management
-#AutoIt3Wrapper_Res_Fileversion=2.1.4.2
+#AutoIt3Wrapper_Res_Fileversion=2.1.4.3
 #AutoIt3Wrapper_Res_ProductVersion=2.1.0.0
 #AutoIt3Wrapper_Res_ProductName=Work Days
 #AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
@@ -6762,6 +6762,7 @@ Func _OutlookAgent_EnsureDefaults()
 	_OA_EnsureDefault("Safety", "CleanupConfirmationPhrase", "CLEAN WORKDAYS OUTLOOK")
 
 	_OA_EnsureDefault("Advanced", "LogLevel", "Normal")
+	_OA_EnsureDefault("Logging", "VerboseMode", "0")
 EndFunc   ;==>_OutlookAgent_EnsureDefaults
 
 Func _OutlookAgent_IsInstalled()
@@ -6780,7 +6781,7 @@ Func _OutlookAgent_StatusText()
 	Local $sRunning = "Stopped"
 	If _OutlookAgent_IsRunning() Then $sRunning = "Running"
 
-	Return "Status: " & $sInstalled & " / " & $sRunning & @CRLF & "Location: " & $g_sOutlookAgentExe
+	Return "Status: " & $sInstalled & " / " & $sRunning & @CRLF & "Location: " & $g_sOutlookAgentExe & @CRLF & "Log: " & $g_sOutlookAgentLog
 EndFunc   ;==>_OutlookAgent_StatusText
 
 Func _OutlookAgent_RunCommand()
@@ -6919,7 +6920,7 @@ Func _OutlookAgent_Uninstall()
 	Return 1
 EndFunc   ;==>_OutlookAgent_Uninstall
 
-Func _OutlookAgent_SaveSettings($idInterval, $idPast, $idFuture, $idConflictOutlook, $idDeleteOutlookClears, $idSyncBlank, $idSyncWeekend, $idSyncTaggedBlankWeekend, $idStartup, $idSubjectPrefix, $idCategoryPrefix, $idReminderSet, $idManagedOnly, $idShowMarkerSubject, $idMarkerSuffix, $idSeparateMarkerCategory, $idMarkerCategoryName, $idReminderMarker, $idReminderMinutes, $idCleanupEnabled, $idCleanupPastYears, $idCleanupFutureYears, $idCleanupPrefixOnly, $idPauseAfterCleanup)
+Func _OutlookAgent_SaveSettings($idInterval, $idPast, $idFuture, $idConflictOutlook, $idDeleteOutlookClears, $idSyncBlank, $idSyncWeekend, $idSyncTaggedBlankWeekend, $idStartup, $idSubjectPrefix, $idCategoryPrefix, $idReminderSet, $idManagedOnly, $idShowMarkerSubject, $idMarkerSuffix, $idSeparateMarkerCategory, $idMarkerCategoryName, $idReminderMarker, $idReminderMinutes, $idCleanupEnabled, $idCleanupPastYears, $idCleanupFutureYears, $idCleanupPrefixOnly, $idPauseAfterCleanup, $idVerboseMode)
 	Local $iInterval = Number(GUICtrlRead($idInterval))
 	If $iInterval < 1 Then $iInterval = 15
 	Local $iPast = Number(GUICtrlRead($idPast))
@@ -6961,6 +6962,13 @@ Func _OutlookAgent_SaveSettings($idInterval, $idPast, $idFuture, $idConflictOutl
 	_OA_Write("Safety", "CleanupPrefixOnlyItems", _OA_CheckTo01(GUICtrlRead($idCleanupPrefixOnly)))
 	_OA_Write("Safety", "PauseAfterOutlookCleanup", _OA_CheckTo01(GUICtrlRead($idPauseAfterCleanup)))
 
+	_OA_Write("Logging", "VerboseMode", _OA_CheckTo01(GUICtrlRead($idVerboseMode)))
+	If _OA_CheckTo01(GUICtrlRead($idVerboseMode)) = "1" Then
+		_OA_Write("Advanced", "LogLevel", "Verbose")
+	Else
+		_OA_Write("Advanced", "LogLevel", "Normal")
+	EndIf
+
 	RegWrite($g_sOutlookAgentDB, "LastSettingsSavedByWorkDays", "REG_SZ", StringFormat("%04d-%02d-%02d %02d:%02d:%02d", @YEAR, @MON, @MDAY, @HOUR, @MIN, @SEC))
 	_OutlookAgent_UpdateStartupRunKey()
 	Return 1
@@ -6969,7 +6977,7 @@ EndFunc   ;==>_OutlookAgent_SaveSettings
 Func _OutlookAgent_SettingsWindow()
 	_OutlookAgent_EnsureDefaults()
 
-	Local $hAgent = GUICreate("WorkDays Outlook Agent", 650, 765, -1, -1, $DS_MODALFRAME, BitOR($WS_EX_TOPMOST, $WS_EX_MDICHILD), $Form_WorkDays)
+	Local $hAgent = GUICreate("WorkDays Outlook Agent", 650, 815, -1, -1, $DS_MODALFRAME, BitOR($WS_EX_TOPMOST, $WS_EX_MDICHILD), $Form_WorkDays)
 	GUISetBkColor(0xF7FBFF, $hAgent)
 	GUISetFont(9, 400, 0, "Segoe UI", $hAgent)
 
@@ -6977,14 +6985,14 @@ Func _OutlookAgent_SettingsWindow()
 	GUICtrlSetFont(-1, 13, 700, 0, "Segoe UI")
 	GUICtrlSetColor(-1, 0x0B4F8A)
 
-	Local $lblStatus = GUICtrlCreateLabel(_OutlookAgent_StatusText(), 18, 42, 610, 38)
+	Local $lblStatus = GUICtrlCreateLabel(_OutlookAgent_StatusText(), 18, 42, 610, 50)
 	GUICtrlSetColor($lblStatus, 0x1D3557)
 
-	Local $btnInstall = GUICtrlCreateButton("Install / Update", 18, 88, 120, 28)
-	Local $btnStart = GUICtrlCreateButton("Start", 148, 88, 80, 28)
-	Local $btnStop = GUICtrlCreateButton("Stop", 238, 88, 80, 28)
-	Local $btnOpenLog = GUICtrlCreateButton("Open log", 328, 88, 90, 28)
-	Local $btnUninstall = GUICtrlCreateButton("Uninstall", 508, 88, 120, 28)
+	Local $btnInstall = GUICtrlCreateButton("Install / Update", 18, 100, 120, 28)
+	Local $btnStart = GUICtrlCreateButton("Start", 148, 100, 80, 28)
+	Local $btnStop = GUICtrlCreateButton("Stop", 238, 100, 80, 28)
+	Local $btnOpenLog = GUICtrlCreateButton("Open log", 328, 100, 90, 28)
+	Local $btnUninstall = GUICtrlCreateButton("Uninstall", 508, 100, 120, 28)
 
 	GUICtrlCreateGroup("Sync behavior", 18, 128, 610, 150)
 	GUICtrlCreateLabel("Sync every", 34, 154, 70, 20)
@@ -7009,7 +7017,7 @@ Func _OutlookAgent_SettingsWindow()
 	Local $inpCategoryPrefix = GUICtrlCreateInput(_OA_Read("Outlook", "CategoryPrefix", "WorkDays -"), 430, 314, 180, 22)
 	Local $chkReminderSet = GUICtrlCreateCheckbox("Always use Outlook reminder", 34, 350, 210, 20)
 	Local $chkManagedOnly = GUICtrlCreateCheckbox("Only read items created by the agent", 280, 350, 270, 20)
-	GUICtrlCreateLabel("Manual Outlook subjects: W - Remote, WD - On Site, [WD:R]. Leave managed-only unchecked.", 34, 374, 570, 18)
+	GUICtrlCreateLabel("Appointments are created as all-day Free time events.", 34, 374, 420, 18)
 	GUICtrlSetColor(-1, 0x577590)
 
 	GUICtrlCreateGroup("Marker alerts", 18, 412, 610, 130)
@@ -7033,6 +7041,11 @@ Func _OutlookAgent_SettingsWindow()
 	Local $inpCleanupFuture = GUICtrlCreateInput(_OA_Read("Safety", "CleanupFutureYears", "10"), 530, 610, 42, 22, $ES_NUMBER)
 	GUICtrlCreateLabel("future", 578, 614, 48, 18)
 
+	GUICtrlCreateGroup("Logging", 18, 654, 610, 54)
+	Local $chkVerboseMode = GUICtrlCreateCheckbox("Verbose log", 34, 678, 120, 20)
+	GUICtrlCreateLabel("Writes detailed sync diagnostics. The log is always saved next to the Agent executable.", 160, 682, 450, 18)
+	GUICtrlSetColor(-1, 0x577590)
+
 	_OA_SetCheck($chkConflictOutlook, _OA_Read("Sync", "OutlookWinsOnConflict", "1"))
 	_OA_SetCheck($chkDeleteOutlookClears, _OA_Read("Sync", "DeleteInOutlookClearsWorkDays", "0"))
 	_OA_SetCheck($chkSyncBlank, _OA_Read("Sync", "SyncBlank", "0"))
@@ -7047,10 +7060,11 @@ Func _OutlookAgent_SettingsWindow()
 	_OA_SetCheck($chkCleanupEnabled, _OA_Read("Safety", "EnableOutlookCleanup", "1"))
 	_OA_SetCheck($chkCleanupPrefixOnly, _OA_Read("Safety", "CleanupPrefixOnlyItems", "0"))
 	_OA_SetCheck($chkPauseAfterCleanup, _OA_Read("Safety", "PauseAfterOutlookCleanup", "1"))
+	_OA_SetCheck($chkVerboseMode, _OA_Read("Logging", "VerboseMode", "0"))
 
-	Local $btnClean = GUICtrlCreateButton("Clean Outlook WorkDays items...", 18, 654, 210, 30)
-	Local $btnSave = GUICtrlCreateButton("Save", 408, 690, 100, 30)
-	Local $btnClose = GUICtrlCreateButton("Close", 528, 690, 100, 30)
+	Local $btnClean = GUICtrlCreateButton("Clean Outlook WorkDays items...", 18, 724, 210, 30)
+	Local $btnSave = GUICtrlCreateButton("Save", 408, 760, 100, 30)
+	Local $btnClose = GUICtrlCreateButton("Close", 528, 760, 100, 30)
 
 	GUISetState(@SW_SHOW, $hAgent)
 
@@ -7082,12 +7096,12 @@ Func _OutlookAgent_SettingsWindow()
 				GUICtrlSetData($lblStatus, _OutlookAgent_StatusText())
 
 			Case $btnClean
-				_OutlookAgent_SaveSettings($inpInterval, $inpPast, $inpFuture, $chkConflictOutlook, $chkDeleteOutlookClears, $chkSyncBlank, $chkSyncWeekend, $chkSyncTaggedBlankWeekend, $chkStartup, $inpSubjectPrefix, $inpCategoryPrefix, $chkReminderSet, $chkManagedOnly, $chkShowMarkerSubject, $inpMarkerSuffix, $chkSeparateMarkerCategory, $inpMarkerCategory, $chkReminderMarker, $inpReminderMinutes, $chkCleanupEnabled, $inpCleanupPast, $inpCleanupFuture, $chkCleanupPrefixOnly, $chkPauseAfterCleanup)
+				_OutlookAgent_SaveSettings($inpInterval, $inpPast, $inpFuture, $chkConflictOutlook, $chkDeleteOutlookClears, $chkSyncBlank, $chkSyncWeekend, $chkSyncTaggedBlankWeekend, $chkStartup, $inpSubjectPrefix, $inpCategoryPrefix, $chkReminderSet, $chkManagedOnly, $chkShowMarkerSubject, $inpMarkerSuffix, $chkSeparateMarkerCategory, $inpMarkerCategory, $chkReminderMarker, $inpReminderMinutes, $chkCleanupEnabled, $inpCleanupPast, $inpCleanupFuture, $chkCleanupPrefixOnly, $chkPauseAfterCleanup, $chkVerboseMode)
 				_OutlookAgent_CleanOutlookFromWorkDays()
 				GUICtrlSetData($lblStatus, _OutlookAgent_StatusText())
 
 			Case $btnSave
-				_OutlookAgent_SaveSettings($inpInterval, $inpPast, $inpFuture, $chkConflictOutlook, $chkDeleteOutlookClears, $chkSyncBlank, $chkSyncWeekend, $chkSyncTaggedBlankWeekend, $chkStartup, $inpSubjectPrefix, $inpCategoryPrefix, $chkReminderSet, $chkManagedOnly, $chkShowMarkerSubject, $inpMarkerSuffix, $chkSeparateMarkerCategory, $inpMarkerCategory, $chkReminderMarker, $inpReminderMinutes, $chkCleanupEnabled, $inpCleanupPast, $inpCleanupFuture, $chkCleanupPrefixOnly, $chkPauseAfterCleanup)
+				_OutlookAgent_SaveSettings($inpInterval, $inpPast, $inpFuture, $chkConflictOutlook, $chkDeleteOutlookClears, $chkSyncBlank, $chkSyncWeekend, $chkSyncTaggedBlankWeekend, $chkStartup, $inpSubjectPrefix, $inpCategoryPrefix, $chkReminderSet, $chkManagedOnly, $chkShowMarkerSubject, $inpMarkerSuffix, $chkSeparateMarkerCategory, $inpMarkerCategory, $chkReminderMarker, $inpReminderMinutes, $chkCleanupEnabled, $inpCleanupPast, $inpCleanupFuture, $chkCleanupPrefixOnly, $chkPauseAfterCleanup, $chkVerboseMode)
 				GUICtrlSetData($lblStatus, _OutlookAgent_StatusText())
 				MsgBox($MB_ICONINFORMATION, "WorkDays Outlook Agent", "Outlook Agent settings were saved." & @CRLF & @CRLF & "If the agent is running, it will use the updated settings on the next sync cycle.", 0, $hAgent)
 		EndSwitch
