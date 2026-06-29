@@ -3,7 +3,7 @@
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Icon=xcalendar4.ico
 #AutoIt3Wrapper_Res_Description=Work Day management
-#AutoIt3Wrapper_Res_Fileversion=2.1.4.5
+#AutoIt3Wrapper_Res_Fileversion=2.1.4.6
 #AutoIt3Wrapper_Res_ProductVersion=2.1.0.0
 #AutoIt3Wrapper_Res_ProductName=Work Days
 #AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
@@ -179,6 +179,11 @@ Global $g_sOutlookAgentDir = @ScriptDir
 Global $g_sOutlookAgentExe = $g_sOutlookAgentDir & "\Workdays_Outlook_Agent.exe"
 Global $g_sOutlookAgentLog = $g_sOutlookAgentDir & "\Workdays_Outlook_Agent.log"
 Global $g_sOutlookAgentProcess = "Workdays_Outlook_Agent.exe"
+Global $g_bOutlookAgentRefreshPending = False
+Global $g_sOutlookAgentPendingSeq = ""
+Global $g_sOutlookAgentPendingDate = ""
+Global $g_sOutlookAgentPendingStatus = ""
+Global $g_bWorkDaysUpdaterAvailable = False
 Global $ResetPosition = 0
 Global $Progress_Splash, $Form_Splash, $Label_Percentage, $Splash, $Button_Close_Splash
 
@@ -571,6 +576,12 @@ GUICtrlSetColor($Button_Remote, $Font_Remote)
 $Button_holiday = GUICtrlCreateButton("&Holiday", 384, 144, 75, 25)
 GUICtrlSetBkColor($Button_holiday, $Color_bk_holiday)
 GUICtrlSetColor($Button_holiday, $Font_Holiday)
+
+$Button_OutlookSync = GUICtrlCreateButton("Sync", 472, 144, 75, 25)
+GUICtrlSetTip($Button_OutlookSync, "Force an immediate Outlook Agent sync.")
+GUICtrlSetBkColor($Button_OutlookSync, 0xD9ECFF)
+GUICtrlSetColor($Button_OutlookSync, 0x0B4F8A)
+GUICtrlSetFont($Button_OutlookSync, 9, 700)
 
 ;~ $Button_PTO = GUICtrlCreateButton("&PTO", 384, 114, 75, 25)
 $Button_PTO = GUICtrlCreateButton("&PTO", 296, 114, 75, 25)
@@ -1123,8 +1134,13 @@ If $UpdatedVersion > $currentVersion Then
 EndIf
 #ce
 If FileExists(@ScriptDir & "\WorkDays.tmp") Then
+	$g_bWorkDaysUpdaterAvailable = True
+	GUICtrlSetData($Button_Update, "UPDATE AVAILABLE - Click to execute")
+	GUICtrlSetColor($Button_Update, 0xFFFFFF)
+	GUICtrlSetBkColor($Button_Update, 0xFF0000)
 	GUICtrlSetState($Button_Update, $GUI_SHOW)
 Else
+	$g_bWorkDaysUpdaterAvailable = False
 	GUICtrlSetState($Button_Update, $GUI_HIDE)
 EndIf
 
@@ -1143,6 +1159,8 @@ While 1
 
 
 	$nMsg = GUIGetMsg()
+
+	_OutlookAgent_CheckRefreshNotification()
 
 	; ── Custom calendar: prev/next navigation and day clicks ─────────
 	If $nMsg = $g_ccPrev Then
@@ -1402,14 +1420,21 @@ While 1
 
 	Switch $nMsg
 		Case $Button_Update
-			$Updater_File = @TempDir & "\Updater.exe"
-			FileInstall("Updater.exe", $Updater_File, 1)
-			Sleep(500)
-			Run(@TempDir & "\Updater.exe '" & @ScriptDir & "'")
-;~ 			Run($Updater_File)
-			Sleep(500)
-			_HideListViewCellTip()
-			Exit
+			If $g_bOutlookAgentRefreshPending Then
+				_OutlookAgent_RefreshWorkDaysFromAgentChange()
+			ElseIf $g_bWorkDaysUpdaterAvailable Or FileExists(@ScriptDir & "\WorkDays.tmp") Then
+				$Updater_File = @TempDir & "\Updater.exe"
+				FileInstall("Updater.exe", $Updater_File, 1)
+				Sleep(500)
+				Run(@TempDir & "\Updater.exe '" & @ScriptDir & "'")
+;~ 				Run($Updater_File)
+				Sleep(500)
+				_HideListViewCellTip()
+				Exit
+			EndIf
+
+		Case $Button_OutlookSync
+			_OutlookAgent_RequestSyncNow()
 
 		Case $Label_YSumary_Reset
 			_Chart("", True)
@@ -6975,10 +7000,124 @@ Func _OutlookAgent_SaveSettings($idInterval, $idPast, $idFuture, $idConflictOutl
 	Return 1
 EndFunc   ;==>_OutlookAgent_SaveSettings
 
+
+Func _OutlookAgent_StatusCodeToLabel($sStatus)
+	Switch $sStatus
+		Case "O"
+			Return "On Site"
+		Case "R"
+			Return "Remote"
+		Case "H"
+			Return "Holiday"
+		Case "P"
+			Return "PTO"
+		Case "T"
+			Return "Travel"
+		Case "S"
+			Return "Sick"
+		Case "W"
+			Return "Weekend"
+		Case "B"
+			Return "Blank"
+		Case Else
+			Return ""
+	EndSwitch
+EndFunc   ;==>_OutlookAgent_StatusCodeToLabel
+
+Func _OutlookAgent_RequestSyncNow()
+	_OutlookAgent_EnsureDefaults()
+	GUICtrlSetData($Button_OutlookSync, "Sync...")
+
+	Local $sNow = StringFormat("%04d-%02d-%02d %02d:%02d:%02d", @YEAR, @MON, @MDAY, @HOUR, @MIN, @SEC) & "." & @MSEC
+	RegWrite($g_sOutlookAgentDB, "Sync_ForceNowRequest", "REG_SZ", $sNow)
+	RegWrite($g_sOutlookAgentDB, "Sync_ForceNowRequestedBy", "REG_SZ", "WorkDays")
+
+	If _OutlookAgent_IsRunning() Then
+		Sleep(500)
+		GUICtrlSetData($Button_OutlookSync, "Sync")
+		Return 1
+	EndIf
+
+	If Not _OutlookAgent_IsInstalled() Then
+		GUICtrlSetData($Button_OutlookSync, "Sync")
+		Local $iInstall = MsgBox(BitOR($MB_ICONQUESTION, $MB_YESNO), "WorkDays Outlook Agent", "The Outlook Agent is not installed yet." & @CRLF & @CRLF & "Install it now?", 0, $Form_WorkDays)
+		If $iInstall <> $IDYES Then Return 0
+		If Not _OutlookAgent_Install() Then Return 0
+		GUICtrlSetData($Button_OutlookSync, "Sync...")
+	EndIf
+
+	Run(_OutlookAgent_RunCommand() & " /syncnow", $g_sOutlookAgentDir)
+	Sleep(500)
+	GUICtrlSetData($Button_OutlookSync, "Sync")
+	Return 1
+EndFunc   ;==>_OutlookAgent_RequestSyncNow
+
+Func _OutlookAgent_CheckRefreshNotification()
+	Static $sLastSeenSeq = "__INIT__"
+	Local $sSeq = RegRead($g_sOutlookAgentDB, "LastDatabaseChangeSeq")
+	If @error Then $sSeq = ""
+
+	If $sLastSeenSeq = "__INIT__" Then
+		$sLastSeenSeq = $sSeq
+		Return 0
+	EndIf
+
+	If $sSeq = "" Or $sSeq = $sLastSeenSeq Then Return 0
+
+	$sLastSeenSeq = $sSeq
+	$g_bOutlookAgentRefreshPending = True
+	$g_sOutlookAgentPendingSeq = $sSeq
+	$g_sOutlookAgentPendingDate = RegRead($g_sOutlookAgentDB, "LastDatabaseChangeDate")
+	If @error Then $g_sOutlookAgentPendingDate = ""
+	$g_sOutlookAgentPendingStatus = RegRead($g_sOutlookAgentDB, "LastDatabaseChangeStatus")
+	If @error Then $g_sOutlookAgentPendingStatus = ""
+
+	Local $sText = "OUTLOOK CHANGE - Click to refresh"
+	If $g_sOutlookAgentPendingDate <> "" Then $sText = "OUTLOOK CHANGE " & $g_sOutlookAgentPendingDate & " - Refresh"
+	GUICtrlSetData($Button_Update, $sText)
+	GUICtrlSetColor($Button_Update, 0xFFFFFF)
+	GUICtrlSetBkColor($Button_Update, 0x2F80ED)
+	GUICtrlSetFont($Button_Update, 9, 900)
+	GUICtrlSetState($Button_Update, $GUI_SHOW)
+	Return 1
+EndFunc   ;==>_OutlookAgent_CheckRefreshNotification
+
+Func _OutlookAgent_RefreshWorkDaysFromAgentChange()
+	Local $sMsg = "The Outlook Agent changed the WorkDays database."
+	If $g_sOutlookAgentPendingDate <> "" Then
+		$sMsg &= @CRLF & @CRLF & "Date: " & $g_sOutlookAgentPendingDate
+		Local $sLabel = _OutlookAgent_StatusCodeToLabel($g_sOutlookAgentPendingStatus)
+		If $sLabel <> "" Then $sMsg &= @CRLF & "Status: " & $sLabel
+	EndIf
+	$sMsg &= @CRLF & @CRLF & "Refreshing the screen now."
+
+	MsgBox($MB_ICONINFORMATION, "WorkDays Outlook Agent", $sMsg, 0, $Form_WorkDays)
+	_Reload()
+
+	RegWrite($g_sOutlookAgentDB, "LastDatabaseChangeAcknowledgedByWorkDays", "REG_SZ", $g_sOutlookAgentPendingSeq)
+	RegWrite($g_sOutlookAgentDB, "LastDatabaseChangeAcknowledgedAt", "REG_SZ", StringFormat("%04d-%02d-%02d %02d:%02d:%02d", @YEAR, @MON, @MDAY, @HOUR, @MIN, @SEC))
+
+	$g_bOutlookAgentRefreshPending = False
+	$g_sOutlookAgentPendingSeq = ""
+	$g_sOutlookAgentPendingDate = ""
+	$g_sOutlookAgentPendingStatus = ""
+
+	If $g_bWorkDaysUpdaterAvailable Or FileExists(@ScriptDir & "\WorkDays.tmp") Then
+		$g_bWorkDaysUpdaterAvailable = True
+		GUICtrlSetData($Button_Update, "UPDATE AVAILABLE - Click to execute")
+		GUICtrlSetColor($Button_Update, 0xFFFFFF)
+		GUICtrlSetBkColor($Button_Update, 0xFF0000)
+		GUICtrlSetState($Button_Update, $GUI_SHOW)
+	Else
+		GUICtrlSetState($Button_Update, $GUI_HIDE)
+	EndIf
+	Return 1
+EndFunc   ;==>_OutlookAgent_RefreshWorkDaysFromAgentChange
+
 Func _OutlookAgent_SettingsWindow()
 	_OutlookAgent_EnsureDefaults()
 
-	Local $hAgent = GUICreate("WorkDays Outlook Agent", 650, 835, -1, -1, $DS_MODALFRAME, BitOR($WS_EX_TOPMOST, $WS_EX_MDICHILD), $Form_WorkDays)
+	Local $hAgent = GUICreate("WorkDays Outlook Agent", 650, 875, -1, -1, $DS_MODALFRAME, BitOR($WS_EX_TOPMOST, $WS_EX_MDICHILD), $Form_WorkDays)
 	GUISetBkColor(0xF7FBFF, $hAgent)
 	GUISetFont(9, 400, 0, "Segoe UI", $hAgent)
 
@@ -7064,15 +7203,14 @@ Func _OutlookAgent_SettingsWindow()
 	_OA_SetCheck($chkVerboseMode, _OA_Read("Logging", "VerboseMode", "0"))
 
 	Local $btnClean = GUICtrlCreateButton("Clean Outlook WorkDays items...", 18, 742, 210, 30)
-	Local $btnSave = GUICtrlCreateButton("Save", 408, 786, 100, 30)
-	Local $btnClose = GUICtrlCreateButton("Close", 528, 786, 100, 30)
+	Local $btnSave = GUICtrlCreateButton("Save", 528, 826, 100, 30)
 
 	GUISetState(@SW_SHOW, $hAgent)
 
 	While 1
 		Local $nAgentMsg = GUIGetMsg()
 		Switch $nAgentMsg
-			Case $GUI_EVENT_CLOSE, $btnClose
+			Case $GUI_EVENT_CLOSE
 				GUIDelete($hAgent)
 				WinActivate("Work Days")
 				Return 0
@@ -7103,8 +7241,9 @@ Func _OutlookAgent_SettingsWindow()
 
 			Case $btnSave
 				_OutlookAgent_SaveSettings($inpInterval, $inpPast, $inpFuture, $chkConflictOutlook, $chkDeleteOutlookClears, $chkSyncBlank, $chkSyncWeekend, $chkSyncTaggedBlankWeekend, $chkStartup, $inpSubjectPrefix, $inpCategoryPrefix, $chkReminderSet, $chkManagedOnly, $chkShowMarkerSubject, $inpMarkerSuffix, $chkSeparateMarkerCategory, $inpMarkerCategory, $chkReminderMarker, $inpReminderMinutes, $chkCleanupEnabled, $inpCleanupPast, $inpCleanupFuture, $chkCleanupPrefixOnly, $chkPauseAfterCleanup, $chkVerboseMode)
-				GUICtrlSetData($lblStatus, _OutlookAgent_StatusText())
-				MsgBox($MB_ICONINFORMATION, "WorkDays Outlook Agent", "Outlook Agent settings were saved." & @CRLF & @CRLF & "If the agent is running, it will use the updated settings on the next sync cycle.", 0, $hAgent)
+				GUIDelete($hAgent)
+				WinActivate("Work Days")
+				Return 1
 		EndSwitch
 	WEnd
 EndFunc   ;==>_OutlookAgent_SettingsWindow

@@ -3,7 +3,7 @@
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Icon=CalendarSync.ico
 #AutoIt3Wrapper_Res_Description=Work Day Sync Agent
-#AutoIt3Wrapper_Res_Fileversion=1.0.0.7
+#AutoIt3Wrapper_Res_Fileversion=1.0.0.8
 #AutoIt3Wrapper_Res_ProductName=Work Day Sync Agent
 #AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
 #AutoIt3Wrapper_Res_LegalCopyright=Copyright © 2026 Fabricio Zambroni
@@ -40,9 +40,12 @@ Global $g_iTrayPause = 0
 Global $g_iTrayLog = 0
 Global $g_iTrayCleanOutlook = 0
 Global $g_iTrayExit = 0
+Global $g_sLastForceSyncRequest = ""
 
 DirCreate($g_sAgentDir)
 _EnsureConfig()
+$g_sLastForceSyncRequest = RegRead($g_sAgentDB, "Sync_ForceNowRequest")
+If @error Then $g_sLastForceSyncRequest = ""
 _HandleCommandLine()
 
 If _Singleton($g_sAppTitle, 1) = 0 Then
@@ -77,6 +80,8 @@ While 1
 			_Log("Agent closed by user.")
 			Exit
 	EndSwitch
+
+	_CheckForcedSyncRequest()
 
 	If Not $g_bPaused Then
 		Local $iIntervalMin = Number(_Cfg("Sync", "IntervalMinutes", "15"))
@@ -215,6 +220,39 @@ EndFunc
 Func _AgentRunCommand()
 	If @Compiled Then Return '"' & @ScriptFullPath & '"'
 	Return '"' & @AutoItExe & '" "' & @ScriptFullPath & '"'
+EndFunc
+
+
+Func _CheckForcedSyncRequest()
+	Local $sRequest = RegRead($g_sAgentDB, "Sync_ForceNowRequest")
+	If @error Then $sRequest = ""
+	If $sRequest = "" Or $sRequest = $g_sLastForceSyncRequest Then Return 0
+
+	$g_sLastForceSyncRequest = $sRequest
+	SetError(0)
+	RegWrite($g_sAgentDB, "Sync_ForceNowAccepted", "REG_SZ", StringFormat("%04d-%02d-%02d %02d:%02d:%02d", @YEAR, @MON, @MDAY, @HOUR, @MIN, @SEC))
+	_Log("Immediate sync request detected from WorkDays. Request=" & $sRequest)
+
+
+	_SyncNow()
+	$g_hTimer = TimerInit()
+	RegWrite($g_sAgentDB, "Sync_ForceNowCompleted", "REG_SZ", StringFormat("%04d-%02d-%02d %02d:%02d:%02d", @YEAR, @MON, @MDAY, @HOUR, @MIN, @SEC))
+	Return 1
+EndFunc
+
+Func _NotifyWorkDaysDatabaseChanged($sDateISO, $sStatus, $sMarker)
+	Local $sSeq = RegRead($g_sAgentDB, "LastDatabaseChangeSeq")
+	If @error Or $sSeq = "" Then $sSeq = "0"
+	Local $iSeq = Number($sSeq) + 1
+	Local $sNow = StringFormat("%04d-%02d-%02d %02d:%02d:%02d", @YEAR, @MON, @MDAY, @HOUR, @MIN, @SEC)
+
+	RegWrite($g_sAgentDB, "LastDatabaseChangeSeq", "REG_SZ", String($iSeq))
+	RegWrite($g_sAgentDB, "LastDatabaseChangeAt", "REG_SZ", $sNow)
+	RegWrite($g_sAgentDB, "LastDatabaseChangeDate", "REG_SZ", $sDateISO)
+	RegWrite($g_sAgentDB, "LastDatabaseChangeStatus", "REG_SZ", $sStatus)
+	RegWrite($g_sAgentDB, "LastDatabaseChangeMarkerLength", "REG_SZ", StringLen($sMarker))
+	_VLog("WorkDays refresh notification updated: seq=" & $iSeq & " date=" & $sDateISO & " status=" & $sStatus & " markerLen=" & StringLen($sMarker))
+	Return $iSeq
 EndFunc
 
 Func _SyncNow()
@@ -784,6 +822,7 @@ Func _WriteRegistryDay($sDateISO, $sStatus, $sMarker)
 	If $iOK Then
 		Local $sReadBack = RegRead($sRegPath, $sRegName)
 		_VLog("Registry write OK: date=" & $sDateISO & " path='" & $sRegPath & "' name='" & $sRegName & "' status='" & $sStatus & "' markerLen=" & StringLen($sMarker) & " valuePreview='" & _DbgValue($sValue, 120) & "' readBackPreview='" & _DbgValue($sReadBack, 120) & "'")
+		_NotifyWorkDaysDatabaseChanged($sDateISO, $sStatus, $sMarker)
 	Else
 		_Log("Registry write FAILED: " & $sDateISO & " status=" & $sStatus & " path=" & $sRegPath & " name=" & $sRegName & " error=" & @error)
 	EndIf

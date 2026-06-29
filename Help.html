@@ -567,7 +567,7 @@
         </table>
 
         <h3>Install and control the agent</h3>
-        <p>Open <strong>Settings &gt; Outlook Agent</strong> in Work Days. From there, you can install, update, start, stop, uninstall, and review the agent log.</p>
+        <p>Open <strong>Settings &gt; Outlook Agent</strong> in Work Days. From there, you can install, update, start, stop, uninstall, review the agent log, and control all agent settings. The settings window now uses a single <strong>Save</strong> button; clicking it saves the settings and closes the window.</p>
         <div class="grid">
           <div class="card">
             <h3>Install / Update</h3>
@@ -587,11 +587,15 @@
           </div>
           <div class="card">
             <h3>Save</h3>
-            <p>Saves the Outlook Agent settings from Work Days. If the agent is running, it will pick up the new settings on the next sync cycle.</p>
+            <p>Saves the Outlook Agent settings from Work Days and closes the settings window. If the agent is running, it will pick up the new settings on the next sync cycle.</p>
           </div>
           <div class="card">
             <h3>Start with Windows</h3>
             <p>Lets the agent start automatically when you sign in to Windows, so synchronization continues without manually opening it.</p>
+          </div>
+          <div class="card">
+            <h3>Main-screen Sync</h3>
+            <p>The <strong>Sync</strong> button beside the day classification buttons requests an immediate Outlook Agent sync. Use it after changing a day in Work Days when you want the Outlook calendar updated right away.</p>
           </div>
         </div>
 
@@ -612,6 +616,10 @@
             <tr><td>Verbose log</td><td>Turns on detailed troubleshooting messages. Use this when Outlook items are not syncing back to Work Days and you need to see exactly what the agent accepted, ignored, or wrote.</td></tr>
           </tbody>
         </table>
+
+        <h3>Immediate sync from the main screen</h3>
+        <p>Use the <strong>Sync</strong> button beside the day buttons to force synchronization without opening the Outlook Agent settings window. When the agent is already running, Work Days sends a background sync request and the agent executes it immediately. If the agent is not running, Work Days can start a one-time sync using the installed agent.</p>
+        <p>When the Outlook Agent changes the Work Days database from an Outlook edit, Work Days shows an <strong>OUTLOOK CHANGE</strong> refresh message in the same area normally used for update notifications. Click it to refresh the screen and reload the latest database values.</p>
 
         <h3>Create or update a day from Outlook</h3>
         <p>You can create or change a Work Days entry directly from Outlook by creating an <strong>all-day appointment</strong> on the target date with one of the supported subjects. The appointment should be shown as <strong>Free time</strong>.</p>
@@ -689,8 +697,9 @@
             <tr><td>The yearly view looks too tight or too large.</td><td>Use <strong>Settings &gt; Options</strong> and adjust <strong>Font size</strong> or <strong>Cell size</strong>.</td></tr>
             <tr><td>Outlook Agent does not create appointments.</td><td>Confirm Microsoft Outlook Desktop is installed and opens normally, then go to <strong>Settings &gt; Outlook Agent</strong>, click <strong>Install / Update</strong>, then <strong>Start</strong>. Use <strong>Open log</strong> if it still does not sync.</td></tr>
             <tr><td>Outlook appointments appear as Busy.</td><td>Run the agent again or click <strong>Start</strong>. Managed Work Days appointments should be reset to <strong>Free time</strong>.</td></tr>
-            <tr><td>Outlook changes are not coming back to Work Days.</td><td>Use a supported all-day subject such as <code>WorkDays - Remote</code> or <code>W - On Site</code>. Make sure the appointment is all-day, the date is inside the sync range, and <strong>Only read items created by the agent</strong> is unchecked. Put notes in the body, then wait for the next sync or click Sync now.</td></tr>
-            <tr><td>A manual Outlook appointment is ignored.</td><td>Turn on <strong>Verbose log</strong>, click Sync now, then open <code>Workdays_Outlook_Agent.log</code>. The log shows whether the item was outside the date range, not all-day, filtered out, or not recognized as a Work Days subject/category.</td></tr>
+            <tr><td>Outlook changes are not coming back to Work Days.</td><td>Use a supported all-day subject such as <code>WorkDays - Remote</code> or <code>W - On Site</code>. Make sure the appointment is all-day, the date is inside the sync range, and <strong>Only read items created by the agent</strong> is unchecked. Put notes in the body, then wait for the next sync or click the main-screen <strong>Sync</strong> button.</td></tr>
+            <tr><td>A manual Outlook appointment is ignored.</td><td>Turn on <strong>Verbose log</strong>, click the main-screen <strong>Sync</strong> button, then open <code>Workdays_Outlook_Agent.log</code>. The log shows whether the item was outside the date range, not all-day, filtered out, or not recognized as a Work Days subject/category.</td></tr>
+            <tr><td>The Work Days screen did not update after an Outlook edit.</td><td>Look for the blue <strong>OUTLOOK CHANGE</strong> refresh message near the selected-date controls. Click it to reload the Work Days screen with the database changes written by the Outlook Agent.</td></tr>
             <tr><td>Marker reminders are too early or too late.</td><td>Open <strong>Settings &gt; Outlook Agent</strong> and adjust <strong>Reminder minutes before all-day event</strong>. Remember that all-day Outlook items start at midnight.</td></tr>
             <tr><td>Cleaned Outlook items came back.</td><td>Make sure <strong>Keep agent stopped after cleanup</strong> is enabled. If the agent is started again, active Work Days entries may be republished to Outlook.</td></tr>
           </tbody>
