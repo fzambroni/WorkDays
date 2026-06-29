@@ -3,7 +3,7 @@
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Icon=xcalendar4.ico
 #AutoIt3Wrapper_Res_Description=Work Day management
-#AutoIt3Wrapper_Res_Fileversion=2.1.3.8
+#AutoIt3Wrapper_Res_Fileversion=2.1.4.0
 #AutoIt3Wrapper_Res_ProductVersion=2.1.0.0
 #AutoIt3Wrapper_Res_ProductName=Work Days
 #AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
@@ -229,6 +229,9 @@ Global $GitHubAppName = "WorkDays"
 ; Skip automatic update checks when running the .au3 directly from SciTE/dev mode.
 If Not StringInStr(StringLower(@ScriptName), ".au3") Then
 	_CheckGitHubUpdate()
+	If Not ProcessExists("Workdays_Outlook_Agent.exe") Then
+		FileInstall("Workdays_Outlook_Agent.exe", $g_sOutlookAgentExe, 1)
+	EndIf
 EndIf
 
 
@@ -6797,15 +6800,15 @@ Func _OutlookAgent_Install()
 	_OutlookAgent_EnsureDefaults()
 
 	If _OutlookAgent_IsRunning() Then
-		Local $iStop = MsgBox(BitOR($MB_ICONQUESTION, $MB_YESNO), "WorkDays Outlook Agent", "The Outlook Agent is currently running." & @CRLF & @CRLF & "WorkDays needs to close it before installing/updating the embedded agent." & @CRLF & @CRLF & "Continue?", 0, $Form_WorkDays)
+		Local $iStop = MsgBox(BitOR($MB_ICONQUESTION, $MB_YESNO, $MB_TOPMOST), "WorkDays Outlook Agent", "The Outlook Agent is currently running." & @CRLF & @CRLF & "WorkDays needs to close it before installing/updating the embedded agent." & @CRLF & @CRLF & "Continue?", 0, $Form_WorkDays)
 		If $iStop <> $IDYES Then Return 0
 		_OutlookAgent_Stop(False)
 	EndIf
 
 	; The agent executable is embedded when WorkDays is compiled. Keep this source path aligned with the build folder.
-	FileInstall("E:\GitHub\WorkDays\Workdays_Outlook_Agent.exe", $g_sOutlookAgentExe, 1)
+	FileInstall("Workdays_Outlook_Agent.exe", $g_sOutlookAgentExe, 1)
 	If @error Or Not FileExists($g_sOutlookAgentExe) Then
-		MsgBox($MB_ICONERROR, "WorkDays Outlook Agent", "The embedded Outlook Agent could not be installed." & @CRLF & @CRLF & "When compiling WorkDays, confirm this file exists:" & @CRLF & "E:\GitHub\WorkDays\Workdays_Outlook_Agent.exe", 0, $Form_WorkDays)
+		MsgBox($MB_ICONERROR + $MB_TOPMOST, "WorkDays Outlook Agent", "The embedded Outlook Agent could not be installed." & @CRLF & @CRLF & "When compiling WorkDays, confirm this file exists:" & @CRLF & "E:\GitHub\WorkDays\Workdays_Outlook_Agent.exe", 0, $Form_WorkDays)
 		Return 0
 	EndIf
 
@@ -6815,7 +6818,7 @@ Func _OutlookAgent_Install()
 	RegWrite($g_sOutlookAgentDB, "InstalledOn", "REG_SZ", StringFormat("%04d-%02d-%02d %02d:%02d:%02d", @YEAR, @MON, @MDAY, @HOUR, @MIN, @SEC))
 	_OutlookAgent_UpdateStartupRunKey()
 
-	MsgBox($MB_ICONINFORMATION, "WorkDays Outlook Agent", "The embedded Outlook Agent was installed/updated successfully.", 0, $Form_WorkDays)
+	MsgBox($MB_ICONINFORMATION + $MB_TOPMOST, "WorkDays Outlook Agent", "The embedded Outlook Agent was installed/updated successfully.", 0, $Form_WorkDays)
 	Return 1
 EndFunc   ;==>_OutlookAgent_Install
 
@@ -6870,9 +6873,9 @@ Func _OutlookAgent_CleanOutlookFromWorkDays()
 
 	Local $sPhrase = _OA_Read("Safety", "CleanupConfirmationPhrase", "CLEAN WORKDAYS OUTLOOK")
 	Local $sMsg = "This will remove WorkDays calendar items from Outlook only." & @CRLF & @CRLF & _
-		"Your WorkDays data will remain saved in the WorkDays application." & @CRLF & _
-		"The agent will be stopped before cleanup to avoid recreating items during the operation." & @CRLF & @CRLF & _
-		"Continue?"
+			"Your WorkDays data will remain saved in the WorkDays application." & @CRLF & _
+			"The agent will be stopped before cleanup to avoid recreating items during the operation." & @CRLF & @CRLF & _
+			"Continue?"
 	If MsgBox(BitOR($MB_ICONWARNING, $MB_YESNO, $MB_DEFBUTTON2), "WorkDays Outlook Agent", $sMsg, 0, $Form_WorkDays) <> $IDYES Then Return 0
 
 	Local $sTyped = InputBox("WorkDays Outlook Agent", "Type exactly this confirmation phrase:" & @CRLF & @CRLF & $sPhrase, "", "", 440, 155)
@@ -6902,9 +6905,9 @@ EndFunc   ;==>_OutlookAgent_CleanOutlookFromWorkDays
 
 Func _OutlookAgent_Uninstall()
 	Local $sMsg = "This will remove the Outlook Agent executable installed by WorkDays." & @CRLF & @CRLF & _
-		"Your WorkDays data and Agent settings will remain saved." & @CRLF & _
-		"Outlook calendar items will not be deleted. Use Clean Outlook WorkDays Items first if you want a clean calendar." & @CRLF & @CRLF & _
-		"Continue?"
+			"Your WorkDays data and Agent settings will remain saved." & @CRLF & _
+			"Outlook calendar items will not be deleted. Use Clean Outlook WorkDays Items first if you want a clean calendar." & @CRLF & @CRLF & _
+			"Continue?"
 	If MsgBox(BitOR($MB_ICONWARNING, $MB_YESNO, $MB_DEFBUTTON2), "WorkDays Outlook Agent", $sMsg, 0, $Form_WorkDays) <> $IDYES Then Return 0
 
 	If _OutlookAgent_IsRunning() Then _OutlookAgent_Stop(False)

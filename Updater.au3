@@ -21,6 +21,7 @@ Opt("TrayAutoPause", 0)
 ;####################################################
 ;####################################################
 Global $AppName = "Workdays"
+Global $UpdateProcess = 0
 ;####################################################
 ;####################################################
 
@@ -76,6 +77,12 @@ If Not FileExists($Path & "\" & $AppName & ".tmp") Then
 Else
 	_UpdaterVerboseLog("Staged file found. Starting replacement.")
 	_splash()
+	_UpdaterVerboseLog("Closing Updater Agent")
+	if ProcessExists("Workdays_Outlook_Agent.exe") Then
+		$UpdateProcess = 1
+		ProcessClose("Workdays_Outlook_Agent.exe")
+	EndIf
+
 	Sleep(3000)
 	If FileMove($Path & "\" & $AppName & ".tmp",$Path & "\" & $AppName & ".exe",9) Then
 		_UpdaterVerboseLog("Replacement completed: " & $Path & "\" & $AppName & ".exe")
@@ -85,6 +92,8 @@ Else
 		Exit
 	EndIf
 	Sleep(2000)
+	_UpdaterVerboseLog("Deleting Updater Agent")
+	FileDelete(@ScriptDir & "\Workdays_Outlook_Agent.exe")
 	_UpdaterVerboseLog("Restarting application: " & $Path & "\" & $AppName & ".exe")
 	Run('"' & $Path & "\" & $AppName & ".exe" & '"')
 
