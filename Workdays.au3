@@ -3,7 +3,7 @@
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Icon=xcalendar4.ico
 #AutoIt3Wrapper_Res_Description=Work Day management
-#AutoIt3Wrapper_Res_Fileversion=2.1.4.0
+#AutoIt3Wrapper_Res_Fileversion=2.1.4.1
 #AutoIt3Wrapper_Res_ProductVersion=2.1.0.0
 #AutoIt3Wrapper_Res_ProductName=Work Days
 #AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
@@ -6873,10 +6873,10 @@ Func _OutlookAgent_CleanOutlookFromWorkDays()
 
 	Local $sPhrase = _OA_Read("Safety", "CleanupConfirmationPhrase", "CLEAN WORKDAYS OUTLOOK")
 	Local $sMsg = "This will remove WorkDays calendar items from Outlook only." & @CRLF & @CRLF & _
-			"Your WorkDays data will remain saved in the WorkDays application." & @CRLF & _
-			"The agent will be stopped before cleanup to avoid recreating items during the operation." & @CRLF & @CRLF & _
-			"Continue?"
-	If MsgBox(BitOR($MB_ICONWARNING, $MB_YESNO, $MB_DEFBUTTON2), "WorkDays Outlook Agent", $sMsg, 0, $Form_WorkDays) <> $IDYES Then Return 0
+		"Your WorkDays data will remain saved in the WorkDays application." & @CRLF & _
+		"The agent will be stopped before cleanup to avoid recreating items during the operation." & @CRLF & @CRLF & _
+		"Continue?"
+	If MsgBox(BitOR($MB_ICONWARNING, $MB_YESNO, $MB_DEFBUTTON2, $MB_TOPMOST), "WorkDays Outlook Agent", $sMsg, 0, $Form_WorkDays) <> $IDYES Then Return 0
 
 	Local $sTyped = InputBox("WorkDays Outlook Agent", "Type exactly this confirmation phrase:" & @CRLF & @CRLF & $sPhrase, "", "", 440, 155)
 	If @error Then Return 0
@@ -6905,10 +6905,10 @@ EndFunc   ;==>_OutlookAgent_CleanOutlookFromWorkDays
 
 Func _OutlookAgent_Uninstall()
 	Local $sMsg = "This will remove the Outlook Agent executable installed by WorkDays." & @CRLF & @CRLF & _
-			"Your WorkDays data and Agent settings will remain saved." & @CRLF & _
-			"Outlook calendar items will not be deleted. Use Clean Outlook WorkDays Items first if you want a clean calendar." & @CRLF & @CRLF & _
-			"Continue?"
-	If MsgBox(BitOR($MB_ICONWARNING, $MB_YESNO, $MB_DEFBUTTON2), "WorkDays Outlook Agent", $sMsg, 0, $Form_WorkDays) <> $IDYES Then Return 0
+		"Your WorkDays data and Agent settings will remain saved." & @CRLF & _
+		"Outlook calendar items will not be deleted. Use Clean Outlook WorkDays Items first if you want a clean calendar." & @CRLF & @CRLF & _
+		"Continue?"
+	If MsgBox(BitOR($MB_ICONWARNING, $MB_YESNO, $MB_DEFBUTTON2, $MB_TOPMOST), "WorkDays Outlook Agent", $sMsg, 0, $Form_WorkDays) <> $IDYES Then Return 0
 
 	If _OutlookAgent_IsRunning() Then _OutlookAgent_Stop(False)
 	RegDelete("HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run", "WorkDays Outlook Agent")

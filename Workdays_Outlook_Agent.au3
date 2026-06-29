@@ -3,7 +3,7 @@
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Icon=CalendarSync.ico
 #AutoIt3Wrapper_Res_Description=Work Day Sync Agent
-#AutoIt3Wrapper_Res_Fileversion=1.0.0.2
+#AutoIt3Wrapper_Res_Fileversion=1.0.0.3
 #AutoIt3Wrapper_Res_ProductName=Work Day Sync Agent
 #AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
 #AutoIt3Wrapper_Res_LegalCopyright=Copyright © 2026 Fabricio Zambroni
@@ -18,11 +18,12 @@ Opt("MustDeclareVars", 1)
 Opt("TrayMenuMode", 3)
 Opt("TrayOnEventMode", 0)
 
-Global Const $g_sAppTitle = "WorkDays Outlook Agent - Version: " & FileGetVersion(@ScriptFullPath)
+Global Const $g_sAppTitle = "WorkDays Outlook Agent"
 Global Const $g_sDB = "HKEY_CURRENT_USER\Software\WorkDays"
-Global Const $g_sIni = @ScriptDir & "\Workdays_Outlook_Agent.ini"
-Global Const $g_sState = @ScriptDir & "\Workdays_Outlook_Agent_State.ini"
-Global Const $g_sLog = @ScriptDir & "\Workdays_Outlook_Agent.log"
+Global Const $g_sAgentDB = "HKEY_CURRENT_USER\Software\WorkDays\OutlookAgent"
+Global Const $g_sAgentDir = @LocalAppDataDir & "\WorkDays"
+Global Const $g_sState = $g_sAgentDir & "\Workdays_Outlook_Agent_State.ini"
+Global Const $g_sLog = $g_sAgentDir & "\Workdays_Outlook_Agent.log"
 Global Const $g_sSep = Chr(29)
 
 Global Const $OL_APPOINTMENT_ITEM = 1
@@ -36,17 +37,19 @@ Global $g_hTimer = TimerInit()
 Global $g_iTrayStatus = 0
 Global $g_iTraySyncNow = 0
 Global $g_iTrayPause = 0
-Global $g_iTraySettings = 0
 Global $g_iTrayLog = 0
-Global $g_iTrayStartup = 0
+Global $g_iTrayCleanOutlook = 0
 Global $g_iTrayExit = 0
+
+DirCreate($g_sAgentDir)
+_EnsureConfig()
+_HandleCommandLine()
 
 If _Singleton($g_sAppTitle, 1) = 0 Then
 	MsgBox($MB_ICONINFORMATION, $g_sAppTitle, "WorkDays Outlook Agent is already running.")
 	Exit
 EndIf
 
-_EnsureConfig()
 _ApplyStartupSetting()
 _CreateTray()
 _Log("Agent started.")
@@ -61,16 +64,14 @@ While 1
 			$g_hTimer = TimerInit()
 		Case $g_iTrayPause
 			_TogglePause()
-		Case $g_iTraySettings
-			ShellExecute($g_sIni)
 		Case $g_iTrayLog
 			If FileExists($g_sLog) Then
 				ShellExecute($g_sLog)
 			Else
 				MsgBox($MB_ICONINFORMATION, $g_sAppTitle, "The log file has not been created yet.")
 			EndIf
-		Case $g_iTrayStartup
-			_ToggleWindowsStartup()
+		Case $g_iTrayCleanOutlook
+			_CleanOutlookCalendarFromTray()
 		Case $g_iTrayExit
 			_Log("Agent closed by user.")
 			Exit
@@ -88,27 +89,83 @@ While 1
 	Sleep(250)
 WEnd
 
-Func _EnsureConfig()
-	If FileExists($g_sIni) Then Return
+Func _HandleCommandLine()
+	If $CmdLine[0] < 1 Then Return
+	Local $sCmd = StringLower(StringStripWS($CmdLine[1], 3))
+	Switch $sCmd
+		Case "/cleanoutlook"
+			_Log("Outlook cleanup requested by WorkDays.")
+			Local $iDeleted = _CleanOutlookCalendar()
+			If @error Then
+				_Log("Outlook cleanup failed. Error code: " & @error)
+				Exit 1
+			EndIf
+			_Log("Outlook cleanup completed. Deleted items: " & $iDeleted)
+			Exit 0
+		Case "/synconce", "/syncnow"
+			_Log("One-time sync requested by WorkDays.")
+			Local $iChanges = _RunSync()
+			If @error Then
+				_Log("One-time sync failed. Error code: " & @error)
+				Exit 1
+			EndIf
+			_Log("One-time sync completed. Changes: " & $iChanges)
+			Exit 0
+	EndSwitch
+EndFunc
 
-	IniWrite($g_sIni, "Sync", "IntervalMinutes", "15")
-	IniWrite($g_sIni, "Sync", "PastDays", "60")
-	IniWrite($g_sIni, "Sync", "FutureDays", "370")
-	IniWrite($g_sIni, "Sync", "OutlookWinsOnConflict", "1")
-	IniWrite($g_sIni, "Sync", "DeleteInOutlookClearsWorkDays", "0")
-	IniWrite($g_sIni, "Sync", "SyncBlank", "0")
-	IniWrite($g_sIni, "Sync", "SyncWeekend", "0")
-	IniWrite($g_sIni, "Sync", "SyncTaggedBlankOrWeekend", "1")
-	IniWrite($g_sIni, "Sync", "RunAtWindowsStartup", "0")
-	IniWrite($g_sIni, "Outlook", "SubjectPrefix", "WorkDays -")
-	IniWrite($g_sIni, "Outlook", "CategoryPrefix", "WorkDays -")
-	IniWrite($g_sIni, "Outlook", "ReminderSet", "0")
-	IniWrite($g_sIni, "Outlook", "ManagedOnly", "0")
-	IniWrite($g_sIni, "Advanced", "LogLevel", "Normal")
+Func _EnsureConfig()
+	; Settings are owned by the main WorkDays application and stored in the registry.
+	; The agent only creates missing defaults for upgrade safety.
+	_EnsureRegDefault("Sync", "IntervalMinutes", "15")
+	_EnsureRegDefault("Sync", "PastDays", "60")
+	_EnsureRegDefault("Sync", "FutureDays", "370")
+	_EnsureRegDefault("Sync", "OutlookWinsOnConflict", "1")
+	_EnsureRegDefault("Sync", "DeleteInOutlookClearsWorkDays", "0")
+	_EnsureRegDefault("Sync", "SyncBlank", "0")
+	_EnsureRegDefault("Sync", "SyncWeekend", "0")
+	_EnsureRegDefault("Sync", "SyncTaggedBlankOrWeekend", "1")
+	_EnsureRegDefault("Sync", "RunAtWindowsStartup", "0")
+
+	_EnsureRegDefault("Outlook", "SubjectPrefix", "WorkDays -")
+	_EnsureRegDefault("Outlook", "CategoryPrefix", "WorkDays -")
+	_EnsureRegDefault("Outlook", "ReminderSet", "0")
+	_EnsureRegDefault("Outlook", "ManagedOnly", "0")
+
+	_EnsureRegDefault("Markers", "ShowMarkerTagInSubject", "1")
+	_EnsureRegDefault("Markers", "MarkerSubjectSuffix", " [Marker]")
+	_EnsureRegDefault("Markers", "UseSeparateMarkerCategory", "1")
+	_EnsureRegDefault("Markers", "MarkerCategoryName", "WorkDays - Marker")
+	_EnsureRegDefault("Markers", "ReminderWhenMarkerExists", "1")
+	_EnsureRegDefault("Markers", "ReminderMinutesBeforeStart", "540")
+
+	_EnsureRegDefault("Safety", "EnableOutlookCleanup", "1")
+	_EnsureRegDefault("Safety", "CleanupPastYears", "10")
+	_EnsureRegDefault("Safety", "CleanupFutureYears", "10")
+	_EnsureRegDefault("Safety", "CleanupPrefixOnlyItems", "0")
+	_EnsureRegDefault("Safety", "PauseAfterOutlookCleanup", "1")
+	_EnsureRegDefault("Safety", "CleanupConfirmationPhrase", "CLEAN WORKDAYS OUTLOOK")
+
+	_EnsureRegDefault("Advanced", "LogLevel", "Normal")
+EndFunc
+
+Func _SettingName($sSection, $sKey)
+	Return $sSection & "_" & $sKey
+EndFunc
+
+Func _EnsureRegDefault($sSection, $sKey, $sDefault)
+	RegRead($g_sAgentDB, _SettingName($sSection, $sKey))
+	If @error Then RegWrite($g_sAgentDB, _SettingName($sSection, $sKey), "REG_SZ", String($sDefault))
 EndFunc
 
 Func _Cfg($sSection, $sKey, $sDefault)
-	Return IniRead($g_sIni, $sSection, $sKey, $sDefault)
+	Local $sValue = RegRead($g_sAgentDB, _SettingName($sSection, $sKey))
+	If @error Or $sValue = "" Then Return $sDefault
+	Return String($sValue)
+EndFunc
+
+Func _SetCfg($sSection, $sKey, $sValue)
+	Return RegWrite($g_sAgentDB, _SettingName($sSection, $sKey), "REG_SZ", String($sValue))
 EndFunc
 
 Func _CreateTray()
@@ -118,17 +175,12 @@ Func _CreateTray()
 	TrayCreateItem("")
 	$g_iTraySyncNow = TrayCreateItem("Sync now")
 	$g_iTrayPause = TrayCreateItem("Pause sync")
-	$g_iTraySettings = TrayCreateItem("Open settings")
 	$g_iTrayLog = TrayCreateItem("Open log")
-	$g_iTrayStartup = TrayCreateItem(_StartupTrayText())
+	TrayCreateItem("")
+	$g_iTrayCleanOutlook = TrayCreateItem("Clean Outlook WorkDays items...")
 	TrayCreateItem("")
 	$g_iTrayExit = TrayCreateItem("Exit")
 	TraySetState($TRAY_ICONSTATE_SHOW)
-EndFunc
-
-Func _StartupTrayText()
-	If _Cfg("Sync", "RunAtWindowsStartup", "0") = "1" Then Return "Disable Windows startup"
-	Return "Enable Windows startup"
 EndFunc
 
 Func _TogglePause()
@@ -147,22 +199,13 @@ Func _TogglePause()
 	EndIf
 EndFunc
 
-Func _ToggleWindowsStartup()
-	Local $sCurrent = _Cfg("Sync", "RunAtWindowsStartup", "0")
-	If $sCurrent = "1" Then
-		IniWrite($g_sIni, "Sync", "RunAtWindowsStartup", "0")
-		RegDelete("HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run", "WorkDays Outlook Agent")
-	Else
-		IniWrite($g_sIni, "Sync", "RunAtWindowsStartup", "1")
-		RegWrite("HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run", "WorkDays Outlook Agent", "REG_SZ", _AgentRunCommand())
-	EndIf
-	TrayItemSetText($g_iTrayStartup, _StartupTrayText())
-	_ApplyStartupSetting()
-EndFunc
-
 Func _ApplyStartupSetting()
+	; Startup is configured only by the main WorkDays application.
+	; The agent only applies the registry value it receives from WorkDays.
 	If _Cfg("Sync", "RunAtWindowsStartup", "0") = "1" Then
 		RegWrite("HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run", "WorkDays Outlook Agent", "REG_SZ", _AgentRunCommand())
+	Else
+		RegDelete("HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run", "WorkDays Outlook Agent")
 	EndIf
 EndFunc
 
@@ -310,7 +353,9 @@ Func _RunSync()
 		EndIf
 
 		; First run or state repair: create missing Outlook items from existing Work Days data.
-		If Not $bHasOutlook And _ShouldSync($sRegStatus, $sRegMarker) Then
+		; If Outlook was intentionally cleaned, the state keeps the current WorkDays hash
+		; with no Outlook hash. In that case, do not republish until WorkDays changes again.
+		If Not $bHasOutlook And _ShouldSync($sRegStatus, $sRegMarker) And $sStateRegHash = "" And $sStateOutHash = "" And $sStateEntryID = "" Then
 			$sOutEntryID = _CreateOrUpdateOutlookItem($oOutlook, $oNs, $sDateISO, "", $sRegStatus, $sRegMarker)
 			_UpdateState($sDateISO, $sRegHash, $sRegHash, $sOutEntryID)
 			$iChanges += 1
@@ -325,6 +370,116 @@ Func _RunSync()
 	Next
 
 	Return $iChanges
+EndFunc
+
+Func _CleanOutlookCalendarFromTray()
+	If _Cfg("Safety", "EnableOutlookCleanup", "1") <> "1" Then
+		MsgBox($MB_ICONINFORMATION, $g_sAppTitle, "Outlook cleanup is disabled in settings.")
+		Return
+	EndIf
+
+	Local $sPhrase = _Cfg("Safety", "CleanupConfirmationPhrase", "CLEAN WORKDAYS OUTLOOK")
+	Local $sMsg = "This will delete WorkDays calendar items from Outlook only." & @CRLF & @CRLF & _
+		"Your WorkDays data will remain stored in the WorkDays app." & @CRLF & _
+		"After cleanup, sync will be paused if PauseAfterOutlookCleanup is enabled." & @CRLF & @CRLF & _
+		"Continue?"
+	If MsgBox(BitOR($MB_ICONWARNING, $MB_YESNO, $MB_DEFBUTTON2), $g_sAppTitle, $sMsg) <> $IDYES Then Return
+
+	Local $sTyped = InputBox($g_sAppTitle, "Type exactly this confirmation phrase:" & @CRLF & @CRLF & $sPhrase, "", "", 420, 150)
+	If @error Then Return
+	If StringStripWS($sTyped, 3) <> $sPhrase Then
+		MsgBox($MB_ICONINFORMATION, $g_sAppTitle, "Cleanup cancelled. The confirmation phrase did not match.")
+		Return
+	EndIf
+
+	TrayItemSetText($g_iTrayStatus, "Cleaning Outlook...")
+	Local $iDeleted = _CleanOutlookCalendar()
+	If @error Then
+		MsgBox($MB_ICONERROR, $g_sAppTitle, "Outlook cleanup failed. Check the log file for details.")
+		TrayItemSetText($g_iTrayStatus, "Cleanup failed")
+		Return
+	EndIf
+
+	If _Cfg("Safety", "PauseAfterOutlookCleanup", "1") = "1" And Not $g_bPaused Then
+		_TogglePause()
+	EndIf
+
+	MsgBox($MB_ICONINFORMATION, $g_sAppTitle, "Outlook cleanup completed." & @CRLF & @CRLF & "Deleted items: " & $iDeleted)
+	_Log("Outlook cleanup completed. Deleted items: " & $iDeleted)
+EndFunc
+
+Func _CleanOutlookCalendar()
+	Local $oOutlook = _GetOutlookApplication()
+	If Not IsObj($oOutlook) Then Return SetError(1, 0, 0)
+
+	Local $oNs = $oOutlook.GetNamespace("MAPI")
+	If Not IsObj($oNs) Then Return SetError(2, 0, 0)
+
+	Local $oCalendar = $oNs.GetDefaultFolder($OL_FOLDER_CALENDAR)
+	If Not IsObj($oCalendar) Then Return SetError(3, 0, 0)
+
+	Local $iPastYears = Number(_Cfg("Safety", "CleanupPastYears", "10"))
+	Local $iFutureYears = Number(_Cfg("Safety", "CleanupFutureYears", "10"))
+	If $iPastYears < 0 Then $iPastYears = 10
+	If $iFutureYears < 0 Then $iFutureYears = 10
+
+	Local $sStartISO = _ISOAddDays(_TodayISO(), -365 * $iPastYears)
+	Local $sEndISO = _ISOAddDays(_TodayISO(), 365 * $iFutureYears)
+	Local $oItems = $oCalendar.Items
+	If Not IsObj($oItems) Then Return SetError(4, 0, 0)
+
+	$oItems.IncludeRecurrences = False
+	$oItems.Sort("[Start]")
+	Local $sFilter = "[Start] >= '" & _OutlookFilterDate($sStartISO) & "' AND [Start] < '" & _OutlookFilterDate(_ISOAddDays($sEndISO, 1)) & "'"
+	Local $oRange = $oItems.Restrict($sFilter)
+	If Not IsObj($oRange) Then Return SetError(5, 0, 0)
+
+	Local $oDeleteList = ObjCreate("Scripting.Dictionary")
+	If Not IsObj($oDeleteList) Then Return SetError(6, 0, 0)
+
+	Local $oItem
+	For $oItem In $oRange
+		If Not IsObj($oItem) Then ContinueLoop
+		If Not _IsOutlookCleanupCandidate($oItem) Then ContinueLoop
+
+		Local $sEntryID = String($oItem.EntryID)
+		If $sEntryID = "" Then ContinueLoop
+		Local $sDateISO = _GetUserProp($oItem, "WorkDaysDate")
+		If Not _IsISODate($sDateISO) Then $sDateISO = _OutlookDateToISO($oItem.Start)
+		If Not $oDeleteList.Exists($sEntryID) Then $oDeleteList.Add($sEntryID, $sDateISO)
+	Next
+
+	Local $iDeleted = 0
+	Local $vEntryID
+	For $vEntryID In $oDeleteList.Keys
+		Local $sDate = $oDeleteList.Item($vEntryID)
+		If _DeleteOutlookItem($oNs, String($vEntryID)) Then
+			$iDeleted += 1
+			If _IsISODate($sDate) Then _MarkDateAsOutlookCleaned($sDate)
+		EndIf
+	Next
+
+	Return $iDeleted
+EndFunc
+
+Func _IsOutlookCleanupCandidate($oItem)
+	If Not IsObj($oItem) Then Return False
+	If _GetUserProp($oItem, "WorkDaysManaged") = "1" Then Return True
+
+	If _Cfg("Safety", "CleanupPrefixOnlyItems", "0") <> "1" Then Return False
+
+	Local $sSubject = String($oItem.Subject)
+	Local $sPrefix = _SubjectPrefix()
+	If StringLeft(StringLower(StringStripWS($sSubject, 3)), StringLen(StringLower($sPrefix))) = StringLower($sPrefix) Then Return True
+	If StringRegExp($sSubject, "(?i)^\s*\[\s*WD\s*[:\-]\s*[A-Z]") Then Return True
+	Return False
+EndFunc
+
+Func _MarkDateAsOutlookCleaned($sDateISO)
+	Local $sRegRec = _ReadRegistryDay($sDateISO)
+	Local $sRegStatus = _RecordStatus($sRegRec)
+	Local $sRegMarker = _RecordMarker($sRegRec)
+	_UpdateState($sDateISO, _RecordHash($sRegStatus, $sRegMarker), "", "")
 EndFunc
 
 Func _GetOutlookApplication()
@@ -357,8 +512,9 @@ Func _LoadOutlookMap($oCalendar, $sStartISO, $sEndISO)
 		If Not _IsISODate($sDateISO) Then $sDateISO = _OutlookDateToISO($oItem.Start)
 		If Not _IsISODate($sDateISO) Then ContinueLoop
 
-		Local $sStatus = _GetUserProp($oItem, "WorkDaysStatus")
-		If Not _IsKnownStatus($sStatus) Then $sStatus = _ParseStatusFromSubject($oItem.Subject)
+		; Visible Outlook data wins. This lets users change the day classification directly in Outlook.
+		; Internal UserProperties are kept only as a fallback for old/managed items.
+		Local $sStatus = _GetOutlookItemStatus($oItem)
 		If Not _IsKnownStatus($sStatus) Then ContinueLoop
 
 		Local $sMarker = _CleanOutlookMarker($oItem.Body)
@@ -387,6 +543,8 @@ Func _IsWorkDaysCandidate($oItem)
 
 	If _Cfg("Outlook", "ManagedOnly", "0") = "1" Then Return False
 
+	If _IsKnownStatus(_ParseStatusFromCategories($oItem.Categories)) Then Return True
+
 	Local $sSubject = String($oItem.Subject)
 	Local $sPrefix = _SubjectPrefix()
 	If StringLeft(StringLower(StringStripWS($sSubject, 3)), StringLen(StringLower($sPrefix))) = StringLower($sPrefix) Then Return True
@@ -400,14 +558,14 @@ Func _CreateOrUpdateOutlookItem($oOutlook, $oNs, $sDateISO, $sEntryID, $sStatus,
 	If Not IsObj($oItem) Then $oItem = $oOutlook.CreateItem($OL_APPOINTMENT_ITEM)
 	If Not IsObj($oItem) Then Return ""
 
-	$oItem.Subject = _BuildSubject($sStatus)
+	$oItem.Subject = _BuildSubject($sStatus, $sMarker)
 	$oItem.Start = _OutlookFilterDate($sDateISO)
 	$oItem.End = _OutlookFilterDate(_ISOAddDays($sDateISO, 1))
 	$oItem.AllDayEvent = True
 	$oItem.BusyStatus = $OL_FREE
-	$oItem.ReminderSet = (_Cfg("Outlook", "ReminderSet", "0") = "1")
+	_SetOutlookReminder($oItem, $sMarker)
 	$oItem.Body = $sMarker
-	$oItem.Categories = _CategoryPrefix() & _StatusLabel($sStatus)
+	$oItem.Categories = _BuildCategories($sStatus, $sMarker)
 	_SetUserProp($oItem, "WorkDaysManaged", "1")
 	_SetUserProp($oItem, "WorkDaysDate", $sDateISO)
 	_SetUserProp($oItem, "WorkDaysStatus", $sStatus)
@@ -423,8 +581,8 @@ Func _EnsureOutlookItemFree($oNs, $sEntryID, $sDateISO, $sStatus, $sMarker)
 	If Not IsObj($oItem) Then Return 0
 
 	Local $bChanged = False
-	If String($oItem.Subject) <> _BuildSubject($sStatus) Then
-		$oItem.Subject = _BuildSubject($sStatus)
+	If String($oItem.Subject) <> _BuildSubject($sStatus, $sMarker) Then
+		$oItem.Subject = _BuildSubject($sStatus, $sMarker)
 		$bChanged = True
 	EndIf
 	If $oItem.BusyStatus <> $OL_FREE Then
@@ -435,10 +593,15 @@ Func _EnsureOutlookItemFree($oNs, $sEntryID, $sDateISO, $sStatus, $sMarker)
 		$oItem.AllDayEvent = True
 		$bChanged = True
 	EndIf
-	If String($oItem.Categories) = "" Then
-		$oItem.Categories = _CategoryPrefix() & _StatusLabel($sStatus)
+	If String($oItem.Categories) <> _BuildCategories($sStatus, $sMarker) Then
+		$oItem.Categories = _BuildCategories($sStatus, $sMarker)
 		$bChanged = True
 	EndIf
+	If String($oItem.Body) <> $sMarker Then
+		$oItem.Body = $sMarker
+		$bChanged = True
+	EndIf
+	If _SetOutlookReminder($oItem, $sMarker) Then $bChanged = True
 	_SetUserProp($oItem, "WorkDaysManaged", "1")
 	_SetUserProp($oItem, "WorkDaysDate", $sDateISO)
 	_SetUserProp($oItem, "WorkDaysStatus", $sStatus)
@@ -538,19 +701,58 @@ EndFunc
 
 
 Func _SubjectPrefix()
-	Local $sPrefix = IniRead($g_sIni, "Outlook", "SubjectPrefix", "WorkDays -")
+	Local $sPrefix = _Cfg("Outlook", "SubjectPrefix", "WorkDays -")
 	If StringRight($sPrefix, 1) = "-" Then $sPrefix &= " "
 	Return $sPrefix
 EndFunc
 
 Func _CategoryPrefix()
-	Local $sPrefix = IniRead($g_sIni, "Outlook", "CategoryPrefix", "WorkDays -")
+	Local $sPrefix = _Cfg("Outlook", "CategoryPrefix", "WorkDays -")
 	If StringRight($sPrefix, 1) = "-" Then $sPrefix &= " "
 	Return $sPrefix
 EndFunc
 
-Func _BuildSubject($sStatus)
-	Return _SubjectPrefix() & _StatusLabel($sStatus)
+Func _BuildSubject($sStatus, $sMarker = "")
+	Local $sSubject = _SubjectPrefix() & _StatusLabel($sStatus)
+	If _HasMarker($sMarker) And _Cfg("Markers", "ShowMarkerTagInSubject", "1") = "1" Then
+		$sSubject &= _Cfg("Markers", "MarkerSubjectSuffix", " [Marker]")
+	EndIf
+	Return $sSubject
+EndFunc
+
+Func _BuildCategories($sStatus, $sMarker = "")
+	Local $sCategories = _CategoryPrefix() & _StatusLabel($sStatus)
+	If _HasMarker($sMarker) And _Cfg("Markers", "UseSeparateMarkerCategory", "1") = "1" Then
+		$sCategories &= ", " & _Cfg("Markers", "MarkerCategoryName", "WorkDays - Marker")
+	EndIf
+	Return $sCategories
+EndFunc
+
+Func _HasMarker($sMarker)
+	Return StringStripWS(String($sMarker), 3) <> ""
+EndFunc
+
+Func _SetOutlookReminder(ByRef $oItem, $sMarker)
+	If Not IsObj($oItem) Then Return False
+	Local $bChanged = False
+	Local $bReminderSet = (_Cfg("Outlook", "ReminderSet", "0") = "1")
+	If _HasMarker($sMarker) And _Cfg("Markers", "ReminderWhenMarkerExists", "1") = "1" Then $bReminderSet = True
+
+	If $oItem.ReminderSet <> $bReminderSet Then
+		$oItem.ReminderSet = $bReminderSet
+		$bChanged = True
+	EndIf
+
+	If $bReminderSet Then
+		Local $iMinutes = Number(_Cfg("Markers", "ReminderMinutesBeforeStart", "540"))
+		If $iMinutes < 0 Then $iMinutes = 0
+		If $oItem.ReminderMinutesBeforeStart <> $iMinutes Then
+			$oItem.ReminderMinutesBeforeStart = $iMinutes
+			$bChanged = True
+		EndIf
+	EndIf
+
+	Return $bChanged
 EndFunc
 
 Func _StatusLabel($sStatus)
@@ -573,6 +775,58 @@ Func _StatusLabel($sStatus)
 			Return "Weekend"
 	EndSwitch
 	Return "Unknown"
+EndFunc
+
+Func _GetOutlookItemStatus($oItem)
+	If Not IsObj($oItem) Then Return ""
+
+	Local $sStatus = _ParseStatusFromCategories($oItem.Categories)
+	If _IsKnownStatus($sStatus) Then Return $sStatus
+
+	$sStatus = _ParseStatusFromSubject($oItem.Subject)
+	If _IsKnownStatus($sStatus) Then Return $sStatus
+
+	$sStatus = _GetUserProp($oItem, "WorkDaysStatus")
+	If _IsKnownStatus($sStatus) Then Return $sStatus
+
+	Return ""
+EndFunc
+
+Func _ParseStatusFromCategories($sCategories)
+	Local $sRaw = String($sCategories)
+	If StringStripWS($sRaw, 3) = "" Then Return ""
+
+	Local $sPrefix = StringLower(_CategoryPrefix())
+	Local $aCategories = StringSplit($sRaw, ",")
+	If Not IsArray($aCategories) Then Return ""
+
+	For $i = 1 To $aCategories[0]
+		Local $sCat = StringLower(StringStripWS($aCategories[$i], 3))
+		If $sCat = "" Then ContinueLoop
+		If StringLeft($sCat, StringLen($sPrefix)) = $sPrefix Then
+			Local $sAfter = StringStripWS(StringTrimLeft($sCat, StringLen($sPrefix)), 3)
+			Local $sStatus = _ParseStatusLabel($sAfter)
+			If _IsKnownStatus($sStatus) Then Return $sStatus
+		EndIf
+		Local $sDirect = _ParseStatusLabel($sCat)
+		If _IsKnownStatus($sDirect) Then Return $sDirect
+	Next
+
+	Return ""
+EndFunc
+
+Func _ParseStatusLabel($sText)
+	Local $s = StringLower(StringStripWS(String($sText), 3))
+	If $s = "" Then Return ""
+	If $s = "o" Or $s = "on site" Or $s = "onsite" Then Return "O"
+	If $s = "r" Or $s = "remote" Then Return "R"
+	If $s = "h" Or $s = "holiday" Then Return "H"
+	If $s = "p" Or $s = "pto" Or $s = "paid time off" Then Return "P"
+	If $s = "t" Or $s = "travel" Then Return "T"
+	If $s = "s" Or $s = "sick" Then Return "S"
+	If $s = "b" Or $s = "blank" Then Return "B"
+	If $s = "w" Or $s = "weekend" Then Return "W"
+	Return ""
 EndFunc
 
 Func _ParseStatusFromSubject($sSubject)
