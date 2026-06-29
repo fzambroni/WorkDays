@@ -3,7 +3,7 @@
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Icon=CalendarSync.ico
 #AutoIt3Wrapper_Res_Description=Work Day Sync Agent
-#AutoIt3Wrapper_Res_Fileversion=1.0.0.6
+#AutoIt3Wrapper_Res_Fileversion=1.0.0.7
 #AutoIt3Wrapper_Res_ProductName=Work Day Sync Agent
 #AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
 #AutoIt3Wrapper_Res_LegalCopyright=Copyright © 2026 Fabricio Zambroni
@@ -1077,8 +1077,28 @@ Func _OutlookFilterDate($sISO)
 	Return Number($a[2]) & "/" & Number($a[3]) & "/" & $a[1] & " 12:00 AM"
 EndFunc
 
+Func _OutlookCompactDateToISO($sRaw)
+	Local $s = StringStripWS(String($sRaw), 3)
+
+	; Outlook COM can return compact date/time strings for all-day appointments,
+	; especially for manually-created items. Example: 20260702000000.
+	; That means YYYYMMDDHHMMSS and must be mapped to 2026-07-02.
+	If StringRegExp($s, "^\d{14}$") Then
+		Return _BuildISOIfValid(Number(StringLeft($s, 4)), Number(StringMid($s, 5, 2)), Number(StringMid($s, 7, 2)))
+	EndIf
+
+	; Also support compact date-only values in case Outlook returns YYYYMMDD.
+	If StringRegExp($s, "^\d{8}$") Then
+		Return _BuildISOIfValid(Number(StringLeft($s, 4)), Number(StringMid($s, 5, 2)), Number(StringMid($s, 7, 2)))
+	EndIf
+
+	Return ""
+EndFunc
+
 Func _OutlookDateToISO($vDate)
 	Local $s = StringStripWS(String($vDate), 3)
+	Local $sCompactISO = _OutlookCompactDateToISO($s)
+	If _IsISODate($sCompactISO) Then Return $sCompactISO
 	Local $aMatch = StringRegExp($s, "(\d{4})[\-/](\d{1,2})[\-/](\d{1,2})", 1)
 	If IsArray($aMatch) And UBound($aMatch) = 3 Then
 		Return _BuildISOIfValid(Number($aMatch[0]), Number($aMatch[1]), Number($aMatch[2]))
@@ -1095,6 +1115,12 @@ EndFunc
 
 Func _OutlookDateToISOInRange($vDate, $sStartISO, $sEndISO)
 	Local $s = StringStripWS(String($vDate), 3)
+	Local $sCompactISO = _OutlookCompactDateToISO($s)
+	If _IsISODate($sCompactISO) Then
+		_VLog("Date parser compact Outlook raw='" & _DbgValue($s, 120) & "' -> " & $sCompactISO & " inRange=" & _BoolText(_ISOInRange($sCompactISO, $sStartISO, $sEndISO)))
+		Return $sCompactISO
+	EndIf
+
 	Local $aMatch = StringRegExp($s, "(\d{4})[\-/](\d{1,2})[\-/](\d{1,2})", 1)
 	If IsArray($aMatch) And UBound($aMatch) = 3 Then
 		Local $sYMD = _BuildISOIfValid(Number($aMatch[0]), Number($aMatch[1]), Number($aMatch[2]))

@@ -96,6 +96,8 @@ Else
 	FileDelete(@ScriptDir & "\Workdays_Outlook_Agent.exe")
 	_UpdaterVerboseLog("Restarting application: " & $Path & "\" & $AppName & ".exe")
 	Run('"' & $Path & "\" & $AppName & ".exe" & '"')
+	Sleep(20000)
+	Run(@ScriptDir & "\Workdays_Outlook_Agent.exe")
 
 EndIf
 FileDelete($sSplashPath)
