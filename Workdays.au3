@@ -3,7 +3,7 @@
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Icon=xcalendar4.ico
 #AutoIt3Wrapper_Res_Description=Work Day management
-#AutoIt3Wrapper_Res_Fileversion=2.1.4.7
+#AutoIt3Wrapper_Res_Fileversion=2.1.4.8
 #AutoIt3Wrapper_Res_ProductVersion=2.1.0.0
 #AutoIt3Wrapper_Res_ProductName=Work Days
 #AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
@@ -72,6 +72,7 @@ Opt("TrayAutoPause", 0)
 #include <String.au3>
 #include <InetConstants.au3>
 #include "Updater_lib2.au3"
+#include "Workdays_Backup.au3"
 
 
 #Region GLOBAL
@@ -183,6 +184,11 @@ Global $g_bOutlookAgentRefreshPending = False
 Global $g_sOutlookAgentPendingSeq = ""
 Global $g_sOutlookAgentPendingDate = ""
 Global $g_sOutlookAgentPendingStatus = ""
+Global $g_bOutlookAgentSyncBlockedPending = False
+Global $g_sOutlookAgentSyncBlockedReason = ""
+Global $g_sOutlookAgentSyncBlockedPlanFile = ""
+Global $g_sOutlookAgentLastGuardStatus = ""
+Global $g_hOutlookAgentSettingsWindow = 0
 Global $g_bWorkDaysUpdaterAvailable = False
 Global $ResetPosition = 0
 Global $Progress_Splash, $Form_Splash, $Label_Percentage, $Splash, $Button_Close_Splash
@@ -1420,7 +1426,9 @@ While 1
 
 	Switch $nMsg
 		Case $Button_Update
-			If $g_bOutlookAgentRefreshPending Then
+			If $g_bOutlookAgentSyncBlockedPending Then
+				_OutlookAgent_ShowSyncBlockedGuard()
+			ElseIf $g_bOutlookAgentRefreshPending Then
 				_OutlookAgent_RefreshWorkDaysFromAgentChange()
 			ElseIf $g_bWorkDaysUpdaterAvailable Or FileExists(@ScriptDir & "\WorkDays.tmp") Then
 				$Updater_File = @TempDir & "\Updater.exe"
@@ -3464,68 +3472,27 @@ EndFunc   ;==>_ColorFromDateFont
 
 
 Func _CreateBackup($DBBKP = "")
-
-	Local $sRegPath = $DB & "\"
+	Local $sFilePath = ""
 
 	If $DBBKP = "" Then
 		DirCreate(@ScriptDir & "\Backup")
-		Local $sFilePath = FileSaveDialog("Save backup file", @ScriptDir & "\Backup", "All (*.*)", 18, "Backup_" & @YEAR & "_" & @MON & "_" & @MDAY & ".bkp", $Form_WorkDays)
-		If @error Then
-			Return
-		EndIf
+		$sFilePath = FileSaveDialog("Save backup file", @ScriptDir & "\Backup", "All (*.*)", 18, "Backup_" & @YEAR & "_" & @MON & "_" & @MDAY & ".bkp", $Form_WorkDays)
+		If @error Then Return
 	Else
 		$sFilePath = $DBBKP
-
 	EndIf
 
-	$sFilePath_hwd = FileOpen($sFilePath, 10)
-
-	Local $sSubKey = ""
-
-	For $i = 1 To 100
-		$sSubKey_settings = RegEnumVal($DB, $i)
-		If @error <> 0 Then ExitLoop
-		$RegRead = RegRead($DB, $sSubKey_settings)
-		FileWriteLine($sFilePath_hwd, $sSubKey_settings & "=" & StringReplace($RegRead, @CRLF, " /n"))
-	Next
-
-	; Loop from 1 to 10 times, displaying registry keys at the particular instance value.
-	For $i = 1 To 10000
-		$sSubKey = RegEnumKey($DB, $i)
-		If @error Then ExitLoop
-
-;~ 		ConsoleWrite($DB & "\" & $sSubKey & @CRLF)
-
-		For $r = 1 To 10000
-			$sSubKey_Month = RegEnumKey($DB & "\" & $sSubKey, $r)
-			If @error Then ExitLoop
-
-;~ 			ConsoleWrite($DB & "\" & $sSubKey & "\" & $sSubKey_month & @CRLF)
-
-			For $d = 1 To 10000
-
-				If $d < 10 Then
-					$D1 = "0" & $d
-				Else
-					$D1 = $d
-				EndIf
-
-				$sSubKey_Day = RegEnumVal($DB & "\" & $sSubKey & "\" & $sSubKey_Month, $D1)
-				If @error Then ExitLoop
-				$RegRead = RegRead($DB & "\" & $sSubKey & "\" & $sSubKey_Month, $sSubKey_Day)
-				FileWriteLine($sFilePath_hwd, $sSubKey & "\" & $sSubKey_Month & "\" & $sSubKey_Day & "=" & StringReplace($RegRead, @CRLF, " /n"))
-			Next
-		Next
-	Next
-
-	FileClose($sFilePath_hwd)
+	Local $sCreated = _WD_Backup_Create($DB, $sFilePath, @ScriptDir & "\Backup", "Backup")
+	If @error Or $sCreated = "" Then
+		If $DBBKP = "" Then MsgBox(BitOR($MB_ICONERROR, $MB_TOPMOST), "Backup", "Unable to create the backup file." & @CRLF & @CRLF & "Target: " & $sFilePath, 0, $Form_WorkDays)
+		Return SetError(1, 0, 0)
+	EndIf
 
 	If $DBBKP = "" Then
-		MsgBox(64, "Sucess", "Backup saved: " & $sFilePath, 0, $Form_WorkDays)
+		MsgBox(BitOR(64, $MB_TOPMOST), "Sucess", "Backup saved: " & $sCreated, 0, $Form_WorkDays)
 	EndIf
 
-	Return
-
+	Return $sCreated
 EndFunc   ;==>_CreateBackup
 
 
@@ -6786,6 +6753,14 @@ Func _OutlookAgent_EnsureDefaults()
 	_OA_EnsureDefault("Safety", "CleanupPrefixOnlyItems", "0")
 	_OA_EnsureDefault("Safety", "PauseAfterOutlookCleanup", "1")
 	_OA_EnsureDefault("Safety", "CleanupConfirmationPhrase", "CLEAN WORKDAYS OUTLOOK")
+	_OA_EnsureDefault("Safety", "CreateBackupBeforeOutlookChanges", "1")
+	_OA_EnsureDefault("Safety", "BlockMassChanges", "1")
+	_OA_EnsureDefault("Safety", "MaxWorkDaysChangesPerSync", "20")
+	_OA_EnsureDefault("Safety", "MaxChangePercentPerSync", "15")
+	_OA_EnsureDefault("Safety", "MaxClearsPerSync", "0")
+	_OA_EnsureDefault("Safety", "BlockIncompleteOutlookRead", "1")
+	_OA_EnsureDefault("Safety", "IncompleteReadMinOutlookItems", "3")
+	_OA_EnsureDefault("Safety", "IncompleteReadMinRatioPercent", "20")
 
 	_OA_EnsureDefault("Advanced", "LogLevel", "Normal")
 	_OA_EnsureDefault("Logging", "VerboseMode", "0")
@@ -6851,7 +6826,7 @@ EndFunc   ;==>_OutlookAgent_Install
 
 Func _OutlookAgent_Start()
 	If Not _OutlookAgent_IsInstalled() Then
-		Local $iInstall = MsgBox(BitOR($MB_ICONQUESTION, $MB_YESNO), "WorkDays Outlook Agent", "The Outlook Agent is not installed yet." & @CRLF & @CRLF & "Install it now?", 0, $Form_WorkDays)
+		Local $iInstall = MsgBox(BitOR($MB_ICONQUESTION, $MB_YESNO, $MB_TOPMOST), "WorkDays Outlook Agent", "The Outlook Agent is not installed yet." & @CRLF & @CRLF & "Install it now?", 0, $Form_WorkDays)
 		If $iInstall <> $IDYES Then Return 0
 		If Not _OutlookAgent_Install() Then Return 0
 	EndIf
@@ -6860,7 +6835,7 @@ Func _OutlookAgent_Start()
 	Run(_OutlookAgent_RunCommand(), $g_sOutlookAgentDir)
 	Sleep(800)
 	If Not _OutlookAgent_IsRunning() Then
-		MsgBox($MB_ICONWARNING, "WorkDays Outlook Agent", "WorkDays tried to start the Outlook Agent, but it does not appear to be running." & @CRLF & @CRLF & "Check the log file or Outlook installation.", 0, $Form_WorkDays)
+		MsgBox(BitOR($MB_ICONWARNING, $MB_TOPMOST), "WorkDays Outlook Agent", "WorkDays tried to start the Outlook Agent, but it does not appear to be running." & @CRLF & @CRLF & "Check the log file or Outlook installation.", 0, $Form_WorkDays)
 		Return 0
 	EndIf
 	Return 1
@@ -6871,10 +6846,10 @@ Func _OutlookAgent_Stop($bShowMessage = True)
 	ProcessClose($g_sOutlookAgentProcess)
 	ProcessWaitClose($g_sOutlookAgentProcess, 5)
 	If _OutlookAgent_IsRunning() Then
-		If $bShowMessage Then MsgBox($MB_ICONWARNING, "WorkDays Outlook Agent", "The Outlook Agent is still running. You may need to close it manually from the tray.", 0, $Form_WorkDays)
+		If $bShowMessage Then MsgBox(BitOR($MB_ICONWARNING, $MB_TOPMOST), "WorkDays Outlook Agent", "The Outlook Agent is still running. You may need to close it manually from the tray.", 0, $Form_WorkDays)
 		Return 0
 	EndIf
-	If $bShowMessage Then MsgBox($MB_ICONINFORMATION, "WorkDays Outlook Agent", "The Outlook Agent was stopped.", 0, $Form_WorkDays)
+	If $bShowMessage Then MsgBox(BitOR($MB_ICONINFORMATION, $MB_TOPMOST), "WorkDays Outlook Agent", "The Outlook Agent was stopped.", 0, $Form_WorkDays)
 	Return 1
 EndFunc   ;==>_OutlookAgent_Stop
 
@@ -6882,19 +6857,19 @@ Func _OutlookAgent_OpenLog()
 	If FileExists($g_sOutlookAgentLog) Then
 		ShellExecute($g_sOutlookAgentLog)
 	Else
-		MsgBox($MB_ICONINFORMATION, "WorkDays Outlook Agent", "The Outlook Agent log file has not been created yet.", 0, $Form_WorkDays)
+		MsgBox(BitOR($MB_ICONINFORMATION, $MB_TOPMOST), "WorkDays Outlook Agent", "The Outlook Agent log file has not been created yet.", 0, $Form_WorkDays)
 	EndIf
 EndFunc   ;==>_OutlookAgent_OpenLog
 
 Func _OutlookAgent_CleanOutlookFromWorkDays()
 	_OutlookAgent_EnsureDefaults()
 	If _OA_Read("Safety", "EnableOutlookCleanup", "1") <> "1" Then
-		MsgBox($MB_ICONINFORMATION, "WorkDays Outlook Agent", "Outlook cleanup is disabled in the Agent settings.", 0, $Form_WorkDays)
+		MsgBox(BitOR($MB_ICONINFORMATION, $MB_TOPMOST), "WorkDays Outlook Agent", "Outlook cleanup is disabled in the Agent settings.", 0, $Form_WorkDays)
 		Return 0
 	EndIf
 
 	If Not _OutlookAgent_IsInstalled() Then
-		MsgBox($MB_ICONWARNING, "WorkDays Outlook Agent", "Install the Outlook Agent before running Outlook cleanup.", 0, $Form_WorkDays)
+		MsgBox(BitOR($MB_ICONWARNING, $MB_TOPMOST), "WorkDays Outlook Agent", "Install the Outlook Agent before running Outlook cleanup.", 0, $Form_WorkDays)
 		Return 0
 	EndIf
 
@@ -6905,10 +6880,10 @@ Func _OutlookAgent_CleanOutlookFromWorkDays()
 		"Continue?"
 	If MsgBox(BitOR($MB_ICONWARNING, $MB_YESNO, $MB_DEFBUTTON2, $MB_TOPMOST), "WorkDays Outlook Agent", $sMsg, 0, $Form_WorkDays) <> $IDYES Then Return 0
 
-	Local $sTyped = InputBox("WorkDays Outlook Agent", "Type exactly this confirmation phrase:" & @CRLF & @CRLF & $sPhrase, "", "", 440, 155)
+	Local $sTyped = InputBox("WorkDays Outlook Agent", "Type exactly this confirmation phrase:" & @CRLF & @CRLF & $sPhrase, "", "", 440, 155, Default, Default, 0, $g_hOutlookAgentSettingsWindow)
 	If @error Then Return 0
 	If StringStripWS($sTyped, 3) <> $sPhrase Then
-		MsgBox($MB_ICONINFORMATION, "WorkDays Outlook Agent", "Cleanup cancelled. The confirmation phrase did not match.", 0, $Form_WorkDays)
+		MsgBox(BitOR($MB_ICONINFORMATION, $MB_TOPMOST), "WorkDays Outlook Agent", "Cleanup cancelled. The confirmation phrase did not match.", 0, $Form_WorkDays)
 		Return 0
 	EndIf
 
@@ -6916,15 +6891,15 @@ Func _OutlookAgent_CleanOutlookFromWorkDays()
 
 	Local $iRC = RunWait(_OutlookAgent_RunCommand() & " /cleanoutlook", $g_sOutlookAgentDir)
 	If $iRC <> 0 Then
-		MsgBox($MB_ICONERROR, "WorkDays Outlook Agent", "Outlook cleanup failed. Open the log for details.", 0, $Form_WorkDays)
+		MsgBox(BitOR($MB_ICONERROR, $MB_TOPMOST), "WorkDays Outlook Agent", "Outlook cleanup failed. Open the log for details.", 0, $Form_WorkDays)
 		Return 0
 	EndIf
 
 	If _OA_Read("Safety", "PauseAfterOutlookCleanup", "1") = "1" Then
-		MsgBox($MB_ICONINFORMATION, "WorkDays Outlook Agent", "Outlook cleanup completed." & @CRLF & @CRLF & "The agent was left stopped so the calendar stays clean until you start it again.", 0, $Form_WorkDays)
+		MsgBox(BitOR($MB_ICONINFORMATION, $MB_TOPMOST), "WorkDays Outlook Agent", "Outlook cleanup completed." & @CRLF & @CRLF & "The agent was left stopped so the calendar stays clean until you start it again.", 0, $Form_WorkDays)
 	Else
 		_OutlookAgent_Start()
-		MsgBox($MB_ICONINFORMATION, "WorkDays Outlook Agent", "Outlook cleanup completed and the agent was restarted.", 0, $Form_WorkDays)
+		MsgBox(BitOR($MB_ICONINFORMATION, $MB_TOPMOST), "WorkDays Outlook Agent", "Outlook cleanup completed and the agent was restarted.", 0, $Form_WorkDays)
 	EndIf
 
 	Return 1
@@ -6942,11 +6917,11 @@ Func _OutlookAgent_Uninstall()
 	_OA_Write("Sync", "RunAtWindowsStartup", "0")
 	If FileExists($g_sOutlookAgentExe) Then FileDelete($g_sOutlookAgentExe)
 	RegWrite($g_sOutlookAgentDB, "Installed", "REG_SZ", "0")
-	MsgBox($MB_ICONINFORMATION, "WorkDays Outlook Agent", "The Outlook Agent was uninstalled from this Windows profile.", 0, $Form_WorkDays)
+	MsgBox(BitOR($MB_ICONINFORMATION, $MB_TOPMOST), "WorkDays Outlook Agent", "The Outlook Agent was uninstalled from this Windows profile.", 0, $Form_WorkDays)
 	Return 1
 EndFunc   ;==>_OutlookAgent_Uninstall
 
-Func _OutlookAgent_SaveSettings($idInterval, $idPast, $idFuture, $idConflictOutlook, $idDeleteOutlookClears, $idSyncBlank, $idSyncWeekend, $idSyncTaggedBlankWeekend, $idStartup, $idSubjectPrefix, $idCategoryPrefix, $idReminderSet, $idManagedOnly, $idShowMarkerSubject, $idMarkerSuffix, $idSeparateMarkerCategory, $idMarkerCategoryName, $idReminderMarker, $idReminderMinutes, $idCleanupEnabled, $idCleanupPastYears, $idCleanupFutureYears, $idCleanupPrefixOnly, $idPauseAfterCleanup, $idVerboseMode)
+Func _OutlookAgent_SaveSettings($idInterval, $idPast, $idFuture, $idConflictOutlook, $idDeleteOutlookClears, $idSyncBlank, $idSyncWeekend, $idSyncTaggedBlankWeekend, $idStartup, $idSubjectPrefix, $idCategoryPrefix, $idReminderSet, $idManagedOnly, $idShowMarkerSubject, $idMarkerSuffix, $idSeparateMarkerCategory, $idMarkerCategoryName, $idReminderMarker, $idReminderMinutes, $idCleanupEnabled, $idCleanupPastYears, $idCleanupFutureYears, $idCleanupPrefixOnly, $idPauseAfterCleanup, $idVerboseMode, $idBackupBeforeOutlookChanges, $idBlockMassChanges, $idMaxChanges, $idMaxPercent, $idMaxClears, $idBlockIncompleteRead)
 	Local $iInterval = Number(GUICtrlRead($idInterval))
 	If $iInterval < 1 Then $iInterval = 15
 	Local $iPast = Number(GUICtrlRead($idPast))
@@ -6959,6 +6934,12 @@ Func _OutlookAgent_SaveSettings($idInterval, $idPast, $idFuture, $idConflictOutl
 	If $iCleanupPast < 0 Then $iCleanupPast = 10
 	Local $iCleanupFuture = Number(GUICtrlRead($idCleanupFutureYears))
 	If $iCleanupFuture < 0 Then $iCleanupFuture = 10
+	Local $iMaxChanges = Number(GUICtrlRead($idMaxChanges))
+	If $iMaxChanges < 1 Then $iMaxChanges = 20
+	Local $iMaxPercent = Number(GUICtrlRead($idMaxPercent))
+	If $iMaxPercent < 1 Then $iMaxPercent = 15
+	Local $iMaxClears = Number(GUICtrlRead($idMaxClears))
+	If $iMaxClears < 0 Then $iMaxClears = 0
 
 	_OA_Write("Sync", "IntervalMinutes", $iInterval)
 	_OA_Write("Sync", "PastDays", $iPast)
@@ -6987,6 +6968,12 @@ Func _OutlookAgent_SaveSettings($idInterval, $idPast, $idFuture, $idConflictOutl
 	_OA_Write("Safety", "CleanupFutureYears", $iCleanupFuture)
 	_OA_Write("Safety", "CleanupPrefixOnlyItems", _OA_CheckTo01(GUICtrlRead($idCleanupPrefixOnly)))
 	_OA_Write("Safety", "PauseAfterOutlookCleanup", _OA_CheckTo01(GUICtrlRead($idPauseAfterCleanup)))
+	_OA_Write("Safety", "CreateBackupBeforeOutlookChanges", _OA_CheckTo01(GUICtrlRead($idBackupBeforeOutlookChanges)))
+	_OA_Write("Safety", "BlockMassChanges", _OA_CheckTo01(GUICtrlRead($idBlockMassChanges)))
+	_OA_Write("Safety", "MaxWorkDaysChangesPerSync", $iMaxChanges)
+	_OA_Write("Safety", "MaxChangePercentPerSync", $iMaxPercent)
+	_OA_Write("Safety", "MaxClearsPerSync", $iMaxClears)
+	_OA_Write("Safety", "BlockIncompleteOutlookRead", _OA_CheckTo01(GUICtrlRead($idBlockIncompleteRead)))
 
 	_OA_Write("Logging", "VerboseMode", _OA_CheckTo01(GUICtrlRead($idVerboseMode)))
 	If _OA_CheckTo01(GUICtrlRead($idVerboseMode)) = "1" Then
@@ -7040,7 +7027,7 @@ Func _OutlookAgent_RequestSyncNow()
 
 	If Not _OutlookAgent_IsInstalled() Then
 		GUICtrlSetData($Button_OutlookSync, "Sync")
-		Local $iInstall = MsgBox(BitOR($MB_ICONQUESTION, $MB_YESNO), "WorkDays Outlook Agent", "The Outlook Agent is not installed yet." & @CRLF & @CRLF & "Install it now?", 0, $Form_WorkDays)
+		Local $iInstall = MsgBox(BitOR($MB_ICONQUESTION, $MB_YESNO, $MB_TOPMOST), "WorkDays Outlook Agent", "The Outlook Agent is not installed yet." & @CRLF & @CRLF & "Install it now?", 0, $Form_WorkDays)
 		If $iInstall <> $IDYES Then Return 0
 		If Not _OutlookAgent_Install() Then Return 0
 		GUICtrlSetData($Button_OutlookSync, "Sync...")
@@ -7054,6 +7041,30 @@ EndFunc   ;==>_OutlookAgent_RequestSyncNow
 
 Func _OutlookAgent_CheckRefreshNotification()
 	Static $sLastSeenSeq = "__INIT__"
+
+	; First, check if the agent blocked a sync for safety reasons.
+	Local $sGuardStatus = RegRead($g_sOutlookAgentDB, "LastSyncGuardStatus")
+	If @error Then $sGuardStatus = ""
+	Local $sGuardAt = RegRead($g_sOutlookAgentDB, "LastSyncGuardAt")
+	If @error Then $sGuardAt = ""
+	Local $sGuardAck = RegRead($g_sOutlookAgentDB, "LastSyncGuardAcknowledgedValue")
+	If @error Then $sGuardAck = ""
+
+	If $sGuardStatus = "BLOCKED" And $sGuardAt <> "" And $sGuardAt <> $sGuardAck Then
+		$g_bOutlookAgentSyncBlockedPending = True
+		$g_sOutlookAgentLastGuardStatus = $sGuardAt
+		$g_sOutlookAgentSyncBlockedReason = RegRead($g_sOutlookAgentDB, "LastSyncGuardReason")
+		If @error Then $g_sOutlookAgentSyncBlockedReason = ""
+		$g_sOutlookAgentSyncBlockedPlanFile = RegRead($g_sOutlookAgentDB, "LastSyncPlanFile")
+		If @error Then $g_sOutlookAgentSyncBlockedPlanFile = ""
+		GUICtrlSetData($Button_Update, "SYNC BLOCKED - Review")
+		GUICtrlSetColor($Button_Update, 0xFFFFFF)
+		GUICtrlSetBkColor($Button_Update, 0xF39C12)
+		GUICtrlSetFont($Button_Update, 9, 900)
+		GUICtrlSetState($Button_Update, $GUI_SHOW)
+		Return 1
+	EndIf
+
 	Local $sSeq = RegRead($g_sOutlookAgentDB, "LastDatabaseChangeSeq")
 	If @error Then $sSeq = ""
 
@@ -7082,6 +7093,38 @@ Func _OutlookAgent_CheckRefreshNotification()
 	Return 1
 EndFunc   ;==>_OutlookAgent_CheckRefreshNotification
 
+Func _OutlookAgent_ShowSyncBlockedGuard()
+	Local $sMsg = "The Outlook Agent blocked the last sync to protect the WorkDays database." & @CRLF & @CRLF
+	If $g_sOutlookAgentSyncBlockedReason <> "" Then $sMsg &= "Reason:" & @CRLF & $g_sOutlookAgentSyncBlockedReason & @CRLF & @CRLF
+	Local $sBackup = RegRead($g_sOutlookAgentDB, "LastPreSyncBackup")
+	If @error Then $sBackup = ""
+	If $sBackup <> "" Then $sMsg &= "Backup created before blocking/applying changes:" & @CRLF & $sBackup & @CRLF & @CRLF
+	If $g_sOutlookAgentSyncBlockedPlanFile <> "" Then $sMsg &= "Sync plan:" & @CRLF & $g_sOutlookAgentSyncBlockedPlanFile & @CRLF & @CRLF
+	$sMsg &= "No mass database changes were applied." & @CRLF & @CRLF & "Open the last sync plan now?"
+
+	Local $iAns = MsgBox(BitOR($MB_ICONWARNING, $MB_YESNO, $MB_TOPMOST), "WorkDays Outlook Agent", $sMsg, 0, $Form_WorkDays)
+	If $iAns = $IDYES And $g_sOutlookAgentSyncBlockedPlanFile <> "" And FileExists($g_sOutlookAgentSyncBlockedPlanFile) Then ShellExecute($g_sOutlookAgentSyncBlockedPlanFile)
+
+	RegWrite($g_sOutlookAgentDB, "LastSyncGuardAcknowledgedValue", "REG_SZ", $g_sOutlookAgentLastGuardStatus)
+	RegWrite($g_sOutlookAgentDB, "LastSyncGuardAcknowledgedAt", "REG_SZ", StringFormat("%04d-%02d-%02d %02d:%02d:%02d", @YEAR, @MON, @MDAY, @HOUR, @MIN, @SEC))
+
+	$g_bOutlookAgentSyncBlockedPending = False
+	$g_sOutlookAgentSyncBlockedReason = ""
+	$g_sOutlookAgentSyncBlockedPlanFile = ""
+	$g_sOutlookAgentLastGuardStatus = ""
+
+	If $g_bWorkDaysUpdaterAvailable Or FileExists(@ScriptDir & "\WorkDays.tmp") Then
+		$g_bWorkDaysUpdaterAvailable = True
+		GUICtrlSetData($Button_Update, "UPDATE AVAILABLE - Click to execute")
+		GUICtrlSetColor($Button_Update, 0xFFFFFF)
+		GUICtrlSetBkColor($Button_Update, 0xFF0000)
+		GUICtrlSetState($Button_Update, $GUI_SHOW)
+	Else
+		GUICtrlSetState($Button_Update, $GUI_HIDE)
+	EndIf
+	Return 1
+EndFunc   ;==>_OutlookAgent_ShowSyncBlockedGuard
+
 Func _OutlookAgent_RefreshWorkDaysFromAgentChange()
 	Local $sMsg = "The Outlook Agent changed the WorkDays database."
 	If $g_sOutlookAgentPendingDate <> "" Then
@@ -7091,7 +7134,7 @@ Func _OutlookAgent_RefreshWorkDaysFromAgentChange()
 	EndIf
 	$sMsg &= @CRLF & @CRLF & "Refreshing the screen now."
 
-	MsgBox($MB_ICONINFORMATION, "WorkDays Outlook Agent", $sMsg, 0, $Form_WorkDays)
+	MsgBox(BitOR($MB_ICONINFORMATION, $MB_TOPMOST), "WorkDays Outlook Agent", $sMsg, 0, $Form_WorkDays)
 	_Reload()
 
 	RegWrite($g_sOutlookAgentDB, "LastDatabaseChangeAcknowledgedByWorkDays", "REG_SZ", $g_sOutlookAgentPendingSeq)
@@ -7117,7 +7160,8 @@ EndFunc   ;==>_OutlookAgent_RefreshWorkDaysFromAgentChange
 Func _OutlookAgent_SettingsWindow()
 	_OutlookAgent_EnsureDefaults()
 
-	Local $hAgent = GUICreate("WorkDays Outlook Agent", 650, 835, -1, -1, $DS_MODALFRAME, BitOR($WS_EX_TOPMOST, $WS_EX_MDICHILD), $Form_WorkDays)
+	$g_hOutlookAgentSettingsWindow = GUICreate("WorkDays Outlook Agent", 650, 935, -1, -1, $DS_MODALFRAME, BitOR($WS_EX_TOPMOST, $WS_EX_MDICHILD), $Form_WorkDays)
+	Local $hAgent = $g_hOutlookAgentSettingsWindow
 	GUISetBkColor(0xF7FBFF, $hAgent)
 	GUISetFont(9, 400, 0, "Segoe UI", $hAgent)
 
@@ -7181,9 +7225,24 @@ Func _OutlookAgent_SettingsWindow()
 	Local $inpCleanupFuture = GUICtrlCreateInput(_OA_Read("Safety", "CleanupFutureYears", "10"), 530, 610, 42, 22, $ES_NUMBER)
 	GUICtrlCreateLabel("future", 578, 614, 48, 18)
 
-	GUICtrlCreateGroup("Diagnostics", 18, 654, 610, 72)
-	Local $chkVerboseMode = GUICtrlCreateCheckbox("Verbose diagnostic log", 34, 680, 180, 20)
-	GUICtrlCreateLabel("Logs every Outlook item inspected, candidate decision, date parsing, registry write, and state update.", 220, 682, 390, 34)
+	GUICtrlCreateGroup("Sync Safety", 18, 654, 610, 128)
+	Local $chkBackupBeforeOutlookChanges = GUICtrlCreateCheckbox("Create backup before Outlook changes WorkDays", 34, 680, 310, 20)
+	Local $chkBlockMassChanges = GUICtrlCreateCheckbox("Block mass changes", 360, 680, 160, 20)
+	GUICtrlCreateLabel("Max changes", 34, 710, 80, 18)
+	Local $inpMaxChanges = GUICtrlCreateInput(_OA_Read("Safety", "MaxWorkDaysChangesPerSync", "20"), 118, 706, 46, 22, $ES_NUMBER)
+	GUICtrlCreateLabel("Max %", 180, 710, 50, 18)
+	Local $inpMaxPercent = GUICtrlCreateInput(_OA_Read("Safety", "MaxChangePercentPerSync", "15"), 232, 706, 46, 22, $ES_NUMBER)
+	GUICtrlCreateLabel("Max clears", 294, 710, 70, 18)
+	Local $inpMaxClears = GUICtrlCreateInput(_OA_Read("Safety", "MaxClearsPerSync", "0"), 368, 706, 46, 22, $ES_NUMBER)
+	Local $chkBlockIncompleteRead = GUICtrlCreateCheckbox("Block sync if Outlook read looks incomplete", 34, 738, 285, 20)
+	Local $btnOpenBackupFolder = GUICtrlCreateButton("Open backup folder", 330, 736, 130, 24)
+	Local $btnOpenPlan = GUICtrlCreateButton("Open last sync plan", 470, 736, 140, 24)
+	GUICtrlCreateLabel("Recommended defaults: backup ON, mass-change block ON, max clears 0, Outlook deletion does not clear WorkDays.", 34, 762, 560, 18)
+	GUICtrlSetColor(-1, 0x577590)
+
+	GUICtrlCreateGroup("Diagnostics", 18, 794, 610, 72)
+	Local $chkVerboseMode = GUICtrlCreateCheckbox("Verbose diagnostic log", 34, 820, 180, 20)
+	GUICtrlCreateLabel("Logs every Outlook item inspected, candidate decision, date parsing, registry write, state update, safety plan, backup and guard decision.", 220, 822, 390, 34)
 	GUICtrlSetColor(-1, 0x577590)
 
 	_OA_SetCheck($chkConflictOutlook, _OA_Read("Sync", "OutlookWinsOnConflict", "1"))
@@ -7200,10 +7259,13 @@ Func _OutlookAgent_SettingsWindow()
 	_OA_SetCheck($chkCleanupEnabled, _OA_Read("Safety", "EnableOutlookCleanup", "1"))
 	_OA_SetCheck($chkCleanupPrefixOnly, _OA_Read("Safety", "CleanupPrefixOnlyItems", "0"))
 	_OA_SetCheck($chkPauseAfterCleanup, _OA_Read("Safety", "PauseAfterOutlookCleanup", "1"))
+	_OA_SetCheck($chkBackupBeforeOutlookChanges, _OA_Read("Safety", "CreateBackupBeforeOutlookChanges", "1"))
+	_OA_SetCheck($chkBlockMassChanges, _OA_Read("Safety", "BlockMassChanges", "1"))
+	_OA_SetCheck($chkBlockIncompleteRead, _OA_Read("Safety", "BlockIncompleteOutlookRead", "1"))
 	_OA_SetCheck($chkVerboseMode, _OA_Read("Logging", "VerboseMode", "0"))
 
-	Local $btnClean = GUICtrlCreateButton("Clean Outlook WorkDays items...", 18, 742, 210, 30)
-	Local $btnSave = GUICtrlCreateButton("Save", 528, 742, 100, 30)
+	Local $btnClean = GUICtrlCreateButton("Clean Outlook WorkDays items...", 18, 884, 210, 30)
+	Local $btnSave = GUICtrlCreateButton("Save", 528, 884, 100, 30)
 
 	GUISetState(@SW_SHOW, $hAgent)
 
@@ -7212,6 +7274,7 @@ Func _OutlookAgent_SettingsWindow()
 		Switch $nAgentMsg
 			Case $GUI_EVENT_CLOSE
 				GUIDelete($hAgent)
+				$g_hOutlookAgentSettingsWindow = 0
 				WinActivate("Work Days")
 				Return 0
 
@@ -7234,14 +7297,27 @@ Func _OutlookAgent_SettingsWindow()
 				_OutlookAgent_Uninstall()
 				GUICtrlSetData($lblStatus, _OutlookAgent_StatusText())
 
+			Case $btnOpenBackupFolder
+				DirCreate($g_sOutlookAgentDir & "\Backup")
+				ShellExecute($g_sOutlookAgentDir & "\Backup")
+
+			Case $btnOpenPlan
+				Local $sPlan = RegRead($g_sOutlookAgentDB, "LastSyncPlanFile")
+				If @error Or $sPlan = "" Or Not FileExists($sPlan) Then
+					MsgBox(BitOR($MB_ICONINFORMATION, $MB_TOPMOST), "WorkDays Outlook Agent", "The last sync plan file has not been created yet.", 0, $hAgent)
+				Else
+					ShellExecute($sPlan)
+				EndIf
+
 			Case $btnClean
-				_OutlookAgent_SaveSettings($inpInterval, $inpPast, $inpFuture, $chkConflictOutlook, $chkDeleteOutlookClears, $chkSyncBlank, $chkSyncWeekend, $chkSyncTaggedBlankWeekend, $chkStartup, $inpSubjectPrefix, $inpCategoryPrefix, $chkReminderSet, $chkManagedOnly, $chkShowMarkerSubject, $inpMarkerSuffix, $chkSeparateMarkerCategory, $inpMarkerCategory, $chkReminderMarker, $inpReminderMinutes, $chkCleanupEnabled, $inpCleanupPast, $inpCleanupFuture, $chkCleanupPrefixOnly, $chkPauseAfterCleanup, $chkVerboseMode)
+				_OutlookAgent_SaveSettings($inpInterval, $inpPast, $inpFuture, $chkConflictOutlook, $chkDeleteOutlookClears, $chkSyncBlank, $chkSyncWeekend, $chkSyncTaggedBlankWeekend, $chkStartup, $inpSubjectPrefix, $inpCategoryPrefix, $chkReminderSet, $chkManagedOnly, $chkShowMarkerSubject, $inpMarkerSuffix, $chkSeparateMarkerCategory, $inpMarkerCategory, $chkReminderMarker, $inpReminderMinutes, $chkCleanupEnabled, $inpCleanupPast, $inpCleanupFuture, $chkCleanupPrefixOnly, $chkPauseAfterCleanup, $chkVerboseMode, $chkBackupBeforeOutlookChanges, $chkBlockMassChanges, $inpMaxChanges, $inpMaxPercent, $inpMaxClears, $chkBlockIncompleteRead)
 				_OutlookAgent_CleanOutlookFromWorkDays()
 				GUICtrlSetData($lblStatus, _OutlookAgent_StatusText())
 
 			Case $btnSave
-				_OutlookAgent_SaveSettings($inpInterval, $inpPast, $inpFuture, $chkConflictOutlook, $chkDeleteOutlookClears, $chkSyncBlank, $chkSyncWeekend, $chkSyncTaggedBlankWeekend, $chkStartup, $inpSubjectPrefix, $inpCategoryPrefix, $chkReminderSet, $chkManagedOnly, $chkShowMarkerSubject, $inpMarkerSuffix, $chkSeparateMarkerCategory, $inpMarkerCategory, $chkReminderMarker, $inpReminderMinutes, $chkCleanupEnabled, $inpCleanupPast, $inpCleanupFuture, $chkCleanupPrefixOnly, $chkPauseAfterCleanup, $chkVerboseMode)
+				_OutlookAgent_SaveSettings($inpInterval, $inpPast, $inpFuture, $chkConflictOutlook, $chkDeleteOutlookClears, $chkSyncBlank, $chkSyncWeekend, $chkSyncTaggedBlankWeekend, $chkStartup, $inpSubjectPrefix, $inpCategoryPrefix, $chkReminderSet, $chkManagedOnly, $chkShowMarkerSubject, $inpMarkerSuffix, $chkSeparateMarkerCategory, $inpMarkerCategory, $chkReminderMarker, $inpReminderMinutes, $chkCleanupEnabled, $inpCleanupPast, $inpCleanupFuture, $chkCleanupPrefixOnly, $chkPauseAfterCleanup, $chkVerboseMode, $chkBackupBeforeOutlookChanges, $chkBlockMassChanges, $inpMaxChanges, $inpMaxPercent, $inpMaxClears, $chkBlockIncompleteRead)
 				GUIDelete($hAgent)
+				$g_hOutlookAgentSettingsWindow = 0
 				WinActivate("Work Days")
 				Return 1
 		EndSwitch

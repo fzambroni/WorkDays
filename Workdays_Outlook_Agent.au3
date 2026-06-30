@@ -3,7 +3,7 @@
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Icon=CalendarSync.ico
 #AutoIt3Wrapper_Res_Description=Work Day Sync Agent
-#AutoIt3Wrapper_Res_Fileversion=1.0.0.9
+#AutoIt3Wrapper_Res_Fileversion=1.0.1.0
 #AutoIt3Wrapper_Res_ProductName=Work Day Sync Agent
 #AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
 #AutoIt3Wrapper_Res_LegalCopyright=Copyright © 2026 Fabricio Zambroni
@@ -13,6 +13,7 @@
 #include <Misc.au3>
 #include <MsgBoxConstants.au3>
 #include <TrayConstants.au3>
+#include "Workdays_Backup.au3"
 
 Opt("MustDeclareVars", 1)
 Opt("TrayMenuMode", 3)
@@ -42,6 +43,15 @@ Global $g_iTrayCleanOutlook = 0
 Global $g_iTrayExit = 0
 Global $g_sLastForceSyncRequest = ""
 
+Global $g_iPlanOutlookToWorkDaysChanges = 0
+Global $g_iPlanClears = 0
+Global $g_iPlanCurrentRecords = 0
+Global $g_iPlanSyncableRecords = 0
+Global $g_iPlanOutlookCandidates = 0
+Global $g_sLastSyncPlanFile = ""
+Global $g_sLastPreSyncBackup = ""
+Global $g_sLastSyncGuardReason = ""
+
 DirCreate($g_sAgentDir)
 _EnsureConfig()
 $g_sLastForceSyncRequest = RegRead($g_sAgentDB, "Sync_ForceNowRequest")
@@ -49,7 +59,7 @@ If @error Then $g_sLastForceSyncRequest = ""
 _HandleCommandLine()
 
 If _Singleton($g_sAppTitle, 1) = 0 Then
-	MsgBox($MB_ICONINFORMATION, $g_sAppTitle, "WorkDays Outlook Agent is already running.")
+	MsgBox(BitOR($MB_ICONINFORMATION, $MB_TOPMOST), $g_sAppTitle, "WorkDays Outlook Agent is already running.")
 	Exit
 EndIf
 
@@ -152,6 +162,14 @@ Func _EnsureConfig()
 	_EnsureRegDefault("Safety", "CleanupPrefixOnlyItems", "0")
 	_EnsureRegDefault("Safety", "PauseAfterOutlookCleanup", "1")
 	_EnsureRegDefault("Safety", "CleanupConfirmationPhrase", "CLEAN WORKDAYS OUTLOOK")
+	_EnsureRegDefault("Safety", "CreateBackupBeforeOutlookChanges", "1")
+	_EnsureRegDefault("Safety", "BlockMassChanges", "1")
+	_EnsureRegDefault("Safety", "MaxWorkDaysChangesPerSync", "20")
+	_EnsureRegDefault("Safety", "MaxChangePercentPerSync", "15")
+	_EnsureRegDefault("Safety", "MaxClearsPerSync", "0")
+	_EnsureRegDefault("Safety", "BlockIncompleteOutlookRead", "1")
+	_EnsureRegDefault("Safety", "IncompleteReadMinOutlookItems", "3")
+	_EnsureRegDefault("Safety", "IncompleteReadMinRatioPercent", "20")
 
 	_EnsureRegDefault("Advanced", "LogLevel", "Normal")
 	_EnsureRegDefault("Logging", "VerboseMode", "0")
@@ -298,6 +316,12 @@ Func _RunSync()
 	If Not IsObj($oOutlookMap) Then Return SetError(4, 0, 0)
 	_VLog("Outlook candidate map loaded. Count=" & $oOutlookMap.Count)
 
+	_BuildSyncSafetyPlan($oOutlookMap, $sStartISO, $sEndISO)
+	If Not _ValidateAndPrepareSyncSafetyPlan() Then
+		_Log("Sync blocked by safety guard. Reason: " & $g_sLastSyncGuardReason)
+		Return SetError(20, 0, 0)
+	EndIf
+
 	Local $iChanges = 0
 	Local $iDays = _ISODiffDays($sStartISO, $sEndISO)
 	Local $i
@@ -418,7 +442,194 @@ Func _RunSync()
 		EndIf
 	Next
 
+	_SetSyncGuardStatus("OK", "Sync applied safely. Outlook-to-WorkDays changes=" & $g_iPlanOutlookToWorkDaysChanges)
 	Return $iChanges
+EndFunc
+
+Func _BuildSyncSafetyPlan($oOutlookMap, $sStartISO, $sEndISO)
+	$g_iPlanOutlookToWorkDaysChanges = 0
+	$g_iPlanClears = 0
+	$g_iPlanCurrentRecords = 0
+	$g_iPlanSyncableRecords = 0
+	$g_iPlanOutlookCandidates = 0
+	$g_sLastPreSyncBackup = ""
+	$g_sLastSyncGuardReason = ""
+
+	If IsObj($oOutlookMap) Then $g_iPlanOutlookCandidates = $oOutlookMap.Count
+
+	Local $sLogDir = $g_sAgentDir & "\Logs"
+	DirCreate($sLogDir)
+	$g_sLastSyncPlanFile = $sLogDir & "\LastSyncPlan.txt"
+	Local $hPlan = FileOpen($g_sLastSyncPlanFile, 2)
+
+	If $hPlan <> -1 Then
+		FileWriteLine($hPlan, "WORKDAYS OUTLOOK AGENT - LAST SYNC PLAN")
+		FileWriteLine($hPlan, "Generated=" & StringFormat("%04d-%02d-%02d %02d:%02d:%02d", @YEAR, @MON, @MDAY, @HOUR, @MIN, @SEC))
+		FileWriteLine($hPlan, "Range=" & $sStartISO & " to " & $sEndISO)
+		FileWriteLine($hPlan, "")
+	EndIf
+
+	Local $iDays = _ISODiffDays($sStartISO, $sEndISO)
+	Local $i
+	For $i = 0 To $iDays
+		Local $sDateISO = _ISOAddDays($sStartISO, $i)
+		Local $sRegRec = _ReadRegistryDay($sDateISO)
+		Local $sRegStatus = _RecordStatus($sRegRec)
+		Local $sRegMarker = _RecordMarker($sRegRec)
+		Local $sRegHash = _RecordHash($sRegStatus, $sRegMarker)
+		If $sRegHash <> "" Then $g_iPlanCurrentRecords += 1
+		If _ShouldSync($sRegStatus, $sRegMarker) Then $g_iPlanSyncableRecords += 1
+
+		Local $sOutRec = ""
+		Local $bHasOutlook = False
+		If IsObj($oOutlookMap) And $oOutlookMap.Exists($sDateISO) Then
+			$sOutRec = $oOutlookMap.Item($sDateISO)
+			$bHasOutlook = True
+		EndIf
+
+		Local $sOutEntryID = _OutlookRecordPart($sOutRec, 0)
+		Local $sOutStatus = _OutlookRecordPart($sOutRec, 1)
+		Local $sOutMarker = _OutlookRecordPart($sOutRec, 2)
+		Local $sOutHash = ""
+		If $bHasOutlook Then $sOutHash = _RecordHash($sOutStatus, $sOutMarker)
+
+		Local $sStateRegHash = IniRead($g_sState, $sDateISO, "RegHash", "")
+		Local $sStateOutHash = IniRead($g_sState, $sDateISO, "OutHash", "")
+		Local $sStateEntryID = IniRead($g_sState, $sDateISO, "EntryID", "")
+		Local $bRegChanged = ($sRegHash <> $sStateRegHash)
+		Local $bOutChanged = ($sOutHash <> $sStateOutHash)
+
+		Local $sAction = ""
+		Local $sTargetStatus = $sRegStatus
+		Local $sTargetMarker = $sRegMarker
+
+		If Not $bHasOutlook And $sStateOutHash <> "" And Not $bRegChanged Then
+			If _Cfg("Sync", "DeleteInOutlookClearsWorkDays", "0") = "1" Then
+				$sAction = "OUTLOOK_DELETE_CLEAR_WORKDAYS"
+				$sTargetStatus = "B"
+				$sTargetMarker = ""
+			EndIf
+		ElseIf $bHasOutlook And $bOutChanged And Not $bRegChanged Then
+			$sAction = "PULL_OUTLOOK_CHANGE"
+			$sTargetStatus = $sOutStatus
+			$sTargetMarker = $sOutMarker
+		ElseIf $bRegChanged And $bOutChanged Then
+			If _Cfg("Sync", "OutlookWinsOnConflict", "1") = "1" And $bHasOutlook Then
+				$sAction = "CONFLICT_PULL_OUTLOOK"
+				$sTargetStatus = $sOutStatus
+				$sTargetMarker = $sOutMarker
+			EndIf
+		EndIf
+
+		If $sAction <> "" Then
+			$g_iPlanOutlookToWorkDaysChanges += 1
+			If $sTargetStatus = "B" And StringStripWS($sTargetMarker, 3) = "" Then $g_iPlanClears += 1
+			If $hPlan <> -1 Then FileWriteLine($hPlan, $sDateISO & " | " & $sAction & " | current=" & $sRegStatus & " | outlook=" & $sOutStatus & " | target=" & $sTargetStatus & " | markerLen=" & StringLen($sTargetMarker) & " | entry=" & _EntryIdShort($sOutEntryID) & " | stateEntry=" & _EntryIdShort($sStateEntryID))
+		EndIf
+	Next
+
+	If $hPlan <> -1 Then
+		FileWriteLine($hPlan, "")
+		FileWriteLine($hPlan, "SUMMARY")
+		FileWriteLine($hPlan, "OutlookToWorkDaysChanges=" & $g_iPlanOutlookToWorkDaysChanges)
+		FileWriteLine($hPlan, "Clears=" & $g_iPlanClears)
+		FileWriteLine($hPlan, "CurrentWorkDaysRecordsInRange=" & $g_iPlanCurrentRecords)
+		FileWriteLine($hPlan, "SyncableWorkDaysRecordsInRange=" & $g_iPlanSyncableRecords)
+		FileWriteLine($hPlan, "OutlookCandidatesFound=" & $g_iPlanOutlookCandidates)
+		FileClose($hPlan)
+	EndIf
+
+	RegWrite($g_sAgentDB, "LastSyncPlanFile", "REG_SZ", $g_sLastSyncPlanFile)
+	_VLog("Sync safety plan built. OutlookToWorkDaysChanges=" & $g_iPlanOutlookToWorkDaysChanges & " clears=" & $g_iPlanClears & " currentRecords=" & $g_iPlanCurrentRecords & " syncableRecords=" & $g_iPlanSyncableRecords & " outlookCandidates=" & $g_iPlanOutlookCandidates & " planFile=" & $g_sLastSyncPlanFile)
+	Return 1
+EndFunc
+
+Func _ValidateAndPrepareSyncSafetyPlan()
+	Local $sReason = ""
+	Local $iChanges = $g_iPlanOutlookToWorkDaysChanges
+
+	If $iChanges = 0 Then
+		_SetSyncGuardStatus("OK", "No Outlook-to-WorkDays database changes planned.")
+		Return 1
+	EndIf
+
+	If _Cfg("Safety", "CreateBackupBeforeOutlookChanges", "1") = "1" Then
+		$g_sLastPreSyncBackup = _CreateAgentPreSyncBackup("Agent_PreSync")
+		If @error Or $g_sLastPreSyncBackup = "" Then
+			$sReason = "Backup failed. No WorkDays database changes were applied."
+			_SetSyncGuardStatus("BLOCKED", $sReason)
+			Return SetError(1, 0, 0)
+		EndIf
+	EndIf
+
+	If _Cfg("Safety", "BlockMassChanges", "1") = "1" Then
+		Local $iMaxChanges = Number(_Cfg("Safety", "MaxWorkDaysChangesPerSync", "20"))
+		If $iMaxChanges < 1 Then $iMaxChanges = 1
+		If $iChanges > $iMaxChanges Then $sReason &= "Too many Outlook-to-WorkDays changes planned: " & $iChanges & " > " & $iMaxChanges & ". "
+
+		Local $iMaxClears = Number(_Cfg("Safety", "MaxClearsPerSync", "0"))
+		If $iMaxClears < 0 Then $iMaxClears = 0
+		If $g_iPlanClears > $iMaxClears Then $sReason &= "Too many WorkDays clears planned: " & $g_iPlanClears & " > " & $iMaxClears & ". "
+
+		Local $iMaxPercent = Number(_Cfg("Safety", "MaxChangePercentPerSync", "15"))
+		If $iMaxPercent < 1 Then $iMaxPercent = 1
+		If $g_iPlanCurrentRecords > 0 Then
+			Local $nPct = ($iChanges * 100.0) / $g_iPlanCurrentRecords
+			If $nPct > $iMaxPercent Then $sReason &= "Change percentage is too high: " & StringFormat("%.1f", $nPct) & "% > " & $iMaxPercent & "%. "
+		EndIf
+	EndIf
+
+	If _Cfg("Safety", "BlockIncompleteOutlookRead", "1") = "1" Then
+		Local $iMinItems = Number(_Cfg("Safety", "IncompleteReadMinOutlookItems", "3"))
+		Local $iMinRatio = Number(_Cfg("Safety", "IncompleteReadMinRatioPercent", "20"))
+		If $iMinItems < 0 Then $iMinItems = 0
+		If $iMinRatio < 1 Then $iMinRatio = 1
+		If $g_iPlanSyncableRecords >= 10 Then
+			Local $nRatio = 0
+			If $g_iPlanSyncableRecords > 0 Then $nRatio = ($g_iPlanOutlookCandidates * 100.0) / $g_iPlanSyncableRecords
+			If $g_iPlanOutlookCandidates < $iMinItems Or $nRatio < $iMinRatio Then
+				$sReason &= "Outlook read looks incomplete: candidates=" & $g_iPlanOutlookCandidates & ", syncable WorkDays records=" & $g_iPlanSyncableRecords & ", ratio=" & StringFormat("%.1f", $nRatio) & "%. "
+			EndIf
+		EndIf
+	EndIf
+
+	If StringStripWS($sReason, 3) <> "" Then
+		_SetSyncGuardStatus("BLOCKED", $sReason)
+		Return SetError(2, 0, 0)
+	EndIf
+
+	_SetSyncGuardStatus("OK", "Safety checks passed. Backup=" & $g_sLastPreSyncBackup)
+	Return 1
+EndFunc
+
+Func _CreateAgentPreSyncBackup($sPrefix = "Agent_PreSync")
+	Local $sBackupDir = $g_sAgentDir & "\Backup"
+	DirCreate($sBackupDir)
+	Local $sFile = $sBackupDir & "\" & $sPrefix & "_" & @YEAR & "_" & @MON & "_" & @MDAY & "_" & @HOUR & @MIN & @SEC & ".bkp"
+	Local $sCreated = _WD_Backup_Create($g_sDB, $sFile, $sBackupDir, $sPrefix)
+	If @error Or $sCreated = "" Then
+		_Log("Pre-sync backup FAILED. Target=" & $sFile & " error=" & @error)
+		Return SetError(1, 0, "")
+	EndIf
+	RegWrite($g_sAgentDB, "LastPreSyncBackup", "REG_SZ", $sCreated)
+	_Log("Pre-sync backup created: " & $sCreated)
+	Return $sCreated
+EndFunc
+
+Func _SetSyncGuardStatus($sStatus, $sReason)
+	$g_sLastSyncGuardReason = $sReason
+	Local $sNow = StringFormat("%04d-%02d-%02d %02d:%02d:%02d", @YEAR, @MON, @MDAY, @HOUR, @MIN, @SEC)
+	RegWrite($g_sAgentDB, "LastSyncGuardStatus", "REG_SZ", $sStatus)
+	RegWrite($g_sAgentDB, "LastSyncGuardReason", "REG_SZ", $sReason)
+	RegWrite($g_sAgentDB, "LastSyncGuardAt", "REG_SZ", $sNow)
+	RegWrite($g_sAgentDB, "LastSyncGuardChanges", "REG_SZ", String($g_iPlanOutlookToWorkDaysChanges))
+	RegWrite($g_sAgentDB, "LastSyncGuardClears", "REG_SZ", String($g_iPlanClears))
+	RegWrite($g_sAgentDB, "LastSyncGuardOutlookCandidates", "REG_SZ", String($g_iPlanOutlookCandidates))
+	RegWrite($g_sAgentDB, "LastSyncGuardWorkDaysRecords", "REG_SZ", String($g_iPlanCurrentRecords))
+	RegWrite($g_sAgentDB, "LastSyncPlanFile", "REG_SZ", $g_sLastSyncPlanFile)
+	If $g_sLastPreSyncBackup <> "" Then RegWrite($g_sAgentDB, "LastPreSyncBackup", "REG_SZ", $g_sLastPreSyncBackup)
+	If $sStatus = "BLOCKED" Then _Log("SYNC BLOCKED: " & $sReason & " Plan=" & $g_sLastSyncPlanFile & " Backup=" & $g_sLastPreSyncBackup)
+	Return 1
 EndFunc
 
 Func _CleanOutlookCalendarFromTray()
@@ -1223,6 +1434,7 @@ Func _VLogConfigSnapshot()
 	_VLog("Settings snapshot: IntervalMinutes=" & _Cfg("Sync", "IntervalMinutes", "15") & " PastDays=" & _Cfg("Sync", "PastDays", "60") & " FutureDays=" & _Cfg("Sync", "FutureDays", "370") & " OutlookWinsOnConflict=" & _Cfg("Sync", "OutlookWinsOnConflict", "1") & " DeleteInOutlookClearsWorkDays=" & _Cfg("Sync", "DeleteInOutlookClearsWorkDays", "0"))
 	_VLog("Settings snapshot: SyncBlank=" & _Cfg("Sync", "SyncBlank", "0") & " SyncWeekend=" & _Cfg("Sync", "SyncWeekend", "0") & " SyncTaggedBlankOrWeekend=" & _Cfg("Sync", "SyncTaggedBlankOrWeekend", "1") & " RunAtWindowsStartup=" & _Cfg("Sync", "RunAtWindowsStartup", "0"))
 	_VLog("Settings snapshot: SubjectPrefix='" & _Cfg("Outlook", "SubjectPrefix", "WorkDays -") & "' CategoryPrefix='" & _Cfg("Outlook", "CategoryPrefix", "WorkDays -") & "' ManagedOnly=" & _Cfg("Outlook", "ManagedOnly", "0") & " DateOrder=" & _Cfg("Outlook", "DateOrder", "Auto") & " VerboseMode=" & _Cfg("Logging", "VerboseMode", "0") & " LogLevel=" & _Cfg("Advanced", "LogLevel", "Normal"))
+	_VLog("Safety snapshot: CreateBackupBeforeOutlookChanges=" & _Cfg("Safety", "CreateBackupBeforeOutlookChanges", "1") & " BlockMassChanges=" & _Cfg("Safety", "BlockMassChanges", "1") & " MaxWorkDaysChangesPerSync=" & _Cfg("Safety", "MaxWorkDaysChangesPerSync", "20") & " MaxChangePercentPerSync=" & _Cfg("Safety", "MaxChangePercentPerSync", "15") & " MaxClearsPerSync=" & _Cfg("Safety", "MaxClearsPerSync", "0") & " BlockIncompleteOutlookRead=" & _Cfg("Safety", "BlockIncompleteOutlookRead", "1"))
 EndFunc
 
 Func _OutlookItemDebugSummary($oItem)
