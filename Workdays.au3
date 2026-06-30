@@ -3,7 +3,7 @@
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Icon=xcalendar4.ico
 #AutoIt3Wrapper_Res_Description=Work Day management
-#AutoIt3Wrapper_Res_Fileversion=2.1.4.10
+#AutoIt3Wrapper_Res_Fileversion=2.1.4.11
 #AutoIt3Wrapper_Res_ProductVersion=2.1.0.0
 #AutoIt3Wrapper_Res_ProductName=Work Days
 #AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
@@ -3503,8 +3503,6 @@ Func _CreateMenu()
 	GUICtrlDelete($DBpMenu_Report_Professional)
 	GUICtrlDelete($DBpMenu_Delete)
 
-;~ 	MsgBox(262144,"","Aqui 3359")
-
 	Global $DBpMenu_Delete = GUICtrlCreateMenu("Delete Specific year", $BkpMenu_reset_all1)
 	Global $DBpMenu_Report_Simple = GUICtrlCreateMenu("Simple", $DBpMenu_Report)
 	Global $DBpMenu_Report_Detailed = GUICtrlCreateMenu("Detailed", $DBpMenu_Report)
@@ -3516,10 +3514,12 @@ Func _CreateMenu()
 		$sSubKey = RegEnumKey($DB, $i)
 		If @error Then ExitLoop
 
-		$DBpMenu_Delete_Year[$i] = GUICtrlCreateMenuItem($sSubKey, $DBpMenu_Delete)
-		$DBpMenu_Report_simple_Year[$i] = GUICtrlCreateMenuItem($sSubKey, $DBpMenu_Report_Simple)
-		$DBpMenu_Report_detailed_Year[$i] = GUICtrlCreateMenuItem($sSubKey, $DBpMenu_Report_Detailed)
-		$DBpMenu_Report_professional_Year[$i] = GUICtrlCreateMenuItem($sSubKey, $DBpMenu_Report_Professional)
+		If $sSubKey <> "OutlookAgent" Then
+			$DBpMenu_Delete_Year[$i] = GUICtrlCreateMenuItem($sSubKey, $DBpMenu_Delete)
+			$DBpMenu_Report_simple_Year[$i] = GUICtrlCreateMenuItem($sSubKey, $DBpMenu_Report_Simple)
+			$DBpMenu_Report_detailed_Year[$i] = GUICtrlCreateMenuItem($sSubKey, $DBpMenu_Report_Detailed)
+			$DBpMenu_Report_professional_Year[$i] = GUICtrlCreateMenuItem($sSubKey, $DBpMenu_Report_Professional)
+		EndIf
 
 ;~ 		ConsoleWrite("$i: " & $i & @CRLF)
 

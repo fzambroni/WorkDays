@@ -5,7 +5,7 @@
 #AutoIt3Wrapper_Res_Description=Updater
 #AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
 #AutoIt3Wrapper_Res_LegalCopyright=Copyright © 2026 Fabricio Zambroni
-#AutoIt3Wrapper_Res_Fileversion=1.1.1.4
+#AutoIt3Wrapper_Res_Fileversion=1.1.1.5
 #AutoIt3Wrapper_Res_ProductVersion=1.1.1.1
 #AutoIt3Wrapper_Res_ProductName=Updater
 #AutoIt3Wrapper_Res_File_Add=E:\GitHub\Workdays\splash.jpg
@@ -96,8 +96,20 @@ Else
 	FileDelete(@ScriptDir & "\Workdays_Outlook_Agent.exe")
 	_UpdaterVerboseLog("Restarting application: " & $Path & "\" & $AppName & ".exe")
 	Run('"' & $Path & "\" & $AppName & ".exe" & '"')
-	Sleep(20000)
-	Run('"' & $Path & "\Workdays_Outlook_Agent.exe" & '"')
+	$timer = TimerInit()
+	_UpdaterVerboseLog("Waiting App restart before start Agent")
+	While 1
+		Sleep(500)
+		If ProcessExists($AppName & ".exe") Then ExitLoop
+		If TimerDiff($timer) > 20000 Then ExitLoop
+	WEnd
+	If ProcessExists($AppName & ".exe") Then
+		Sleep(2000)
+		_UpdaterVerboseLog("Starting Agent...")
+		Run('"' & $Path & "\Workdays_Outlook_Agent.exe" & '"')
+	Else
+		_UpdaterVerboseLog("Error to start agent")
+	EndIf
 
 EndIf
 FileDelete($sSplashPath)
