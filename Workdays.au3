@@ -3,7 +3,7 @@
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Icon=xcalendar4.ico
 #AutoIt3Wrapper_Res_Description=Work Day management
-#AutoIt3Wrapper_Res_Fileversion=2.1.4.8
+#AutoIt3Wrapper_Res_Fileversion=2.1.4.9
 #AutoIt3Wrapper_Res_ProductVersion=2.1.0.0
 #AutoIt3Wrapper_Res_ProductName=Work Days
 #AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
@@ -7160,7 +7160,7 @@ EndFunc   ;==>_OutlookAgent_RefreshWorkDaysFromAgentChange
 Func _OutlookAgent_SettingsWindow()
 	_OutlookAgent_EnsureDefaults()
 
-	$g_hOutlookAgentSettingsWindow = GUICreate("WorkDays Outlook Agent", 650, 935, -1, -1, $DS_MODALFRAME, BitOR($WS_EX_TOPMOST, $WS_EX_MDICHILD), $Form_WorkDays)
+	$g_hOutlookAgentSettingsWindow = GUICreate("WorkDays Outlook Agent", 650, 950, -1, -1, $DS_MODALFRAME, BitOR($WS_EX_TOPMOST, $WS_EX_MDICHILD), $Form_WorkDays)
 	Local $hAgent = $g_hOutlookAgentSettingsWindow
 	GUISetBkColor(0xF7FBFF, $hAgent)
 	GUISetFont(9, 400, 0, "Segoe UI", $hAgent)
@@ -7264,8 +7264,8 @@ Func _OutlookAgent_SettingsWindow()
 	_OA_SetCheck($chkBlockIncompleteRead, _OA_Read("Safety", "BlockIncompleteOutlookRead", "1"))
 	_OA_SetCheck($chkVerboseMode, _OA_Read("Logging", "VerboseMode", "0"))
 
-	Local $btnClean = GUICtrlCreateButton("Clean Outlook WorkDays items...", 18, 884, 210, 30)
-	Local $btnSave = GUICtrlCreateButton("Save", 528, 884, 100, 30)
+	Local $btnClean = GUICtrlCreateButton("Clean Outlook WorkDays items...", 18, 875, 210, 30)
+	Local $btnSave = GUICtrlCreateButton("Save", 528, 875, 100, 30)
 
 	GUISetState(@SW_SHOW, $hAgent)
 

@@ -3,7 +3,7 @@
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Icon=CalendarSync.ico
 #AutoIt3Wrapper_Res_Description=Work Day Sync Agent
-#AutoIt3Wrapper_Res_Fileversion=1.0.1.0
+#AutoIt3Wrapper_Res_Fileversion=1.0.1.1
 #AutoIt3Wrapper_Res_ProductName=Work Day Sync Agent
 #AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
 #AutoIt3Wrapper_Res_LegalCopyright=Copyright © 2026 Fabricio Zambroni
@@ -48,6 +48,7 @@ Global $g_iPlanClears = 0
 Global $g_iPlanCurrentRecords = 0
 Global $g_iPlanSyncableRecords = 0
 Global $g_iPlanOutlookCandidates = 0
+Global $g_iPlanWorkDaysToOutlookPublishes = 0
 Global $g_sLastSyncPlanFile = ""
 Global $g_sLastPreSyncBackup = ""
 Global $g_sLastSyncGuardReason = ""
@@ -357,20 +358,26 @@ Func _RunSync()
 			_VLog("Day decision " & $sDateISO & ": regStatus='" & $sRegStatus & "' regMarkerLen=" & StringLen($sRegMarker) & " regHash='" & $sRegHash & "' hasOutlook=" & _BoolText($bHasOutlook) & " outStatus='" & $sOutStatus & "' outMarkerLen=" & StringLen($sOutMarker) & " outHash='" & $sOutHash & "' stateRegHash='" & $sStateRegHash & "' stateOutHash='" & $sStateOutHash & "' stateEntryIdShort='" & _EntryIdShort($sStateEntryID) & "' regChanged=" & _BoolText($bRegChanged) & " outChanged=" & _BoolText($bOutChanged))
 		EndIf
 
-		If Not $bHasOutlook And $sStateOutHash <> "" And Not $bRegChanged Then
-			; The Outlook item disappeared after being synced. By default this is kept safe and ignored.
-			If _Cfg("Sync", "DeleteInOutlookClearsWorkDays", "0") = "1" Then
+		If Not $bHasOutlook And _ShouldSync($sRegStatus, $sRegMarker) Then
+			; Definitive state repair / reconciliation rule:
+			; if WorkDays has a syncable record and Outlook does not have the matching item,
+			; publish the WorkDays record even when the state file says the registry hash is unchanged.
+			; This prevents a stale or corrupted State.ini from blocking WorkDays -> Outlook recovery.
+			If $sStateOutHash <> "" And Not $bRegChanged And _Cfg("Sync", "DeleteInOutlookClearsWorkDays", "0") = "1" Then
 				_WriteRegistryDay($sDateISO, "B", "")
 				_UpdateState($sDateISO, _RecordHash("B", ""), "", "")
 				$iChanges += 1
 				_Log("Outlook deletion cleared WorkDays date " & $sDateISO)
 			Else
-				If _ShouldSync($sRegStatus, $sRegMarker) Then
-					$sOutEntryID = _CreateOrUpdateOutlookItem($oOutlook, $oNs, $sDateISO, "", $sRegStatus, $sRegMarker)
-					_UpdateState($sDateISO, $sRegHash, $sRegHash, $sOutEntryID)
-					$iChanges += 1
-					_Log("Re-created missing Outlook item for " & $sDateISO)
+				If $sStateEntryID <> "" Then
+					$sOutEntryID = $sStateEntryID
+				Else
+					$sOutEntryID = ""
 				EndIf
+				$sOutEntryID = _CreateOrUpdateOutlookItem($oOutlook, $oNs, $sDateISO, $sOutEntryID, $sRegStatus, $sRegMarker)
+				_UpdateState($sDateISO, $sRegHash, $sRegHash, $sOutEntryID)
+				$iChanges += 1
+				_Log("Published WorkDays date to missing Outlook item: " & $sDateISO & " -> " & _StatusLabel($sRegStatus))
 			EndIf
 			ContinueLoop
 		EndIf
@@ -425,17 +432,6 @@ Func _RunSync()
 			ContinueLoop
 		EndIf
 
-		; First run or state repair: create missing Outlook items from existing Work Days data.
-		; If Outlook was intentionally cleaned, the state keeps the current WorkDays hash
-		; with no Outlook hash. In that case, do not republish until WorkDays changes again.
-		If Not $bHasOutlook And _ShouldSync($sRegStatus, $sRegMarker) And $sStateRegHash = "" And $sStateOutHash = "" And $sStateEntryID = "" Then
-			$sOutEntryID = _CreateOrUpdateOutlookItem($oOutlook, $oNs, $sDateISO, "", $sRegStatus, $sRegMarker)
-			_UpdateState($sDateISO, $sRegHash, $sRegHash, $sOutEntryID)
-			$iChanges += 1
-			_Log("Created Outlook item for existing WorkDays date: " & $sDateISO)
-			ContinueLoop
-		EndIf
-
 		If $bHasOutlook Then
 			_EnsureOutlookItemFree($oNs, $sOutEntryID, $sDateISO, $sOutStatus, $sOutMarker)
 			_UpdateState($sDateISO, $sOutHash, $sOutHash, $sOutEntryID)
@@ -452,6 +448,7 @@ Func _BuildSyncSafetyPlan($oOutlookMap, $sStartISO, $sEndISO)
 	$g_iPlanCurrentRecords = 0
 	$g_iPlanSyncableRecords = 0
 	$g_iPlanOutlookCandidates = 0
+	$g_iPlanWorkDaysToOutlookPublishes = 0
 	$g_sLastPreSyncBackup = ""
 	$g_sLastSyncGuardReason = ""
 
@@ -521,6 +518,13 @@ Func _BuildSyncSafetyPlan($oOutlookMap, $sStartISO, $sEndISO)
 			EndIf
 		EndIf
 
+		If Not $bHasOutlook And _ShouldSync($sRegStatus, $sRegMarker) Then
+			If Not ($sStateOutHash <> "" And Not $bRegChanged And _Cfg("Sync", "DeleteInOutlookClearsWorkDays", "0") = "1") Then
+				$g_iPlanWorkDaysToOutlookPublishes += 1
+				If $hPlan <> -1 Then FileWriteLine($hPlan, $sDateISO & " | PUBLISH_MISSING_OUTLOOK_ITEM | current=" & $sRegStatus & " | outlook=<missing> | target=" & $sRegStatus & " | markerLen=" & StringLen($sRegMarker) & " | stateRegHash=" & $sStateRegHash & " | stateOutHash=" & $sStateOutHash & " | stateEntry=" & _EntryIdShort($sStateEntryID))
+			EndIf
+		EndIf
+
 		If $sAction <> "" Then
 			$g_iPlanOutlookToWorkDaysChanges += 1
 			If $sTargetStatus = "B" And StringStripWS($sTargetMarker, 3) = "" Then $g_iPlanClears += 1
@@ -532,6 +536,7 @@ Func _BuildSyncSafetyPlan($oOutlookMap, $sStartISO, $sEndISO)
 		FileWriteLine($hPlan, "")
 		FileWriteLine($hPlan, "SUMMARY")
 		FileWriteLine($hPlan, "OutlookToWorkDaysChanges=" & $g_iPlanOutlookToWorkDaysChanges)
+		FileWriteLine($hPlan, "WorkDaysToOutlookMissingPublishes=" & $g_iPlanWorkDaysToOutlookPublishes)
 		FileWriteLine($hPlan, "Clears=" & $g_iPlanClears)
 		FileWriteLine($hPlan, "CurrentWorkDaysRecordsInRange=" & $g_iPlanCurrentRecords)
 		FileWriteLine($hPlan, "SyncableWorkDaysRecordsInRange=" & $g_iPlanSyncableRecords)
@@ -540,7 +545,7 @@ Func _BuildSyncSafetyPlan($oOutlookMap, $sStartISO, $sEndISO)
 	EndIf
 
 	RegWrite($g_sAgentDB, "LastSyncPlanFile", "REG_SZ", $g_sLastSyncPlanFile)
-	_VLog("Sync safety plan built. OutlookToWorkDaysChanges=" & $g_iPlanOutlookToWorkDaysChanges & " clears=" & $g_iPlanClears & " currentRecords=" & $g_iPlanCurrentRecords & " syncableRecords=" & $g_iPlanSyncableRecords & " outlookCandidates=" & $g_iPlanOutlookCandidates & " planFile=" & $g_sLastSyncPlanFile)
+	_VLog("Sync safety plan built. OutlookToWorkDaysChanges=" & $g_iPlanOutlookToWorkDaysChanges & " WorkDaysToOutlookMissingPublishes=" & $g_iPlanWorkDaysToOutlookPublishes & " clears=" & $g_iPlanClears & " currentRecords=" & $g_iPlanCurrentRecords & " syncableRecords=" & $g_iPlanSyncableRecords & " outlookCandidates=" & $g_iPlanOutlookCandidates & " planFile=" & $g_sLastSyncPlanFile)
 	Return 1
 EndFunc
 
