@@ -322,10 +322,10 @@ Important files:
 The source currently references local wrapper resource paths such as:
 
 ```text
-E:\GitHub\WorkDays\Help.html
-E:\GitHub\WorkDays\splash.jpg
-E:\GitHub\WorkDays\Updater.exe
-E:\GitHub\WorkDays\Workdays_Outlook_Agent.exe
+.\WorkDays\Help.html
+.\WorkDays\splash.jpg
+.\WorkDays\Updater.exe
+.\WorkDays\Workdays_Outlook_Agent.exe
 ```
 
 If your repository is stored elsewhere, update the `#AutoIt3Wrapper_Res_File_Add` paths before compiling.
@@ -345,7 +345,7 @@ Workdays_Outlook_Agent.au3
 Output it as:
 
 ```text
-E:\GitHub\WorkDays\Workdays_Outlook_Agent.exe
+.\WorkDays\Workdays_Outlook_Agent.exe
 ```
 
 The exact output path can be changed, but it must match the path embedded or referenced by the main Work Days build.
