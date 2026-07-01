@@ -3,7 +3,7 @@
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Icon=CalendarSync.ico
 #AutoIt3Wrapper_Res_Description=Work Day Sync Agent
-#AutoIt3Wrapper_Res_Fileversion=1.0.1.1
+#AutoIt3Wrapper_Res_Fileversion=1.0.1.2
 #AutoIt3Wrapper_Res_ProductName=Work Day Sync Agent
 #AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
 #AutoIt3Wrapper_Res_LegalCopyright=Copyright © 2026 Fabricio Zambroni
@@ -49,6 +49,9 @@ Global $g_iPlanCurrentRecords = 0
 Global $g_iPlanSyncableRecords = 0
 Global $g_iPlanOutlookCandidates = 0
 Global $g_iPlanWorkDaysToOutlookPublishes = 0
+Global $g_iPlanStateOutlookLinks = 0
+Global $g_iComErrorCount = 0
+Global $g_sLastComError = ""
 Global $g_sLastSyncPlanFile = ""
 Global $g_sLastPreSyncBackup = ""
 Global $g_sLastSyncGuardReason = ""
@@ -169,8 +172,13 @@ Func _EnsureConfig()
 	_EnsureRegDefault("Safety", "MaxChangePercentPerSync", "15")
 	_EnsureRegDefault("Safety", "MaxClearsPerSync", "0")
 	_EnsureRegDefault("Safety", "BlockIncompleteOutlookRead", "1")
+	_EnsureRegDefault("Safety", "AbortBeforePlanWhenOutlookReadIncomplete", "1")
+	_EnsureRegDefault("Safety", "BlockOnOutlookComError", "1")
+	_EnsureRegDefault("Safety", "OutlookReadyRetries", "12")
+	_EnsureRegDefault("Safety", "OutlookReadyRetryDelayMs", "5000")
 	_EnsureRegDefault("Safety", "IncompleteReadMinOutlookItems", "3")
 	_EnsureRegDefault("Safety", "IncompleteReadMinRatioPercent", "20")
+	_EnsureRegDefault("Safety", "AllowOutlookDeleteClearWorkDays", "0")
 
 	_EnsureRegDefault("Advanced", "LogLevel", "Normal")
 	_EnsureRegDefault("Logging", "VerboseMode", "0")
@@ -296,14 +304,7 @@ EndFunc
 Func _RunSync()
 	_VLog("RunSync started.")
 	_VLogConfigSnapshot()
-	Local $oOutlook = _GetOutlookApplication()
-	If Not IsObj($oOutlook) Then Return SetError(1, 0, 0)
-
-	Local $oNs = $oOutlook.GetNamespace("MAPI")
-	If Not IsObj($oNs) Then Return SetError(2, 0, 0)
-
-	Local $oCalendar = $oNs.GetDefaultFolder($OL_FOLDER_CALENDAR)
-	If Not IsObj($oCalendar) Then Return SetError(3, 0, 0)
+	_ResetComErrorState()
 
 	Local $iPast = Number(_Cfg("Sync", "PastDays", "60"))
 	Local $iFuture = Number(_Cfg("Sync", "FutureDays", "370"))
@@ -313,9 +314,36 @@ Func _RunSync()
 	Local $sStartISO = _ISOAddDays(_TodayISO(), -$iPast)
 	Local $sEndISO = _ISOAddDays(_TodayISO(), $iFuture)
 	_VLog("Sync range: " & $sStartISO & " to " & $sEndISO & " | PastDays=" & $iPast & " | FutureDays=" & $iFuture & " | ManagedOnly=" & _Cfg("Outlook", "ManagedOnly", "0"))
+
+	Local $oOutlook = _GetOutlookApplication()
+	If Not IsObj($oOutlook) Then
+		_AbortSyncBeforePlan("Outlook.Application COM object is not available. " & $g_sLastComError, $sStartISO, $sEndISO)
+		Return SetError(1, 0, 0)
+	EndIf
+
+	Local $oNs = 0
+	Local $oCalendar = 0
+	If Not _WaitForOutlookReady($oOutlook, $oNs, $oCalendar) Then
+		_AbortSyncBeforePlan("Outlook is not ready or is rejecting COM calls. Wait until Outlook is fully open and try again. " & $g_sLastComError, $sStartISO, $sEndISO)
+		Return SetError(2, 0, 0)
+	EndIf
+
+	Local $iComBeforeScan = $g_iComErrorCount
 	Local $oOutlookMap = _LoadOutlookMap($oCalendar, $sStartISO, $sEndISO)
-	If Not IsObj($oOutlookMap) Then Return SetError(4, 0, 0)
+	If @error Or Not IsObj($oOutlookMap) Then
+		_AbortSyncBeforePlan("Outlook calendar scan failed. No changes were planned or applied. " & $g_sLastComError, $sStartISO, $sEndISO)
+		Return SetError(4, 0, 0)
+	EndIf
+	If _Cfg("Safety", "BlockOnOutlookComError", "1") = "1" And _ComErrorOccurredSince($iComBeforeScan) Then
+		_AbortSyncBeforePlan("Outlook COM error occurred during calendar scan. No changes were planned or applied. " & $g_sLastComError, $sStartISO, $sEndISO)
+		Return SetError(5, 0, 0)
+	EndIf
 	_VLog("Outlook candidate map loaded. Count=" & $oOutlookMap.Count)
+
+	If Not _PreflightOutlookReadHealth($oOutlookMap, $sStartISO, $sEndISO) Then
+		_Log("Sync aborted before change plan. Reason: " & $g_sLastSyncGuardReason)
+		Return SetError(19, 0, 0)
+	EndIf
 
 	_BuildSyncSafetyPlan($oOutlookMap, $sStartISO, $sEndISO)
 	If Not _ValidateAndPrepareSyncSafetyPlan() Then
@@ -363,7 +391,7 @@ Func _RunSync()
 			; if WorkDays has a syncable record and Outlook does not have the matching item,
 			; publish the WorkDays record even when the state file says the registry hash is unchanged.
 			; This prevents a stale or corrupted State.ini from blocking WorkDays -> Outlook recovery.
-			If $sStateOutHash <> "" And Not $bRegChanged And _Cfg("Sync", "DeleteInOutlookClearsWorkDays", "0") = "1" Then
+			If $sStateOutHash <> "" And Not $bRegChanged And _OutlookDeleteClearAllowed() Then
 				_WriteRegistryDay($sDateISO, "B", "")
 				_UpdateState($sDateISO, _RecordHash("B", ""), "", "")
 				$iChanges += 1
@@ -442,6 +470,123 @@ Func _RunSync()
 	Return $iChanges
 EndFunc
 
+Func _ResetComErrorState()
+	$g_iComErrorCount = 0
+	$g_sLastComError = ""
+	Return 1
+EndFunc
+
+Func _ComErrorOccurredSince($iPreviousCount)
+	Return $g_iComErrorCount > $iPreviousCount
+EndFunc
+
+Func _AbortSyncBeforePlan($sReason, $sStartISO = "", $sEndISO = "")
+	_WriteAbortedSyncPlan("BLOCKED BEFORE CHANGE PLAN", $sReason, $sStartISO, $sEndISO)
+	_SetSyncGuardStatus("BLOCKED", $sReason)
+	_Log("Sync aborted before change plan: " & $sReason)
+	Return SetError(1, 0, 0)
+EndFunc
+
+Func _RefreshPlanRecordCounts($sStartISO, $sEndISO)
+	$g_iPlanCurrentRecords = 0
+	$g_iPlanSyncableRecords = 0
+	$g_iPlanStateOutlookLinks = 0
+
+	Local $iDays = _ISODiffDays($sStartISO, $sEndISO)
+	Local $i
+	For $i = 0 To $iDays
+		Local $sDateISO = _ISOAddDays($sStartISO, $i)
+		Local $sRegRec = _ReadRegistryDay($sDateISO)
+		Local $sRegStatus = _RecordStatus($sRegRec)
+		Local $sRegMarker = _RecordMarker($sRegRec)
+		Local $sRegHash = _RecordHash($sRegStatus, $sRegMarker)
+		If $sRegHash <> "" Then $g_iPlanCurrentRecords += 1
+		If _ShouldSync($sRegStatus, $sRegMarker) Then
+			$g_iPlanSyncableRecords += 1
+			Local $sStateOutHash = IniRead($g_sState, $sDateISO, "OutHash", "")
+			Local $sStateEntryID = IniRead($g_sState, $sDateISO, "EntryID", "")
+			If $sStateOutHash <> "" Or $sStateEntryID <> "" Then $g_iPlanStateOutlookLinks += 1
+		EndIf
+	Next
+	Return 1
+EndFunc
+
+Func _PreflightOutlookReadHealth($oOutlookMap, $sStartISO, $sEndISO)
+	$g_iPlanOutlookToWorkDaysChanges = 0
+	$g_iPlanClears = 0
+	$g_iPlanWorkDaysToOutlookPublishes = 0
+	$g_iPlanOutlookCandidates = 0
+	If IsObj($oOutlookMap) Then $g_iPlanOutlookCandidates = $oOutlookMap.Count
+	_RefreshPlanRecordCounts($sStartISO, $sEndISO)
+
+	If _Cfg("Safety", "BlockIncompleteOutlookRead", "1") <> "1" Then Return 1
+	If _Cfg("Safety", "AbortBeforePlanWhenOutlookReadIncomplete", "1") <> "1" Then Return 1
+
+	; Only use this preflight when the state file indicates Outlook should already contain many WorkDays items.
+	; This avoids blocking a legitimate first-time publish to an empty Outlook calendar.
+	If $g_iPlanStateOutlookLinks < 10 Then
+		_VLog("Outlook read preflight skipped: state-linked Outlook items=" & $g_iPlanStateOutlookLinks & " (<10). This may be a first publish or a state rebuild.")
+		Return 1
+	EndIf
+
+	Local $iMinItems = Number(_Cfg("Safety", "IncompleteReadMinOutlookItems", "3"))
+	Local $iMinRatio = Number(_Cfg("Safety", "IncompleteReadMinRatioPercent", "20"))
+	If $iMinItems < 0 Then $iMinItems = 0
+	If $iMinRatio < 1 Then $iMinRatio = 1
+
+	Local $nRatio = 0
+	If $g_iPlanStateOutlookLinks > 0 Then $nRatio = ($g_iPlanOutlookCandidates * 100.0) / $g_iPlanStateOutlookLinks
+
+	If $g_iPlanOutlookCandidates < $iMinItems Or $nRatio < $iMinRatio Then
+		Local $sReason = "Outlook read looks incomplete before change planning: candidates=" & $g_iPlanOutlookCandidates & ", expected state-linked Outlook items=" & $g_iPlanStateOutlookLinks & ", ratio=" & StringFormat("%.1f", $nRatio) & "%. Outlook may still be starting, offline, locked by a prompt, or rejecting COM calls. No changes were planned or applied."
+		_AbortSyncBeforePlan($sReason, $sStartISO, $sEndISO)
+		Return SetError(1, 0, 0)
+	EndIf
+
+	_VLog("Outlook read preflight OK: candidates=" & $g_iPlanOutlookCandidates & " stateOutlookLinks=" & $g_iPlanStateOutlookLinks & " ratio=" & StringFormat("%.1f", $nRatio) & "%")
+	Return 1
+EndFunc
+
+Func _WriteAbortedSyncPlan($sTitle, $sReason, $sStartISO = "", $sEndISO = "")
+	Local $sLogDir = $g_sAgentDir & "\Logs"
+	DirCreate($sLogDir)
+	$g_sLastSyncPlanFile = $sLogDir & "\LastSyncPlan.txt"
+	Local $hPlan = FileOpen($g_sLastSyncPlanFile, 2)
+	If $hPlan <> -1 Then
+		FileWriteLine($hPlan, "WORKDAYS OUTLOOK AGENT - LAST SYNC PLAN")
+		FileWriteLine($hPlan, "Generated=" & StringFormat("%04d-%02d-%02d %02d:%02d:%02d", @YEAR, @MON, @MDAY, @HOUR, @MIN, @SEC))
+		If $sStartISO <> "" Or $sEndISO <> "" Then FileWriteLine($hPlan, "Range=" & $sStartISO & " to " & $sEndISO)
+		FileWriteLine($hPlan, "")
+		FileWriteLine($hPlan, $sTitle)
+		FileWriteLine($hPlan, "Reason=" & $sReason)
+		FileWriteLine($hPlan, "")
+		FileWriteLine($hPlan, "SUMMARY")
+		FileWriteLine($hPlan, "OutlookToWorkDaysChanges=0")
+		FileWriteLine($hPlan, "WorkDaysToOutlookMissingPublishes=0")
+		FileWriteLine($hPlan, "Clears=0")
+		FileWriteLine($hPlan, "CurrentWorkDaysRecordsInRange=" & $g_iPlanCurrentRecords)
+		FileWriteLine($hPlan, "SyncableWorkDaysRecordsInRange=" & $g_iPlanSyncableRecords)
+		FileWriteLine($hPlan, "StateOutlookLinksInRange=" & $g_iPlanStateOutlookLinks)
+		FileWriteLine($hPlan, "OutlookCandidatesFound=" & $g_iPlanOutlookCandidates)
+		FileWriteLine($hPlan, "ComErrorCount=" & $g_iComErrorCount)
+		FileWriteLine($hPlan, "LastComError=" & $g_sLastComError)
+		FileClose($hPlan)
+	EndIf
+	RegWrite($g_sAgentDB, "LastSyncPlanFile", "REG_SZ", $g_sLastSyncPlanFile)
+	Return 1
+EndFunc
+
+Func _OutlookDeleteClearAllowed()
+	If _Cfg("Sync", "DeleteInOutlookClearsWorkDays", "0") <> "1" Then Return False
+	; This is intentionally a second hidden safety gate. A missing Outlook item is not proof that the user deleted it;
+	; it can also mean Outlook was not ready or returned a partial COM read. Keep this disabled by default.
+	If _Cfg("Safety", "AllowOutlookDeleteClearWorkDays", "0") <> "1" Then
+		_VLog("DeleteInOutlookClearsWorkDays=1 ignored because Safety_AllowOutlookDeleteClearWorkDays=0. Missing Outlook items will not clear WorkDays.")
+		Return False
+	EndIf
+	Return True
+EndFunc
+
 Func _BuildSyncSafetyPlan($oOutlookMap, $sStartISO, $sEndISO)
 	$g_iPlanOutlookToWorkDaysChanges = 0
 	$g_iPlanClears = 0
@@ -449,6 +594,7 @@ Func _BuildSyncSafetyPlan($oOutlookMap, $sStartISO, $sEndISO)
 	$g_iPlanSyncableRecords = 0
 	$g_iPlanOutlookCandidates = 0
 	$g_iPlanWorkDaysToOutlookPublishes = 0
+	$g_iPlanStateOutlookLinks = 0
 	$g_sLastPreSyncBackup = ""
 	$g_sLastSyncGuardReason = ""
 
@@ -493,6 +639,7 @@ Func _BuildSyncSafetyPlan($oOutlookMap, $sStartISO, $sEndISO)
 		Local $sStateRegHash = IniRead($g_sState, $sDateISO, "RegHash", "")
 		Local $sStateOutHash = IniRead($g_sState, $sDateISO, "OutHash", "")
 		Local $sStateEntryID = IniRead($g_sState, $sDateISO, "EntryID", "")
+		If _ShouldSync($sRegStatus, $sRegMarker) And ($sStateOutHash <> "" Or $sStateEntryID <> "") Then $g_iPlanStateOutlookLinks += 1
 		Local $bRegChanged = ($sRegHash <> $sStateRegHash)
 		Local $bOutChanged = ($sOutHash <> $sStateOutHash)
 
@@ -501,7 +648,7 @@ Func _BuildSyncSafetyPlan($oOutlookMap, $sStartISO, $sEndISO)
 		Local $sTargetMarker = $sRegMarker
 
 		If Not $bHasOutlook And $sStateOutHash <> "" And Not $bRegChanged Then
-			If _Cfg("Sync", "DeleteInOutlookClearsWorkDays", "0") = "1" Then
+			If _OutlookDeleteClearAllowed() Then
 				$sAction = "OUTLOOK_DELETE_CLEAR_WORKDAYS"
 				$sTargetStatus = "B"
 				$sTargetMarker = ""
@@ -519,7 +666,7 @@ Func _BuildSyncSafetyPlan($oOutlookMap, $sStartISO, $sEndISO)
 		EndIf
 
 		If Not $bHasOutlook And _ShouldSync($sRegStatus, $sRegMarker) Then
-			If Not ($sStateOutHash <> "" And Not $bRegChanged And _Cfg("Sync", "DeleteInOutlookClearsWorkDays", "0") = "1") Then
+			If Not ($sStateOutHash <> "" And Not $bRegChanged And _OutlookDeleteClearAllowed()) Then
 				$g_iPlanWorkDaysToOutlookPublishes += 1
 				If $hPlan <> -1 Then FileWriteLine($hPlan, $sDateISO & " | PUBLISH_MISSING_OUTLOOK_ITEM | current=" & $sRegStatus & " | outlook=<missing> | target=" & $sRegStatus & " | markerLen=" & StringLen($sRegMarker) & " | stateRegHash=" & $sStateRegHash & " | stateOutHash=" & $sStateOutHash & " | stateEntry=" & _EntryIdShort($sStateEntryID))
 			EndIf
@@ -540,12 +687,13 @@ Func _BuildSyncSafetyPlan($oOutlookMap, $sStartISO, $sEndISO)
 		FileWriteLine($hPlan, "Clears=" & $g_iPlanClears)
 		FileWriteLine($hPlan, "CurrentWorkDaysRecordsInRange=" & $g_iPlanCurrentRecords)
 		FileWriteLine($hPlan, "SyncableWorkDaysRecordsInRange=" & $g_iPlanSyncableRecords)
+		FileWriteLine($hPlan, "StateOutlookLinksInRange=" & $g_iPlanStateOutlookLinks)
 		FileWriteLine($hPlan, "OutlookCandidatesFound=" & $g_iPlanOutlookCandidates)
 		FileClose($hPlan)
 	EndIf
 
 	RegWrite($g_sAgentDB, "LastSyncPlanFile", "REG_SZ", $g_sLastSyncPlanFile)
-	_VLog("Sync safety plan built. OutlookToWorkDaysChanges=" & $g_iPlanOutlookToWorkDaysChanges & " WorkDaysToOutlookMissingPublishes=" & $g_iPlanWorkDaysToOutlookPublishes & " clears=" & $g_iPlanClears & " currentRecords=" & $g_iPlanCurrentRecords & " syncableRecords=" & $g_iPlanSyncableRecords & " outlookCandidates=" & $g_iPlanOutlookCandidates & " planFile=" & $g_sLastSyncPlanFile)
+	_VLog("Sync safety plan built. OutlookToWorkDaysChanges=" & $g_iPlanOutlookToWorkDaysChanges & " WorkDaysToOutlookMissingPublishes=" & $g_iPlanWorkDaysToOutlookPublishes & " clears=" & $g_iPlanClears & " currentRecords=" & $g_iPlanCurrentRecords & " syncableRecords=" & $g_iPlanSyncableRecords & " stateOutlookLinks=" & $g_iPlanStateOutlookLinks & " outlookCandidates=" & $g_iPlanOutlookCandidates & " planFile=" & $g_sLastSyncPlanFile)
 	Return 1
 EndFunc
 
@@ -589,11 +737,11 @@ Func _ValidateAndPrepareSyncSafetyPlan()
 		Local $iMinRatio = Number(_Cfg("Safety", "IncompleteReadMinRatioPercent", "20"))
 		If $iMinItems < 0 Then $iMinItems = 0
 		If $iMinRatio < 1 Then $iMinRatio = 1
-		If $g_iPlanSyncableRecords >= 10 Then
+		If $g_iPlanStateOutlookLinks >= 10 Then
 			Local $nRatio = 0
-			If $g_iPlanSyncableRecords > 0 Then $nRatio = ($g_iPlanOutlookCandidates * 100.0) / $g_iPlanSyncableRecords
+			If $g_iPlanStateOutlookLinks > 0 Then $nRatio = ($g_iPlanOutlookCandidates * 100.0) / $g_iPlanStateOutlookLinks
 			If $g_iPlanOutlookCandidates < $iMinItems Or $nRatio < $iMinRatio Then
-				$sReason &= "Outlook read looks incomplete: candidates=" & $g_iPlanOutlookCandidates & ", syncable WorkDays records=" & $g_iPlanSyncableRecords & ", ratio=" & StringFormat("%.1f", $nRatio) & "%. "
+				$sReason &= "Outlook read looks incomplete: candidates=" & $g_iPlanOutlookCandidates & ", expected state-linked Outlook items=" & $g_iPlanStateOutlookLinks & ", ratio=" & StringFormat("%.1f", $nRatio) & "%. "
 			EndIf
 		EndIf
 	EndIf
@@ -630,6 +778,7 @@ Func _SetSyncGuardStatus($sStatus, $sReason)
 	RegWrite($g_sAgentDB, "LastSyncGuardChanges", "REG_SZ", String($g_iPlanOutlookToWorkDaysChanges))
 	RegWrite($g_sAgentDB, "LastSyncGuardClears", "REG_SZ", String($g_iPlanClears))
 	RegWrite($g_sAgentDB, "LastSyncGuardOutlookCandidates", "REG_SZ", String($g_iPlanOutlookCandidates))
+	RegWrite($g_sAgentDB, "LastSyncGuardStateOutlookLinks", "REG_SZ", String($g_iPlanStateOutlookLinks))
 	RegWrite($g_sAgentDB, "LastSyncGuardWorkDaysRecords", "REG_SZ", String($g_iPlanCurrentRecords))
 	RegWrite($g_sAgentDB, "LastSyncPlanFile", "REG_SZ", $g_sLastSyncPlanFile)
 	If $g_sLastPreSyncBackup <> "" Then RegWrite($g_sAgentDB, "LastPreSyncBackup", "REG_SZ", $g_sLastPreSyncBackup)
@@ -764,14 +913,52 @@ Func _GetOutlookApplication()
 	Return $oOutlook
 EndFunc
 
+Func _WaitForOutlookReady(ByRef $oOutlook, ByRef $oNs, ByRef $oCalendar)
+	Local $iRetries = Number(_Cfg("Safety", "OutlookReadyRetries", "12"))
+	Local $iDelay = Number(_Cfg("Safety", "OutlookReadyRetryDelayMs", "5000"))
+	If $iRetries < 1 Then $iRetries = 1
+	If $iRetries > 60 Then $iRetries = 60
+	If $iDelay < 250 Then $iDelay = 250
+	If $iDelay > 30000 Then $iDelay = 30000
+
+	Local $i
+	For $i = 1 To $iRetries
+		Local $iComBefore = $g_iComErrorCount
+		$oNs = 0
+		$oCalendar = 0
+		If Not IsObj($oOutlook) Then $oOutlook = _GetOutlookApplication()
+
+		If IsObj($oOutlook) Then $oNs = $oOutlook.GetNamespace("MAPI")
+		If IsObj($oNs) Then $oCalendar = $oNs.GetDefaultFolder($OL_FOLDER_CALENDAR)
+
+		If IsObj($oCalendar) Then
+			Local $oItems = $oCalendar.Items
+			Local $iCount = -1
+			If IsObj($oItems) Then $iCount = Number($oItems.Count)
+			Local $sFolderName = String($oCalendar.Name)
+			Local $sFolderPath = String($oCalendar.FolderPath)
+			If IsObj($oItems) And Not _ComErrorOccurredSince($iComBefore) Then
+				_VLog("Outlook readiness check OK on attempt " & $i & "/" & $iRetries & ": folder='" & _DbgValue($sFolderName, 120) & "' path='" & _DbgValue($sFolderPath, 220) & "' items=" & $iCount)
+				Return 1
+			EndIf
+		EndIf
+
+		_Log("Outlook readiness check failed on attempt " & $i & "/" & $iRetries & ". Last COM error: " & $g_sLastComError)
+		If $i < $iRetries Then Sleep($iDelay)
+	Next
+
+	Return SetError(1, 0, 0)
+EndFunc
+
 Func _LoadOutlookMap($oCalendar, $sStartISO, $sEndISO)
+	Local $iComStart = $g_iComErrorCount
 	Local $oMap = ObjCreate("Scripting.Dictionary")
 	If Not IsObj($oMap) Then Return SetError(1, 0, 0)
 
 	Local $oItems = $oCalendar.Items
 	If Not IsObj($oItems) Then
 		_Log("Outlook calendar Items collection is not available.")
-		Return $oMap
+		Return SetError(2, 0, 0)
 	EndIf
 
 	Local $sFolderName = ""
@@ -790,7 +977,7 @@ Func _LoadOutlookMap($oCalendar, $sStartISO, $sEndISO)
 	Local $oRange = $oItems.Restrict($sFilter)
 	If Not IsObj($oRange) Then
 		_Log("Outlook Restrict returned no valid range object. Filter: " & $sFilter)
-		Return $oMap
+		Return SetError(3, 0, 0)
 	EndIf
 
 	Local $iRangeCount = -1
@@ -878,6 +1065,10 @@ Func _LoadOutlookMap($oCalendar, $sStartISO, $sEndISO)
 	Next
 
 	_VLog("Outlook scan summary: scanned=" & $iIndex & " accepted=" & $iAccepted & " rejected=" & $iRejected & " dateRejected=" & $iDateRejected & " statusRejected=" & $iStatusRejected & " duplicates=" & $iDuplicate & " mappedDates=" & $oMap.Count)
+	If _Cfg("Safety", "BlockOnOutlookComError", "1") = "1" And _ComErrorOccurredSince($iComStart) Then
+		_Log("Outlook scan produced COM errors. The scan is considered unreliable and will be aborted. Last COM error: " & $g_sLastComError)
+		Return SetError(9, 0, 0)
+	EndIf
 
 	Return $oMap
 EndFunc
@@ -1439,7 +1630,7 @@ Func _VLogConfigSnapshot()
 	_VLog("Settings snapshot: IntervalMinutes=" & _Cfg("Sync", "IntervalMinutes", "15") & " PastDays=" & _Cfg("Sync", "PastDays", "60") & " FutureDays=" & _Cfg("Sync", "FutureDays", "370") & " OutlookWinsOnConflict=" & _Cfg("Sync", "OutlookWinsOnConflict", "1") & " DeleteInOutlookClearsWorkDays=" & _Cfg("Sync", "DeleteInOutlookClearsWorkDays", "0"))
 	_VLog("Settings snapshot: SyncBlank=" & _Cfg("Sync", "SyncBlank", "0") & " SyncWeekend=" & _Cfg("Sync", "SyncWeekend", "0") & " SyncTaggedBlankOrWeekend=" & _Cfg("Sync", "SyncTaggedBlankOrWeekend", "1") & " RunAtWindowsStartup=" & _Cfg("Sync", "RunAtWindowsStartup", "0"))
 	_VLog("Settings snapshot: SubjectPrefix='" & _Cfg("Outlook", "SubjectPrefix", "WorkDays -") & "' CategoryPrefix='" & _Cfg("Outlook", "CategoryPrefix", "WorkDays -") & "' ManagedOnly=" & _Cfg("Outlook", "ManagedOnly", "0") & " DateOrder=" & _Cfg("Outlook", "DateOrder", "Auto") & " VerboseMode=" & _Cfg("Logging", "VerboseMode", "0") & " LogLevel=" & _Cfg("Advanced", "LogLevel", "Normal"))
-	_VLog("Safety snapshot: CreateBackupBeforeOutlookChanges=" & _Cfg("Safety", "CreateBackupBeforeOutlookChanges", "1") & " BlockMassChanges=" & _Cfg("Safety", "BlockMassChanges", "1") & " MaxWorkDaysChangesPerSync=" & _Cfg("Safety", "MaxWorkDaysChangesPerSync", "20") & " MaxChangePercentPerSync=" & _Cfg("Safety", "MaxChangePercentPerSync", "15") & " MaxClearsPerSync=" & _Cfg("Safety", "MaxClearsPerSync", "0") & " BlockIncompleteOutlookRead=" & _Cfg("Safety", "BlockIncompleteOutlookRead", "1"))
+	_VLog("Safety snapshot: CreateBackupBeforeOutlookChanges=" & _Cfg("Safety", "CreateBackupBeforeOutlookChanges", "1") & " BlockMassChanges=" & _Cfg("Safety", "BlockMassChanges", "1") & " MaxWorkDaysChangesPerSync=" & _Cfg("Safety", "MaxWorkDaysChangesPerSync", "20") & " MaxChangePercentPerSync=" & _Cfg("Safety", "MaxChangePercentPerSync", "15") & " MaxClearsPerSync=" & _Cfg("Safety", "MaxClearsPerSync", "0") & " BlockIncompleteOutlookRead=" & _Cfg("Safety", "BlockIncompleteOutlookRead", "1") & " AbortBeforePlanWhenOutlookReadIncomplete=" & _Cfg("Safety", "AbortBeforePlanWhenOutlookReadIncomplete", "1") & " BlockOnOutlookComError=" & _Cfg("Safety", "BlockOnOutlookComError", "1") & " AllowOutlookDeleteClearWorkDays=" & _Cfg("Safety", "AllowOutlookDeleteClearWorkDays", "0"))
 EndFunc
 
 Func _OutlookItemDebugSummary($oItem)
@@ -1511,5 +1702,7 @@ EndFunc
 
 Func _ComErrorHandler($oError)
 	If Not IsObj($oError) Then Return
-	_Log("COM error: 0x" & Hex($oError.number, 8) & " | " & $oError.windescription & " | line " & $oError.scriptline)
+	$g_iComErrorCount += 1
+	$g_sLastComError = "COM error: 0x" & Hex($oError.number, 8) & " | " & $oError.windescription & " | line " & $oError.scriptline
+	_Log($g_sLastComError)
 EndFunc
