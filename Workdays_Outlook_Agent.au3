@@ -1,9 +1,9 @@
-#Region ;**** Directives created by AutoIt3Wrapper_GUI ****
+﻿#Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_UseX64=n
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Icon=CalendarSync.ico
 #AutoIt3Wrapper_Res_Description=Work Day Sync Agent
-#AutoIt3Wrapper_Res_Fileversion=1.0.1.2
+#AutoIt3Wrapper_Res_Fileversion=1.0.1.3
 #AutoIt3Wrapper_Res_ProductName=Work Day Sync Agent
 #AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
 #AutoIt3Wrapper_Res_LegalCopyright=Copyright © 2026 Fabricio Zambroni
@@ -42,6 +42,11 @@ Global $g_iTrayLog = 0
 Global $g_iTrayCleanOutlook = 0
 Global $g_iTrayExit = 0
 Global $g_sLastForceSyncRequest = ""
+Global $g_sPendingForceSyncRequest = ""
+Global $g_bStartupSyncPending = True
+Global $g_hStartupRetryTimer = TimerInit()
+Global $g_hOutlookVisibleTimer = 0
+Global $g_bOutlookVisibleObserved = False
 
 Global $g_iPlanOutlookToWorkDaysChanges = 0
 Global $g_iPlanClears = 0
@@ -71,15 +76,19 @@ _ApplyStartupSetting()
 _CreateTray()
 _Log("Agent started. Executable/script folder: " & @ScriptDir & " | Log: " & $g_sLog & " | Settings: " & $g_sAgentDB)
 _VLog("Verbose mode enabled. State file: " & $g_sState)
-_SyncNow()
+_InitializeDeferredStartupSync()
 $g_hTimer = TimerInit()
 
 While 1
 	Local $iMsg = TrayGetMsg()
 	Switch $iMsg
 		Case $g_iTraySyncNow
-			_SyncNow()
-			$g_hTimer = TimerInit()
+			If _IsOutlookUiRunning() Then
+				_SyncNow()
+				$g_hTimer = TimerInit()
+			Else
+				_QueueDeferredSync("Tray Sync now was requested, but Outlook is not fully open. The sync will run automatically when Outlook is ready.")
+			EndIf
 		Case $g_iTrayPause
 			_TogglePause()
 		Case $g_iTrayLog
@@ -96,13 +105,18 @@ While 1
 	EndSwitch
 
 	_CheckForcedSyncRequest()
+	_CheckDeferredStartupSync()
 
-	If Not $g_bPaused Then
+	If Not $g_bPaused And Not $g_bStartupSyncPending Then
 		Local $iIntervalMin = Number(_Cfg("Sync", "IntervalMinutes", "15"))
 		If $iIntervalMin < 1 Then $iIntervalMin = 15
 		If TimerDiff($g_hTimer) >= ($iIntervalMin * 60000) Then
-			_SyncNow()
-			$g_hTimer = TimerInit()
+			If _IsOutlookUiRunning() Then
+				_SyncNow()
+				$g_hTimer = TimerInit()
+			Else
+				_QueueDeferredSync("Scheduled sync reached its interval, but Outlook is closed. The sync will run automatically after Outlook is open.")
+			EndIf
 		EndIf
 	EndIf
 
@@ -179,6 +193,12 @@ Func _EnsureConfig()
 	_EnsureRegDefault("Safety", "IncompleteReadMinOutlookItems", "3")
 	_EnsureRegDefault("Safety", "IncompleteReadMinRatioPercent", "20")
 	_EnsureRegDefault("Safety", "AllowOutlookDeleteClearWorkDays", "0")
+	_EnsureRegDefault("Safety", "RequireVisibleOutlookSession", "1")
+	_EnsureRegDefault("Safety", "StartupOutlookRetrySeconds", "15")
+	_EnsureRegDefault("Safety", "OutlookStartupGraceSeconds", "30")
+	_EnsureRegDefault("Safety", "OutlookReadyStableChecks", "3")
+	_EnsureRegDefault("Safety", "IncompleteReadRetries", "3")
+	_EnsureRegDefault("Safety", "IncompleteReadRetryDelayMs", "15000")
 
 	_EnsureRegDefault("Advanced", "LogLevel", "Normal")
 	_EnsureRegDefault("Logging", "VerboseMode", "0")
@@ -229,8 +249,12 @@ Func _TogglePause()
 		TrayItemSetText($g_iTrayPause, "Pause sync")
 		TraySetToolTip($g_sAppTitle)
 		_Log("Sync resumed.")
-		_SyncNow()
-		$g_hTimer = TimerInit()
+		If _IsOutlookUiRunning() Then
+			_SyncNow()
+			$g_hTimer = TimerInit()
+		Else
+			_QueueDeferredSync("Sync was resumed while Outlook is closed. The next sync will run automatically when Outlook is ready.")
+		EndIf
 	EndIf
 EndFunc
 
@@ -250,6 +274,95 @@ Func _AgentRunCommand()
 EndFunc
 
 
+Func _InitializeDeferredStartupSync()
+	$g_bStartupSyncPending = True
+	$g_bOutlookVisibleObserved = False
+	$g_hOutlookVisibleTimer = 0
+	$g_hStartupRetryTimer = TimerInit()
+	TrayItemSetText($g_iTrayStatus, "Waiting for Outlook...")
+	TraySetToolTip($g_sAppTitle & " - waiting for Outlook")
+	_Log("Startup sync deferred until a visible Outlook session is fully open. The agent will not create a hidden Outlook COM session.")
+	Return 1
+EndFunc
+
+Func _IsOutlookUiRunning()
+	If ProcessExists("OUTLOOK.EXE") = 0 Then Return False
+
+	Local $iComBefore = $g_iComErrorCount
+	Local $oOutlook = ObjGet("", "Outlook.Application")
+	If Not IsObj($oOutlook) Then Return False
+
+	Local $oExplorers = $oOutlook.Explorers
+	Local $iExplorerCount = 0
+	If IsObj($oExplorers) Then $iExplorerCount = Number($oExplorers.Count)
+	If _ComErrorOccurredSince($iComBefore) Then Return False
+	Return $iExplorerCount > 0
+EndFunc
+
+Func _QueueDeferredSync($sReason, $sRequest = "")
+	$g_bStartupSyncPending = True
+	If $sRequest <> "" Then $g_sPendingForceSyncRequest = $sRequest
+	$g_bOutlookVisibleObserved = False
+	$g_hOutlookVisibleTimer = 0
+	$g_hStartupRetryTimer = TimerInit()
+	TrayItemSetText($g_iTrayStatus, "Waiting for Outlook...")
+	TraySetToolTip($g_sAppTitle & " - waiting for Outlook")
+	_Log("Sync deferred: " & $sReason)
+	Return 1
+EndFunc
+
+Func _CheckDeferredStartupSync()
+	If Not $g_bStartupSyncPending Or $g_bPaused Then Return 0
+
+	Local $iRetrySeconds = Number(_Cfg("Safety", "StartupOutlookRetrySeconds", "15"))
+	If $iRetrySeconds < 5 Then $iRetrySeconds = 5
+	If $iRetrySeconds > 300 Then $iRetrySeconds = 300
+	If TimerDiff($g_hStartupRetryTimer) < ($iRetrySeconds * 1000) Then Return 0
+	$g_hStartupRetryTimer = TimerInit()
+
+	If Not _IsOutlookUiRunning() Then
+		If $g_bOutlookVisibleObserved Then
+			$g_bOutlookVisibleObserved = False
+			$g_hOutlookVisibleTimer = 0
+		EndIf
+		TrayItemSetText($g_iTrayStatus, "Waiting for Outlook...")
+		Return 0
+	EndIf
+
+	If Not $g_bOutlookVisibleObserved Then
+		$g_bOutlookVisibleObserved = True
+		$g_hOutlookVisibleTimer = TimerInit()
+		_Log("Visible Outlook session detected. Waiting for the startup grace period before the first sync.")
+		Return 0
+	EndIf
+
+	Local $iGraceSeconds = Number(_Cfg("Safety", "OutlookStartupGraceSeconds", "30"))
+	If $iGraceSeconds < 0 Then $iGraceSeconds = 0
+	If $iGraceSeconds > 600 Then $iGraceSeconds = 600
+	If TimerDiff($g_hOutlookVisibleTimer) < ($iGraceSeconds * 1000) Then
+		TrayItemSetText($g_iTrayStatus, "Outlook starting...")
+		Return 0
+	EndIf
+
+	_Log("Outlook startup grace period completed. Running deferred sync.")
+	Local $iResult = _SyncNow()
+	Local $iSyncError = @error
+	If $iSyncError Then
+		_Log("Deferred sync did not complete safely. It will be retried while Outlook remains open. Error code: " & $iSyncError)
+		$g_hStartupRetryTimer = TimerInit()
+		Return SetError($iSyncError, 0, 0)
+	EndIf
+
+	$g_bStartupSyncPending = False
+	$g_bOutlookVisibleObserved = False
+	If $g_sPendingForceSyncRequest <> "" Then
+		RegWrite($g_sAgentDB, "Sync_ForceNowCompleted", "REG_SZ", StringFormat("%04d-%02d-%02d %02d:%02d:%02d", @YEAR, @MON, @MDAY, @HOUR, @MIN, @SEC))
+		$g_sPendingForceSyncRequest = ""
+	EndIf
+	$g_hTimer = TimerInit()
+	Return $iResult
+EndFunc
+
 Func _CheckForcedSyncRequest()
 	Local $sRequest = RegRead($g_sAgentDB, "Sync_ForceNowRequest")
 	If @error Then $sRequest = ""
@@ -260,11 +373,21 @@ Func _CheckForcedSyncRequest()
 	RegWrite($g_sAgentDB, "Sync_ForceNowAccepted", "REG_SZ", StringFormat("%04d-%02d-%02d %02d:%02d:%02d", @YEAR, @MON, @MDAY, @HOUR, @MIN, @SEC))
 	_Log("Immediate sync request detected from WorkDays. Request=" & $sRequest)
 
+	If Not _IsOutlookUiRunning() Then
+		_QueueDeferredSync("The WorkDays Sync button was pressed, but Outlook is not open with a visible calendar session. The request will run automatically after Outlook is fully open.", $sRequest)
+		Return 1
+	EndIf
 
-	_SyncNow()
+	Local $iResult = _SyncNow()
+	Local $iSyncError = @error
 	$g_hTimer = TimerInit()
+	If $iSyncError Then
+		_QueueDeferredSync("The immediate sync could not complete safely. It will retry after Outlook is stable.", $sRequest)
+		Return SetError($iSyncError, 0, 0)
+	EndIf
+
 	RegWrite($g_sAgentDB, "Sync_ForceNowCompleted", "REG_SZ", StringFormat("%04d-%02d-%02d %02d:%02d:%02d", @YEAR, @MON, @MDAY, @HOUR, @MIN, @SEC))
-	Return 1
+	Return $iResult
 EndFunc
 
 Func _NotifyWorkDaysDatabaseChanged($sDateISO, $sStatus, $sMarker)
@@ -287,18 +410,21 @@ Func _SyncNow()
 	TraySetToolTip($g_sAppTitle & " - syncing")
 
 	Local $iChanges = _RunSync()
+	Local $iSyncError = @error
 	Local $sNow = StringFormat("%04d-%02d-%02d %02d:%02d:%02d", @YEAR, @MON, @MDAY, @HOUR, @MIN, @SEC)
 
-	If @error Then
-		TrayItemSetText($g_iTrayStatus, "Last sync failed: " & @HOUR & ":" & @MIN)
-		TraySetToolTip($g_sAppTitle & " - last sync failed")
-		_Log("Sync failed. Error code: " & @error)
-	Else
-		TrayItemSetText($g_iTrayStatus, "Last sync: " & @HOUR & ":" & @MIN & " | Changes: " & $iChanges)
-		TraySetToolTip($g_sAppTitle & " - last sync " & $sNow)
-		IniWrite($g_sState, "Global", "LastSync", $sNow)
-		_Log("Sync completed. Changes: " & $iChanges)
+	If $iSyncError Then
+		TrayItemSetText($g_iTrayStatus, "Last sync deferred: " & @HOUR & ":" & @MIN)
+		TraySetToolTip($g_sAppTitle & " - waiting for a safe sync")
+		_Log("Sync did not complete. Error code: " & $iSyncError)
+		Return SetError($iSyncError, 0, 0)
 	EndIf
+
+	TrayItemSetText($g_iTrayStatus, "Last sync: " & @HOUR & ":" & @MIN & " | Changes: " & $iChanges)
+	TraySetToolTip($g_sAppTitle & " - last sync " & $sNow)
+	IniWrite($g_sState, "Global", "LastSync", $sNow)
+	_Log("Sync completed. Changes: " & $iChanges)
+	Return $iChanges
 EndFunc
 
 Func _RunSync()
@@ -315,33 +441,57 @@ Func _RunSync()
 	Local $sEndISO = _ISOAddDays(_TodayISO(), $iFuture)
 	_VLog("Sync range: " & $sStartISO & " to " & $sEndISO & " | PastDays=" & $iPast & " | FutureDays=" & $iFuture & " | ManagedOnly=" & _Cfg("Outlook", "ManagedOnly", "0"))
 
-	Local $oOutlook = _GetOutlookApplication()
+	Local $oOutlook = _GetOutlookApplication(False)
 	If Not IsObj($oOutlook) Then
-		_AbortSyncBeforePlan("Outlook.Application COM object is not available. " & $g_sLastComError, $sStartISO, $sEndISO)
+		Local $sWaitReason = "Outlook is not running with a visible user session. Sync is waiting; no plan was created and no data was changed."
+		_SetSyncGuardStatus("WAITING", $sWaitReason)
+		_Log($sWaitReason)
 		Return SetError(1, 0, 0)
 	EndIf
 
 	Local $oNs = 0
 	Local $oCalendar = 0
 	If Not _WaitForOutlookReady($oOutlook, $oNs, $oCalendar) Then
-		_AbortSyncBeforePlan("Outlook is not ready or is rejecting COM calls. Wait until Outlook is fully open and try again. " & $g_sLastComError, $sStartISO, $sEndISO)
+		Local $sReadyReason = "Outlook is open but not fully ready yet. Sync is waiting and will retry; no plan was created and no data was changed. " & $g_sLastComError
+		_SetSyncGuardStatus("WAITING", $sReadyReason)
+		_Log($sReadyReason)
 		Return SetError(2, 0, 0)
 	EndIf
 
-	Local $iComBeforeScan = $g_iComErrorCount
-	Local $oOutlookMap = _LoadOutlookMap($oCalendar, $sStartISO, $sEndISO)
-	If @error Or Not IsObj($oOutlookMap) Then
-		_AbortSyncBeforePlan("Outlook calendar scan failed. No changes were planned or applied. " & $g_sLastComError, $sStartISO, $sEndISO)
-		Return SetError(4, 0, 0)
-	EndIf
-	If _Cfg("Safety", "BlockOnOutlookComError", "1") = "1" And _ComErrorOccurredSince($iComBeforeScan) Then
-		_AbortSyncBeforePlan("Outlook COM error occurred during calendar scan. No changes were planned or applied. " & $g_sLastComError, $sStartISO, $sEndISO)
-		Return SetError(5, 0, 0)
-	EndIf
-	_VLog("Outlook candidate map loaded. Count=" & $oOutlookMap.Count)
+	Local $iReadRetries = Number(_Cfg("Safety", "IncompleteReadRetries", "3"))
+	Local $iReadRetryDelay = Number(_Cfg("Safety", "IncompleteReadRetryDelayMs", "15000"))
+	If $iReadRetries < 1 Then $iReadRetries = 1
+	If $iReadRetries > 10 Then $iReadRetries = 10
+	If $iReadRetryDelay < 1000 Then $iReadRetryDelay = 1000
+	If $iReadRetryDelay > 60000 Then $iReadRetryDelay = 60000
 
-	If Not _PreflightOutlookReadHealth($oOutlookMap, $sStartISO, $sEndISO) Then
-		_Log("Sync aborted before change plan. Reason: " & $g_sLastSyncGuardReason)
+	Local $oOutlookMap = 0
+	Local $bHealthyRead = False
+	Local $iReadAttempt
+	For $iReadAttempt = 1 To $iReadRetries
+		Local $iComBeforeScan = $g_iComErrorCount
+		$oOutlookMap = _LoadOutlookMap($oCalendar, $sStartISO, $sEndISO)
+		If @error Or Not IsObj($oOutlookMap) Then
+			$g_sLastSyncGuardReason = "Outlook calendar scan failed on attempt " & $iReadAttempt & "/" & $iReadRetries & ". " & $g_sLastComError
+		ElseIf _Cfg("Safety", "BlockOnOutlookComError", "1") = "1" And _ComErrorOccurredSince($iComBeforeScan) Then
+			$g_sLastSyncGuardReason = "Outlook COM error occurred during calendar scan attempt " & $iReadAttempt & "/" & $iReadRetries & ". " & $g_sLastComError
+		Else
+			_VLog("Outlook candidate map loaded on attempt " & $iReadAttempt & "/" & $iReadRetries & ". Count=" & $oOutlookMap.Count)
+			If _PreflightOutlookReadHealth($oOutlookMap, $sStartISO, $sEndISO) Then
+				$bHealthyRead = True
+				ExitLoop
+			EndIf
+		EndIf
+
+		If $iReadAttempt < $iReadRetries Then
+			_Log("Outlook calendar read is not healthy yet. Waiting " & $iReadRetryDelay & " ms before retry. Reason: " & $g_sLastSyncGuardReason)
+			Sleep($iReadRetryDelay)
+			_ResetComErrorState()
+		EndIf
+	Next
+
+	If Not $bHealthyRead Then
+		_AbortSyncBeforePlan($g_sLastSyncGuardReason & " No changes were planned or applied.", $sStartISO, $sEndISO)
 		Return SetError(19, 0, 0)
 	EndIf
 
@@ -384,6 +534,14 @@ Func _RunSync()
 
 		If _VerboseEnabled() And ($bHasOutlook Or $sRegHash <> "" Or $sStateRegHash <> "" Or $sStateOutHash <> "") Then
 			_VLog("Day decision " & $sDateISO & ": regStatus='" & $sRegStatus & "' regMarkerLen=" & StringLen($sRegMarker) & " regHash='" & $sRegHash & "' hasOutlook=" & _BoolText($bHasOutlook) & " outStatus='" & $sOutStatus & "' outMarkerLen=" & StringLen($sOutMarker) & " outHash='" & $sOutHash & "' stateRegHash='" & $sStateRegHash & "' stateOutHash='" & $sStateOutHash & "' stateEntryIdShort='" & _EntryIdShort($sStateEntryID) & "' regChanged=" & _BoolText($bRegChanged) & " outChanged=" & _BoolText($bOutChanged))
+		EndIf
+
+		; A missing/reset State.ini must not create a false conflict when both sides already match.
+		If $bHasOutlook And $sRegHash <> "" And $sRegHash = $sOutHash Then
+			_UpdateState($sDateISO, $sRegHash, $sOutHash, $sOutEntryID)
+			_EnsureOutlookItemFree($oNs, $sOutEntryID, $sDateISO, $sOutStatus, $sOutMarker)
+			_VLog("State reconciliation only: WorkDays and Outlook already match for " & $sDateISO & ".")
+			ContinueLoop
 		EndIf
 
 		If Not $bHasOutlook And _ShouldSync($sRegStatus, $sRegMarker) Then
@@ -538,8 +696,7 @@ Func _PreflightOutlookReadHealth($oOutlookMap, $sStartISO, $sEndISO)
 	If $g_iPlanStateOutlookLinks > 0 Then $nRatio = ($g_iPlanOutlookCandidates * 100.0) / $g_iPlanStateOutlookLinks
 
 	If $g_iPlanOutlookCandidates < $iMinItems Or $nRatio < $iMinRatio Then
-		Local $sReason = "Outlook read looks incomplete before change planning: candidates=" & $g_iPlanOutlookCandidates & ", expected state-linked Outlook items=" & $g_iPlanStateOutlookLinks & ", ratio=" & StringFormat("%.1f", $nRatio) & "%. Outlook may still be starting, offline, locked by a prompt, or rejecting COM calls. No changes were planned or applied."
-		_AbortSyncBeforePlan($sReason, $sStartISO, $sEndISO)
+		$g_sLastSyncGuardReason = "Outlook read looks incomplete before change planning: candidates=" & $g_iPlanOutlookCandidates & ", expected state-linked Outlook items=" & $g_iPlanStateOutlookLinks & ", ratio=" & StringFormat("%.1f", $nRatio) & "%. Outlook may still be starting, offline, locked by a prompt, or rejecting COM calls."
 		Return SetError(1, 0, 0)
 	EndIf
 
@@ -647,7 +804,10 @@ Func _BuildSyncSafetyPlan($oOutlookMap, $sStartISO, $sEndISO)
 		Local $sTargetStatus = $sRegStatus
 		Local $sTargetMarker = $sRegMarker
 
-		If Not $bHasOutlook And $sStateOutHash <> "" And Not $bRegChanged Then
+		If $bHasOutlook And $sRegHash <> "" And $sRegHash = $sOutHash Then
+			; State rebuild only. Both sides already contain the same value.
+			$sAction = ""
+		ElseIf Not $bHasOutlook And $sStateOutHash <> "" And Not $bRegChanged Then
 			If _OutlookDeleteClearAllowed() Then
 				$sAction = "OUTLOOK_DELETE_CLEAR_WORKDAYS"
 				$sTargetStatus = "B"
@@ -788,28 +948,21 @@ EndFunc
 
 Func _CleanOutlookCalendarFromTray()
 	If _Cfg("Safety", "EnableOutlookCleanup", "1") <> "1" Then
-		MsgBox($MB_ICONINFORMATION, $g_sAppTitle, "Outlook cleanup is disabled in settings.")
+		MsgBox(BitOR($MB_ICONINFORMATION, $MB_TOPMOST), $g_sAppTitle, "Outlook cleanup is disabled in settings.")
 		Return
 	EndIf
 
-	Local $sPhrase = _Cfg("Safety", "CleanupConfirmationPhrase", "CLEAN WORKDAYS OUTLOOK")
 	Local $sMsg = "This will delete WorkDays calendar items from Outlook only." & @CRLF & @CRLF & _
 		"Your WorkDays data will remain stored in the WorkDays app." & @CRLF & _
+		"The synchronization state file will also be deleted so stale Outlook links cannot affect the next sync." & @CRLF & _
 		"After cleanup, sync will be paused if PauseAfterOutlookCleanup is enabled." & @CRLF & @CRLF & _
 		"Continue?"
-	If MsgBox(BitOR($MB_ICONWARNING, $MB_YESNO, $MB_DEFBUTTON2), $g_sAppTitle, $sMsg) <> $IDYES Then Return
-
-	Local $sTyped = InputBox($g_sAppTitle, "Type exactly this confirmation phrase:" & @CRLF & @CRLF & $sPhrase, "", "", 420, 150)
-	If @error Then Return
-	If StringStripWS($sTyped, 3) <> $sPhrase Then
-		MsgBox($MB_ICONINFORMATION, $g_sAppTitle, "Cleanup cancelled. The confirmation phrase did not match.")
-		Return
-	EndIf
+	If MsgBox(BitOR($MB_ICONWARNING, $MB_YESNO, $MB_DEFBUTTON2, $MB_TOPMOST), $g_sAppTitle, $sMsg) <> $IDYES Then Return
 
 	TrayItemSetText($g_iTrayStatus, "Cleaning Outlook...")
 	Local $iDeleted = _CleanOutlookCalendar()
 	If @error Then
-		MsgBox($MB_ICONERROR, $g_sAppTitle, "Outlook cleanup failed. Check the log file for details.")
+		MsgBox(BitOR($MB_ICONERROR, $MB_TOPMOST), $g_sAppTitle, "Outlook cleanup failed. Check the log file for details.")
 		TrayItemSetText($g_iTrayStatus, "Cleanup failed")
 		Return
 	EndIf
@@ -818,19 +971,17 @@ Func _CleanOutlookCalendarFromTray()
 		_TogglePause()
 	EndIf
 
-	MsgBox($MB_ICONINFORMATION, $g_sAppTitle, "Outlook cleanup completed." & @CRLF & @CRLF & "Deleted items: " & $iDeleted)
-	_Log("Outlook cleanup completed. Deleted items: " & $iDeleted)
+	MsgBox(BitOR($MB_ICONINFORMATION, $MB_TOPMOST), $g_sAppTitle, "Outlook cleanup completed." & @CRLF & @CRLF & "Deleted items: " & $iDeleted & @CRLF & "State file deleted: " & $g_sState)
+	_Log("Outlook cleanup completed. Deleted items: " & $iDeleted & ". State file reset.")
 EndFunc
 
 Func _CleanOutlookCalendar()
-	Local $oOutlook = _GetOutlookApplication()
+	Local $oOutlook = _GetOutlookApplication(True)
 	If Not IsObj($oOutlook) Then Return SetError(1, 0, 0)
 
-	Local $oNs = $oOutlook.GetNamespace("MAPI")
-	If Not IsObj($oNs) Then Return SetError(2, 0, 0)
-
-	Local $oCalendar = $oNs.GetDefaultFolder($OL_FOLDER_CALENDAR)
-	If Not IsObj($oCalendar) Then Return SetError(3, 0, 0)
+	Local $oNs = 0
+	Local $oCalendar = 0
+	If Not _WaitForOutlookReady($oOutlook, $oNs, $oCalendar, False) Then Return SetError(2, 0, 0)
 
 	Local $iPastYears = Number(_Cfg("Safety", "CleanupPastYears", "10"))
 	Local $iFutureYears = Number(_Cfg("Safety", "CleanupFutureYears", "10"))
@@ -873,6 +1024,19 @@ Func _CleanOutlookCalendar()
 		EndIf
 	Next
 
+	; Cleanup invalidates every stored Outlook EntryID. Remove the complete state file
+	; so the next sync starts from a clean reconciliation state.
+	If FileExists($g_sState) Then
+		If FileDelete($g_sState) Then
+			_Log("Synchronization state file deleted after Outlook cleanup: " & $g_sState)
+		Else
+			_Log("WARNING: Could not delete synchronization state file after cleanup: " & $g_sState)
+			Return SetError(7, $iDeleted, 0)
+		EndIf
+	Else
+		_Log("Synchronization state file was already absent after Outlook cleanup: " & $g_sState)
+	EndIf
+
 	Return $iDeleted
 EndFunc
 
@@ -896,40 +1060,70 @@ Func _MarkDateAsOutlookCleaned($sDateISO)
 	_UpdateState($sDateISO, _RecordHash($sRegStatus, $sRegMarker), "", "")
 EndFunc
 
-Func _GetOutlookApplication()
-	_VLog("Trying to connect to an existing Outlook.Application COM instance.")
-	Local $oOutlook = ObjGet("", "Outlook.Application")
-	If IsObj($oOutlook) Then
-		_VLog("Connected to existing Outlook.Application instance.")
-	Else
-		_VLog("No existing Outlook.Application instance found. Trying ObjCreate.")
-		$oOutlook = ObjCreate("Outlook.Application")
-		If IsObj($oOutlook) Then _VLog("Created new Outlook.Application COM instance.")
+Func _GetOutlookApplication($bAllowLaunch = False)
+	If ProcessExists("OUTLOOK.EXE") = 0 Then
+		If Not $bAllowLaunch Then
+			_Log("Outlook is not running. Regular sync will wait instead of creating a hidden Outlook COM instance.")
+			Return SetError(2, 0, 0)
+		EndIf
+
+		_Log("Outlook is not running. Explicit cleanup requested, so Outlook will be launched visibly.")
+		ShellExecute("outlook.exe")
+		If Not ProcessWait("OUTLOOK.EXE", 30) Then
+			_Log("Outlook could not be launched for cleanup.")
+			Return SetError(3, 0, 0)
+		EndIf
 	EndIf
-	If Not IsObj($oOutlook) Then
-		_Log("Unable to connect to Outlook.Application COM object.")
-		Return SetError(1, 0, 0)
+
+	Local $i
+	For $i = 1 To 30
+		_VLog("Trying to connect to the running Outlook.Application COM instance. Attempt " & $i & "/30")
+		Local $oOutlook = ObjGet("", "Outlook.Application")
+		If IsObj($oOutlook) Then
+			_VLog("Connected to running Outlook.Application instance.")
+			Return $oOutlook
+		EndIf
+		Sleep(1000)
+	Next
+
+	If $bAllowLaunch Then
+		_VLog("Visible Outlook process exists but ObjGet did not bind. Trying ObjCreate only for the explicit cleanup operation.")
+		Local $oCreated = ObjCreate("Outlook.Application")
+		If IsObj($oCreated) Then Return $oCreated
 	EndIf
-	Return $oOutlook
+
+	_Log("Unable to connect to a running Outlook.Application COM object.")
+	Return SetError(1, 0, 0)
 EndFunc
 
-Func _WaitForOutlookReady(ByRef $oOutlook, ByRef $oNs, ByRef $oCalendar)
+Func _WaitForOutlookReady(ByRef $oOutlook, ByRef $oNs, ByRef $oCalendar, $bRequireExplorer = True)
 	Local $iRetries = Number(_Cfg("Safety", "OutlookReadyRetries", "12"))
 	Local $iDelay = Number(_Cfg("Safety", "OutlookReadyRetryDelayMs", "5000"))
+	Local $iStableRequired = Number(_Cfg("Safety", "OutlookReadyStableChecks", "3"))
 	If $iRetries < 1 Then $iRetries = 1
 	If $iRetries > 60 Then $iRetries = 60
 	If $iDelay < 250 Then $iDelay = 250
 	If $iDelay > 30000 Then $iDelay = 30000
+	If $iStableRequired < 1 Then $iStableRequired = 1
+	If $iStableRequired > 10 Then $iStableRequired = 10
 
+	Local $iStableChecks = 0
+	Local $iPreviousCount = -1
 	Local $i
 	For $i = 1 To $iRetries
 		Local $iComBefore = $g_iComErrorCount
 		$oNs = 0
 		$oCalendar = 0
-		If Not IsObj($oOutlook) Then $oOutlook = _GetOutlookApplication()
 
+		If Not IsObj($oOutlook) Then $oOutlook = _GetOutlookApplication(False)
 		If IsObj($oOutlook) Then $oNs = $oOutlook.GetNamespace("MAPI")
 		If IsObj($oNs) Then $oCalendar = $oNs.GetDefaultFolder($OL_FOLDER_CALENDAR)
+
+		Local $iExplorerCount = 0
+		If IsObj($oOutlook) Then
+			Local $oExplorers = $oOutlook.Explorers
+			If IsObj($oExplorers) Then $iExplorerCount = Number($oExplorers.Count)
+		EndIf
 
 		If IsObj($oCalendar) Then
 			Local $oItems = $oCalendar.Items
@@ -937,13 +1131,27 @@ Func _WaitForOutlookReady(ByRef $oOutlook, ByRef $oNs, ByRef $oCalendar)
 			If IsObj($oItems) Then $iCount = Number($oItems.Count)
 			Local $sFolderName = String($oCalendar.Name)
 			Local $sFolderPath = String($oCalendar.FolderPath)
-			If IsObj($oItems) And Not _ComErrorOccurredSince($iComBefore) Then
-				_VLog("Outlook readiness check OK on attempt " & $i & "/" & $iRetries & ": folder='" & _DbgValue($sFolderName, 120) & "' path='" & _DbgValue($sFolderPath, 220) & "' items=" & $iCount)
-				Return 1
+			Local $bExplorerReady = (Not $bRequireExplorer Or $iExplorerCount > 0)
+
+			If IsObj($oItems) And $bExplorerReady And Not _ComErrorOccurredSince($iComBefore) Then
+				If $iPreviousCount = -1 Or $iCount >= $iPreviousCount Then
+					$iStableChecks += 1
+				Else
+					$iStableChecks = 1
+				EndIf
+				$iPreviousCount = $iCount
+				_VLog("Outlook readiness check " & $i & "/" & $iRetries & ": folder='" & _DbgValue($sFolderName, 120) & "' path='" & _DbgValue($sFolderPath, 220) & "' items=" & $iCount & " explorers=" & $iExplorerCount & " stable=" & $iStableChecks & "/" & $iStableRequired)
+				If $iStableChecks >= $iStableRequired Then
+					_VLog("Outlook readiness confirmed after " & $iStableChecks & " stable checks.")
+					Return 1
+				EndIf
+			Else
+				$iStableChecks = 0
+				$iPreviousCount = -1
 			EndIf
 		EndIf
 
-		_Log("Outlook readiness check failed on attempt " & $i & "/" & $iRetries & ". Last COM error: " & $g_sLastComError)
+		_Log("Outlook readiness check not complete on attempt " & $i & "/" & $iRetries & ". Explorers=" & $iExplorerCount & " Last COM error: " & $g_sLastComError)
 		If $i < $iRetries Then Sleep($iDelay)
 	Next
 
@@ -969,7 +1177,9 @@ Func _LoadOutlookMap($oCalendar, $sStartISO, $sEndISO)
 	$iTotalCount = Number($oItems.Count)
 	_VLog("Default Outlook calendar folder: name='" & _DbgValue($sFolderName, 120) & "' path='" & _DbgValue($sFolderPath, 220) & "' totalItems=" & $iTotalCount)
 
-	$oItems.IncludeRecurrences = True
+	; WorkDays entries are individual all-day appointments. Recurrences are intentionally disabled
+	; because Outlook may report Count=2147483647 for unbounded recurring series during startup.
+	$oItems.IncludeRecurrences = False
 	$oItems.Sort("[Start]")
 
 	Local $sFilter = "[Start] >= '" & _OutlookFilterDate($sStartISO) & "' AND [Start] < '" & _OutlookFilterDate(_ISOAddDays($sEndISO, 1)) & "'"
@@ -1630,7 +1840,7 @@ Func _VLogConfigSnapshot()
 	_VLog("Settings snapshot: IntervalMinutes=" & _Cfg("Sync", "IntervalMinutes", "15") & " PastDays=" & _Cfg("Sync", "PastDays", "60") & " FutureDays=" & _Cfg("Sync", "FutureDays", "370") & " OutlookWinsOnConflict=" & _Cfg("Sync", "OutlookWinsOnConflict", "1") & " DeleteInOutlookClearsWorkDays=" & _Cfg("Sync", "DeleteInOutlookClearsWorkDays", "0"))
 	_VLog("Settings snapshot: SyncBlank=" & _Cfg("Sync", "SyncBlank", "0") & " SyncWeekend=" & _Cfg("Sync", "SyncWeekend", "0") & " SyncTaggedBlankOrWeekend=" & _Cfg("Sync", "SyncTaggedBlankOrWeekend", "1") & " RunAtWindowsStartup=" & _Cfg("Sync", "RunAtWindowsStartup", "0"))
 	_VLog("Settings snapshot: SubjectPrefix='" & _Cfg("Outlook", "SubjectPrefix", "WorkDays -") & "' CategoryPrefix='" & _Cfg("Outlook", "CategoryPrefix", "WorkDays -") & "' ManagedOnly=" & _Cfg("Outlook", "ManagedOnly", "0") & " DateOrder=" & _Cfg("Outlook", "DateOrder", "Auto") & " VerboseMode=" & _Cfg("Logging", "VerboseMode", "0") & " LogLevel=" & _Cfg("Advanced", "LogLevel", "Normal"))
-	_VLog("Safety snapshot: CreateBackupBeforeOutlookChanges=" & _Cfg("Safety", "CreateBackupBeforeOutlookChanges", "1") & " BlockMassChanges=" & _Cfg("Safety", "BlockMassChanges", "1") & " MaxWorkDaysChangesPerSync=" & _Cfg("Safety", "MaxWorkDaysChangesPerSync", "20") & " MaxChangePercentPerSync=" & _Cfg("Safety", "MaxChangePercentPerSync", "15") & " MaxClearsPerSync=" & _Cfg("Safety", "MaxClearsPerSync", "0") & " BlockIncompleteOutlookRead=" & _Cfg("Safety", "BlockIncompleteOutlookRead", "1") & " AbortBeforePlanWhenOutlookReadIncomplete=" & _Cfg("Safety", "AbortBeforePlanWhenOutlookReadIncomplete", "1") & " BlockOnOutlookComError=" & _Cfg("Safety", "BlockOnOutlookComError", "1") & " AllowOutlookDeleteClearWorkDays=" & _Cfg("Safety", "AllowOutlookDeleteClearWorkDays", "0"))
+	_VLog("Safety snapshot: CreateBackupBeforeOutlookChanges=" & _Cfg("Safety", "CreateBackupBeforeOutlookChanges", "1") & " BlockMassChanges=" & _Cfg("Safety", "BlockMassChanges", "1") & " MaxWorkDaysChangesPerSync=" & _Cfg("Safety", "MaxWorkDaysChangesPerSync", "20") & " MaxChangePercentPerSync=" & _Cfg("Safety", "MaxChangePercentPerSync", "15") & " MaxClearsPerSync=" & _Cfg("Safety", "MaxClearsPerSync", "0") & " BlockIncompleteOutlookRead=" & _Cfg("Safety", "BlockIncompleteOutlookRead", "1") & " AbortBeforePlanWhenOutlookReadIncomplete=" & _Cfg("Safety", "AbortBeforePlanWhenOutlookReadIncomplete", "1") & " BlockOnOutlookComError=" & _Cfg("Safety", "BlockOnOutlookComError", "1") & " AllowOutlookDeleteClearWorkDays=" & _Cfg("Safety", "AllowOutlookDeleteClearWorkDays", "0") & " RequireVisibleOutlookSession=" & _Cfg("Safety", "RequireVisibleOutlookSession", "1") & " StartupGraceSeconds=" & _Cfg("Safety", "OutlookStartupGraceSeconds", "30") & " IncompleteReadRetries=" & _Cfg("Safety", "IncompleteReadRetries", "3"))
 EndFunc
 
 Func _OutlookItemDebugSummary($oItem)

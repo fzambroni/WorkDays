@@ -1,9 +1,9 @@
-#Region ;**** Directives created by AutoIt3Wrapper_GUI ****
+﻿#Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_UseX64=n
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Icon=xcalendar4.ico
 #AutoIt3Wrapper_Res_Description=Work Day management
-#AutoIt3Wrapper_Res_Fileversion=2.1.4.12
+#AutoIt3Wrapper_Res_Fileversion=2.1.4.13
 #AutoIt3Wrapper_Res_ProductVersion=2.1.0.0
 #AutoIt3Wrapper_Res_ProductName=Work Days
 #AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
@@ -179,6 +179,7 @@ Global $g_sOutlookAgentDB = $DB & "\OutlookAgent"
 Global $g_sOutlookAgentDir = @ScriptDir
 Global $g_sOutlookAgentExe = $g_sOutlookAgentDir & "\Workdays_Outlook_Agent.exe"
 Global $g_sOutlookAgentLog = $g_sOutlookAgentDir & "\Workdays_Outlook_Agent.log"
+Global $g_sOutlookAgentState = $g_sOutlookAgentDir & "\Workdays_Outlook_Agent_State.ini"
 Global $g_sOutlookAgentProcess = "Workdays_Outlook_Agent.exe"
 Global $g_bOutlookAgentRefreshPending = False
 Global $g_sOutlookAgentPendingSeq = ""
@@ -500,7 +501,6 @@ $g_hGUI = $Form_WorkDays
 If $g_hGUI = 0 Then Exit MsgBox(16, "Error", "Failed to store GUI handle.")
 
 Global $DBpMenu_db = GUICtrlCreateMenu("File")
-Global $BkpMenu_Backup = GUICtrlCreateMenu("Backup", $DBpMenu_db)
 Global $BkpMenu_Exit = GUICtrlCreateMenuItem("&Exit", $DBpMenu_db)
 
 ;~ Global $DBpMenu_backup_Data = GUICtrlCreateMenu("Data")
@@ -514,17 +514,21 @@ Global $BkpMenu_Exit = GUICtrlCreateMenuItem("&Exit", $DBpMenu_db)
 ;~ Global $DBpMenu_backup_Data_Holidays = GUICtrlCreateMenuItem("Import Holidays File", $DBpMenu_backup_Data)
 
 Global $DBpMenu_settings = GUICtrlCreateMenu("Settings")
-Global $BkpMenu_settings_BKcolors = GUICtrlCreateMenuItem("Options", $DBpMenu_settings)
+Global $BkpMenu_settings_BKcolors = GUICtrlCreateMenuItem("Preferences", $DBpMenu_settings)
 Global $BkpMenu_settings_OutlookAgent = GUICtrlCreateMenuItem("Outlook Agent", $DBpMenu_settings)
 ;~ Global $DBpMenu_backup_3 = GUICtrlCreateMenuItem("", $DBpMenu_settings)
-Global $DBpMenu_backup = GUICtrlCreateMenuItem("Create Backup", $BkpMenu_Backup)
-Global $BkpMenu_Batch = GUICtrlCreateMenuItem("Restore Backup", $BkpMenu_Backup)
+
 Global $DBpMenu_backup_3 = GUICtrlCreateMenuItem("", $DBpMenu_settings)
 Global $DBpMenu_backup_Data_Holidays = GUICtrlCreateMenuItem("Import Holidays File", $DBpMenu_settings)
 Global $DBpMenu_backup_3 = GUICtrlCreateMenuItem("", $DBpMenu_settings)
 Global $BkpMenu_reset_all1 = GUICtrlCreateMenu("Data Management", $DBpMenu_settings)
-Global $BkpMenu_reset_all = GUICtrlCreateMenuItem("Reset Entire Database", $BkpMenu_reset_all1)
+Global $BkpMenu_Backup = GUICtrlCreateMenu("Backup", $BkpMenu_reset_all1)
+Global $DBpMenu_backup = GUICtrlCreateMenuItem("Create Backup", $BkpMenu_Backup)
+Global $BkpMenu_Batch = GUICtrlCreateMenuItem("Restore Backup", $BkpMenu_Backup)
 Global $DBpMenu_Delete = GUICtrlCreateMenu("Delete Specific year", $BkpMenu_reset_all1)
+Global $DBpMenu_backup_4 = GUICtrlCreateMenuItem("", $BkpMenu_reset_all1)
+Global $BkpMenu_reset_all = GUICtrlCreateMenuItem("Reset Entire Database", $BkpMenu_reset_all1)
+Global $DBpMenu_backup_5 = GUICtrlCreateMenuItem("", $BkpMenu_reset_all1)
 
 Global $DBpMenu_Report = GUICtrlCreateMenu("Report")
 Global $DBpMenu_Report_Simple = GUICtrlCreateMenu("Simple", $DBpMenu_Report)
@@ -6761,6 +6765,12 @@ Func _OutlookAgent_EnsureDefaults()
 	_OA_EnsureDefault("Safety", "BlockIncompleteOutlookRead", "1")
 	_OA_EnsureDefault("Safety", "IncompleteReadMinOutlookItems", "3")
 	_OA_EnsureDefault("Safety", "IncompleteReadMinRatioPercent", "20")
+	_OA_EnsureDefault("Safety", "RequireVisibleOutlookSession", "1")
+	_OA_EnsureDefault("Safety", "StartupOutlookRetrySeconds", "15")
+	_OA_EnsureDefault("Safety", "OutlookStartupGraceSeconds", "30")
+	_OA_EnsureDefault("Safety", "OutlookReadyStableChecks", "3")
+	_OA_EnsureDefault("Safety", "IncompleteReadRetries", "3")
+	_OA_EnsureDefault("Safety", "IncompleteReadRetryDelayMs", "15000")
 
 	_OA_EnsureDefault("Advanced", "LogLevel", "Normal")
 	_OA_EnsureDefault("Logging", "VerboseMode", "0")
@@ -6873,19 +6883,12 @@ Func _OutlookAgent_CleanOutlookFromWorkDays()
 		Return 0
 	EndIf
 
-	Local $sPhrase = _OA_Read("Safety", "CleanupConfirmationPhrase", "CLEAN WORKDAYS OUTLOOK")
 	Local $sMsg = "This will remove WorkDays calendar items from Outlook only." & @CRLF & @CRLF & _
 		"Your WorkDays data will remain saved in the WorkDays application." & @CRLF & _
-		"The agent will be stopped before cleanup to avoid recreating items during the operation." & @CRLF & @CRLF & _
+		"The agent will be stopped before cleanup to avoid recreating items during the operation." & @CRLF & _
+		"The synchronization state file will also be deleted." & @CRLF & @CRLF & _
 		"Continue?"
 	If MsgBox(BitOR($MB_ICONWARNING, $MB_YESNO, $MB_DEFBUTTON2, $MB_TOPMOST), "WorkDays Outlook Agent", $sMsg, 0, $Form_WorkDays) <> $IDYES Then Return 0
-
-	Local $sTyped = InputBox("WorkDays Outlook Agent", "Type exactly this confirmation phrase:" & @CRLF & @CRLF & $sPhrase, "", "", 440, 155, Default, Default, 0, $g_hOutlookAgentSettingsWindow)
-	If @error Then Return 0
-	If StringStripWS($sTyped, 3) <> $sPhrase Then
-		MsgBox(BitOR($MB_ICONINFORMATION, $MB_TOPMOST), "WorkDays Outlook Agent", "Cleanup cancelled. The confirmation phrase did not match.", 0, $Form_WorkDays)
-		Return 0
-	EndIf
 
 	If _OutlookAgent_IsRunning() Then _OutlookAgent_Stop(False)
 
@@ -6895,11 +6898,20 @@ Func _OutlookAgent_CleanOutlookFromWorkDays()
 		Return 0
 	EndIf
 
+	; The agent deletes the state file as part of a successful cleanup.
+	; Repeat the deletion here as a defensive fallback in case an older installed agent was used.
+	If FileExists($g_sOutlookAgentState) Then
+		If Not FileDelete($g_sOutlookAgentState) Then
+			MsgBox(BitOR($MB_ICONERROR, $MB_TOPMOST), "WorkDays Outlook Agent", "Outlook items were cleaned, but the synchronization state file could not be deleted:" & @CRLF & @CRLF & $g_sOutlookAgentState & @CRLF & @CRLF & "Close any process using the file and delete it manually before restarting the agent.", 0, $Form_WorkDays)
+			Return 0
+		EndIf
+	EndIf
+
 	If _OA_Read("Safety", "PauseAfterOutlookCleanup", "1") = "1" Then
-		MsgBox(BitOR($MB_ICONINFORMATION, $MB_TOPMOST), "WorkDays Outlook Agent", "Outlook cleanup completed." & @CRLF & @CRLF & "The agent was left stopped so the calendar stays clean until you start it again.", 0, $Form_WorkDays)
+		MsgBox(BitOR($MB_ICONINFORMATION, $MB_TOPMOST), "WorkDays Outlook Agent", "Outlook cleanup completed." & @CRLF & @CRLF & "The synchronization state was reset, and the agent was left stopped so the calendar stays clean until you start it again.", 0, $Form_WorkDays)
 	Else
 		_OutlookAgent_Start()
-		MsgBox(BitOR($MB_ICONINFORMATION, $MB_TOPMOST), "WorkDays Outlook Agent", "Outlook cleanup completed and the agent was restarted.", 0, $Form_WorkDays)
+		MsgBox(BitOR($MB_ICONINFORMATION, $MB_TOPMOST), "WorkDays Outlook Agent", "Outlook cleanup completed, the synchronization state was reset, and the agent was restarted.", 0, $Form_WorkDays)
 	EndIf
 
 	Return 1
@@ -7033,7 +7045,9 @@ Func _OutlookAgent_RequestSyncNow()
 		GUICtrlSetData($Button_OutlookSync, "Sync...")
 	EndIf
 
-	Run(_OutlookAgent_RunCommand() & " /syncnow", $g_sOutlookAgentDir)
+	; Start the resident agent instead of a one-time COM sync. The agent keeps the request queued
+	; and waits until a visible Outlook session is fully initialized.
+	Run(_OutlookAgent_RunCommand(), $g_sOutlookAgentDir)
 	Sleep(500)
 	GUICtrlSetData($Button_OutlookSync, "Sync")
 	Return 1
@@ -7271,7 +7285,7 @@ Func _OutlookAgent_SettingsWindow()
 	_OA_SetCheck($chkVerboseMode, _OA_Read("Logging", "VerboseMode", "0"))
 
 	Local $btnClean = GUICtrlCreateButton("Clean Outlook WorkDays items...", 18, 575, 210, 30)
-	Local $btnSave = GUICtrlCreateButton("Save", 838, 575, 100, 30)
+	Local $btnSave = GUICtrlCreateButton("Close", 838, 575, 100, 30)
 
 	GUISetState(@SW_SHOW, $hAgent)
 
