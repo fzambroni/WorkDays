@@ -3,7 +3,7 @@
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Icon=xcalendar4.ico
 #AutoIt3Wrapper_Res_Description=Work Day management
-#AutoIt3Wrapper_Res_Fileversion=2.1.4.13
+#AutoIt3Wrapper_Res_Fileversion=2.1.4.14
 #AutoIt3Wrapper_Res_ProductVersion=2.1.0.0
 #AutoIt3Wrapper_Res_ProductName=Work Days
 #AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
@@ -515,7 +515,7 @@ Global $BkpMenu_Exit = GUICtrlCreateMenuItem("&Exit", $DBpMenu_db)
 
 Global $DBpMenu_settings = GUICtrlCreateMenu("Settings")
 Global $BkpMenu_settings_BKcolors = GUICtrlCreateMenuItem("Preferences", $DBpMenu_settings)
-Global $BkpMenu_settings_OutlookAgent = GUICtrlCreateMenuItem("Outlook Agent", $DBpMenu_settings)
+Global $BkpMenu_settings_OutlookAgent = GUICtrlCreateMenuItem("Outlook Agent (Experimental)", $DBpMenu_settings)
 ;~ Global $DBpMenu_backup_3 = GUICtrlCreateMenuItem("", $DBpMenu_settings)
 
 Global $DBpMenu_backup_3 = GUICtrlCreateMenuItem("", $DBpMenu_settings)
