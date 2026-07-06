@@ -3,7 +3,7 @@
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Icon=xcalendar4.ico
 #AutoIt3Wrapper_Res_Description=Work Day management
-#AutoIt3Wrapper_Res_Fileversion=2.1.4.14
+#AutoIt3Wrapper_Res_Fileversion=2.1.4.15
 #AutoIt3Wrapper_Res_ProductVersion=2.1.0.0
 #AutoIt3Wrapper_Res_ProductName=Work Days
 #AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
@@ -519,7 +519,7 @@ Global $BkpMenu_settings_OutlookAgent = GUICtrlCreateMenuItem("Outlook Agent (Ex
 ;~ Global $DBpMenu_backup_3 = GUICtrlCreateMenuItem("", $DBpMenu_settings)
 
 Global $DBpMenu_backup_3 = GUICtrlCreateMenuItem("", $DBpMenu_settings)
-Global $DBpMenu_backup_Data_Holidays = GUICtrlCreateMenuItem("Import Holidays File", $DBpMenu_settings)
+Global $DBpMenu_backup_Data_Holidays = GUICtrlCreateMenuItem("Import Special days", $DBpMenu_settings)
 Global $DBpMenu_backup_3 = GUICtrlCreateMenuItem("", $DBpMenu_settings)
 Global $BkpMenu_reset_all1 = GUICtrlCreateMenu("Data Management", $DBpMenu_settings)
 Global $BkpMenu_Backup = GUICtrlCreateMenu("Backup", $BkpMenu_reset_all1)
@@ -1718,7 +1718,7 @@ While 1
 
 		Case $DBpMenu_backup_Data_Holidays
 			If Not IsDeclared("iMsgBoxAnswer") Then Local $iMsgBoxAnswer
-			$iMsgBoxAnswer = MsgBox(262452, "Holidays Import", "**WARNING** Importing data will overwrite any existing records for the selected dates. Do you want to proceed?", 0, $Form_WorkDays)
+			$iMsgBoxAnswer = MsgBox(262452, "Special Days Import", "**WARNING** Importing data will overwrite any existing records for the selected dates. Do you want to proceed?", 0, $Form_WorkDays)
 			Select
 				Case $iMsgBoxAnswer = 6 ;Yes
 					_ImportHolidays()
