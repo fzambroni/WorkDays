@@ -3,7 +3,7 @@
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Icon=xcalendar4.ico
 #AutoIt3Wrapper_Res_Description=Work Day management
-#AutoIt3Wrapper_Res_Fileversion=2.1.4.15
+#AutoIt3Wrapper_Res_Fileversion=2.1.4.16
 #AutoIt3Wrapper_Res_ProductVersion=2.1.0.0
 #AutoIt3Wrapper_Res_ProductName=Work Days
 #AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
@@ -178,7 +178,7 @@ Global $AboutDBFile = @ScriptDir & "\About.db"
 Global $g_sOutlookAgentDB = $DB & "\OutlookAgent"
 Global $g_sOutlookAgentDir = @ScriptDir
 Global $g_sOutlookAgentExe = $g_sOutlookAgentDir & "\Workdays_Outlook_Agent.exe"
-Global $g_sOutlookAgentLog = $g_sOutlookAgentDir & "\Workdays_Outlook_Agent.log"
+Global $g_sOutlookAgentLog = $g_sOutlookAgentDir & "\Logs\Workdays_Outlook_Agent.log"
 Global $g_sOutlookAgentState = $g_sOutlookAgentDir & "\Workdays_Outlook_Agent_State.ini"
 Global $g_sOutlookAgentProcess = "Workdays_Outlook_Agent.exe"
 Global $g_bOutlookAgentRefreshPending = False
