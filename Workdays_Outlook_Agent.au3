@@ -3,7 +3,7 @@
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Icon=CalendarSync.ico
 #AutoIt3Wrapper_Res_Description=Work Day Sync Agent
-#AutoIt3Wrapper_Res_Fileversion=1.0.1.4
+#AutoIt3Wrapper_Res_Fileversion=1.0.1.5
 #AutoIt3Wrapper_Res_ProductName=Work Day Sync Agent
 #AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
 #AutoIt3Wrapper_Res_LegalCopyright=Copyright © 2026 Fabricio Zambroni
@@ -24,7 +24,8 @@ Global Const $g_sDB = "HKEY_CURRENT_USER\Software\WorkDays"
 Global Const $g_sAgentDB = "HKEY_CURRENT_USER\Software\WorkDays\OutlookAgent"
 Global Const $g_sAgentDir = @ScriptDir
 Global Const $g_sLogsDir = $g_sAgentDir & "\Logs"
-Global Const $g_sState = $g_sAgentDir & "\Workdays_Outlook_Agent_State.ini"
+Global Const $g_sState = $g_sAgentDir & "\Workdays_Outlook_Agent_State.db"
+Global Const $g_sLegacyState = $g_sAgentDir & "\Workdays_Outlook_Agent_State.ini"
 Global Const $g_sLog = $g_sLogsDir & "\Workdays_Outlook_Agent.log"
 Global Const $g_sSep = Chr(29)
 
@@ -65,9 +66,15 @@ Global $g_iStateEntryLookups = 0
 Global $g_iStateEntryRecovered = 0
 Global $g_iStateEntryMissing = 0
 Global $g_bStateEntryRecoveryComplete = False
+Global $g_iStateEntryStale = 0
+Global $g_iStateDateRecovered = 0
+Global $g_iStateDateMissing = 0
+Global $g_bStateRecoveryTransientError = False
+Global $g_bStateEntryNamespaceStale = False
 
 DirCreate($g_sAgentDir)
 DirCreate($g_sLogsDir)
+_MigrateLegacyStateFile()
 _EnsureConfig()
 $g_sLastForceSyncRequest = RegRead($g_sAgentDB, "Sync_ForceNowRequest")
 If @error Then $g_sLastForceSyncRequest = ""
@@ -81,7 +88,7 @@ EndIf
 _ApplyStartupSetting()
 _CreateTray()
 _Log("Agent started. Executable/script folder: " & @ScriptDir & " | Log: " & $g_sLog & " | Settings: " & $g_sAgentDB)
-_VLog("Verbose mode enabled. State file: " & $g_sState)
+_VLog("Verbose mode enabled. State database: " & $g_sState)
 _InitializeDeferredStartupSync()
 $g_hTimer = TimerInit()
 
@@ -128,6 +135,27 @@ While 1
 
 	Sleep(250)
 WEnd
+
+Func _MigrateLegacyStateFile()
+	; The state database keeps INI-compatible content for backward compatibility,
+	; but uses a .db extension so it is not confused with user-editable settings.
+	If FileExists($g_sState) Then Return 1
+	If Not FileExists($g_sLegacyState) Then Return 1
+
+	If FileMove($g_sLegacyState, $g_sState, 9) Then
+		_Log("Legacy synchronization state migrated: " & $g_sLegacyState & " -> " & $g_sState)
+		Return 1
+	EndIf
+
+	If FileCopy($g_sLegacyState, $g_sState, 9) Then
+		FileDelete($g_sLegacyState)
+		_Log("Legacy synchronization state copied to the new database file: " & $g_sState)
+		Return 1
+	EndIf
+
+	_Log("WARNING: Could not migrate legacy synchronization state database: " & $g_sLegacyState)
+	Return SetError(1, 0, 0)
+EndFunc
 
 Func _HandleCommandLine()
 	If $CmdLine[0] < 1 Then Return
@@ -206,6 +234,9 @@ Func _EnsureConfig()
 	_EnsureRegDefault("Safety", "IncompleteReadRetries", "3")
 	_EnsureRegDefault("Safety", "IncompleteReadRetryDelayMs", "15000")
 	_EnsureRegDefault("Safety", "RecoverMissingItemsFromState", "1")
+	_EnsureRegDefault("Safety", "RecoverMissingItemsByDate", "1")
+	_EnsureRegDefault("Safety", "AutoRepairStaleState", "1")
+	_EnsureRegDefault("Safety", "StateEntryStaleErrorLimit", "3")
 	_EnsureRegDefault("Safety", "StartupIncompleteReadIsWaiting", "1")
 
 	_EnsureRegDefault("Advanced", "LogLevel", "Normal")
@@ -477,6 +508,8 @@ Func _RunSync($bDeferredStartup = False)
 
 	Local $oOutlookMap = 0
 	Local $bHealthyRead = False
+	Local $iPreviousDateMissing = -1
+	Local $iStableMissingChecks = 0
 	Local $iReadAttempt
 	For $iReadAttempt = 1 To $iReadRetries
 		$g_sLastSyncGuardReason = ""
@@ -497,17 +530,37 @@ Func _RunSync($bDeferredStartup = False)
 			; the previously synchronized items still exist. Resolve missing state-linked EntryIDs directly
 			; before declaring the Outlook read incomplete.
 			If _Cfg("Safety", "RecoverMissingItemsFromState", "1") = "1" Then
-				If Not _RecoverOutlookMapFromState($oNs, $oOutlookMap, $sStartISO, $sEndISO) Then
+				If Not _RecoverOutlookMapFromState($oNs, $oCalendar, $oOutlookMap, $sStartISO, $sEndISO) Then
 					$g_sLastSyncGuardReason = "Direct validation of state-linked Outlook items failed on attempt " & $iReadAttempt & "/" & $iReadRetries & ". " & $g_sLastComError
 				Else
-					_VLog("Outlook candidate map after state EntryID recovery: Count=" & $oOutlookMap.Count & " lookups=" & $g_iStateEntryLookups & " recovered=" & $g_iStateEntryRecovered & " missing=" & $g_iStateEntryMissing)
+					_VLog("Outlook candidate map after state recovery: Count=" & $oOutlookMap.Count & " entryLookups=" & $g_iStateEntryLookups & " entryRecovered=" & $g_iStateEntryRecovered & " staleEntryIds=" & $g_iStateEntryStale & " dateRecovered=" & $g_iStateDateRecovered & " dateMissing=" & $g_iStateDateMissing)
 				EndIf
 			EndIf
 
 			If $g_sLastSyncGuardReason = "" Or $g_bStateEntryRecoveryComplete Then
+				If $g_iStateDateMissing = $iPreviousDateMissing Then
+					$iStableMissingChecks += 1
+				Else
+					$iStableMissingChecks = 1
+					$iPreviousDateMissing = $g_iStateDateMissing
+				EndIf
+
 				If _PreflightOutlookReadHealth($oOutlookMap, $sStartISO, $sEndISO) Then
 					$bHealthyRead = True
 					ExitLoop
+				EndIf
+
+				; Do not rebuild state during the first partial Outlook read. Only repair after
+				; repeated, stable date-based checks confirm that the saved EntryIDs are stale.
+				If $iReadAttempt = $iReadRetries And $iStableMissingChecks >= 2 And $g_bStateEntryNamespaceStale And $g_iStateDateMissing > 0 And Not $g_bStateRecoveryTransientError Then
+					Local $iAutoRepaired = _RepairStaleStateLinks($oOutlookMap, $sStartISO, $sEndISO)
+					If $iAutoRepaired > 0 Then
+						_Log("Outlook state repair was confirmed after " & $iStableMissingChecks & " stable recovery checks. Revalidating the sync read.")
+						If _PreflightOutlookReadHealth($oOutlookMap, $sStartISO, $sEndISO) Then
+							$bHealthyRead = True
+							ExitLoop
+						EndIf
+					EndIf
 				EndIf
 			EndIf
 		EndIf
@@ -573,7 +626,7 @@ Func _RunSync($bDeferredStartup = False)
 			_VLog("Day decision " & $sDateISO & ": regStatus='" & $sRegStatus & "' regMarkerLen=" & StringLen($sRegMarker) & " regHash='" & $sRegHash & "' hasOutlook=" & _BoolText($bHasOutlook) & " outStatus='" & $sOutStatus & "' outMarkerLen=" & StringLen($sOutMarker) & " outHash='" & $sOutHash & "' stateRegHash='" & $sStateRegHash & "' stateOutHash='" & $sStateOutHash & "' stateEntryIdShort='" & _EntryIdShort($sStateEntryID) & "' regChanged=" & _BoolText($bRegChanged) & " outChanged=" & _BoolText($bOutChanged))
 		EndIf
 
-		; A missing/reset State.ini must not create a false conflict when both sides already match.
+		; A missing/reset state database must not create a false conflict when both sides already match.
 		If $bHasOutlook And $sRegHash <> "" And $sRegHash = $sOutHash Then
 			_UpdateState($sDateISO, $sRegHash, $sOutHash, $sOutEntryID)
 			_EnsureOutlookItemFree($oNs, $sOutEntryID, $sDateISO, $sOutStatus, $sOutMarker)
@@ -584,8 +637,8 @@ Func _RunSync($bDeferredStartup = False)
 		If Not $bHasOutlook And _ShouldSync($sRegStatus, $sRegMarker) Then
 			; Definitive state repair / reconciliation rule:
 			; if WorkDays has a syncable record and Outlook does not have the matching item,
-			; publish the WorkDays record even when the state file says the registry hash is unchanged.
-			; This prevents a stale or corrupted State.ini from blocking WorkDays -> Outlook recovery.
+			; publish the WorkDays record even when the state database says the registry hash is unchanged.
+			; This prevents a stale or corrupted state database from blocking WorkDays -> Outlook recovery.
 			If $sStateOutHash <> "" And Not $bRegChanged And _OutlookDeleteClearAllowed() Then
 				_WriteRegistryDay($sDateISO, "B", "")
 				_UpdateState($sDateISO, _RecordHash("B", ""), "", "")
@@ -706,13 +759,23 @@ Func _RefreshPlanRecordCounts($sStartISO, $sEndISO)
 	Return 1
 EndFunc
 
-Func _RecoverOutlookMapFromState($oNs, ByRef $oOutlookMap, $sStartISO, $sEndISO)
+Func _RecoverOutlookMapFromState($oNs, $oCalendar, ByRef $oOutlookMap, $sStartISO, $sEndISO)
 	$g_iStateEntryLookups = 0
 	$g_iStateEntryRecovered = 0
 	$g_iStateEntryMissing = 0
+	$g_iStateEntryStale = 0
+	$g_iStateDateRecovered = 0
+	$g_iStateDateMissing = 0
+	$g_bStateRecoveryTransientError = False
+	$g_bStateEntryNamespaceStale = False
 	$g_bStateEntryRecoveryComplete = False
 
-	If Not IsObj($oNs) Or Not IsObj($oOutlookMap) Then Return SetError(1, 0, 0)
+	If Not IsObj($oNs) Or Not IsObj($oCalendar) Or Not IsObj($oOutlookMap) Then Return SetError(1, 0, 0)
+
+	Local $iStaleLimit = Number(_Cfg("Safety", "StateEntryStaleErrorLimit", "3"))
+	If $iStaleLimit < 1 Then $iStaleLimit = 1
+	If $iStaleLimit > 25 Then $iStaleLimit = 25
+	Local $iConsecutiveStale = 0
 
 	Local $iDays = _ISODiffDays($sStartISO, $sEndISO)
 	Local $i
@@ -728,50 +791,184 @@ Func _RecoverOutlookMapFromState($oNs, ByRef $oOutlookMap, $sStartISO, $sEndISO)
 		Local $sEntryID = IniRead($g_sState, $sDateISO, "EntryID", "")
 		If $sEntryID = "" Then ContinueLoop
 
-		$g_iStateEntryLookups += 1
-		Local $iComBeforeLookup = $g_iComErrorCount
-		Local $oItem = _GetOutlookItemByEntryID($oNs, $sEntryID)
-		Local $bComError = _ComErrorOccurredSince($iComBeforeLookup)
+		Local $oItem = 0
+		Local $bNeedDateLookup = True
 
-		If Not IsObj($oItem) Then
-			$g_iStateEntryMissing += 1
-			; MAPI_E_NOT_FOUND is expected when an Outlook item was genuinely removed.
-			; Other COM errors mean Outlook is not ready enough for a safe startup sync.
-			If $bComError And StringInStr(StringUpper($g_sLastComError), "8004010F") = 0 Then
-				_Log("State EntryID recovery aborted by COM error for " & $sDateISO & " entryIdShort='" & _EntryIdShort($sEntryID) & "'. " & $g_sLastComError)
-				Return SetError(2, 0, 0)
+		If Not $g_bStateEntryNamespaceStale Then
+			$g_iStateEntryLookups += 1
+			Local $iComBeforeLookup = $g_iComErrorCount
+			Local $sComBeforeLookup = $g_sLastComError
+			$oItem = _GetOutlookItemByEntryID($oNs, $sEntryID)
+			Local $bComError = _ComErrorOccurredSince($iComBeforeLookup)
+
+			If $bComError Then
+				Local $sLookupError = $g_sLastComError
+				If _IsStaleEntryComError($sLookupError) Then
+					$g_iStateEntryStale += 1
+					$iConsecutiveStale += 1
+					_Log("Stale Outlook EntryID detected for " & $sDateISO & " entryIdShort='" & _EntryIdShort($sEntryID) & "'. Falling back to a date-based lookup. " & $sLookupError)
+					; This exception belongs to one stale cached identifier and is handled locally.
+					; Do not let it invalidate the complete Outlook calendar scan.
+					$g_iComErrorCount = $iComBeforeLookup
+					$g_sLastComError = $sComBeforeLookup
+					If $iConsecutiveStale >= $iStaleLimit Then
+						$g_bStateEntryNamespaceStale = True
+						_Log("Multiple stale Outlook EntryIDs were detected. Remaining state records will use date-based recovery instead of GetItemFromID.")
+					EndIf
+				Else
+					$g_bStateRecoveryTransientError = True
+					_Log("State EntryID recovery paused by a transient Outlook COM error for " & $sDateISO & " entryIdShort='" & _EntryIdShort($sEntryID) & "'. " & $sLookupError)
+					Return SetError(2, 0, 0)
+				EndIf
+			ElseIf IsObj($oItem) Then
+				$iConsecutiveStale = 0
+				$bNeedDateLookup = False
+			Else
+				$g_iStateEntryMissing += 1
 			EndIf
-			ContinueLoop
+		Else
+			; The Outlook/Exchange store may replace EntryIDs after synchronization or restart.
+			; Once that pattern is confirmed, avoid hundreds of predictable COM exceptions.
+			$g_iStateEntryStale += 1
 		EndIf
 
-		Local $sRecoveredDate = _GetUserProp($oItem, "WorkDaysDate")
-		If Not _IsISODate($sRecoveredDate) Then $sRecoveredDate = _OutlookDateToISOInRange($oItem.Start, $sStartISO, $sEndISO)
-		If Not _IsISODate($sRecoveredDate) Or $sRecoveredDate <> $sDateISO Then
+		If IsObj($oItem) Then
+			Local $sRecoveredDate = _GetUserProp($oItem, "WorkDaysDate")
+			If Not _IsISODate($sRecoveredDate) Then $sRecoveredDate = _OutlookDateToISOInRange($oItem.Start, $sStartISO, $sEndISO)
+			If _IsISODate($sRecoveredDate) And $sRecoveredDate = $sDateISO Then
+				Local $sRecoveredStatus = _GetOutlookItemStatus($oItem)
+				If _IsKnownStatus($sRecoveredStatus) Then
+					_AddRecoveredOutlookItemToMap($oOutlookMap, $sDateISO, $oItem, $sRecoveredStatus)
+					$g_iStateEntryRecovered += 1
+					ContinueLoop
+				EndIf
+			EndIf
+			$bNeedDateLookup = True
 			$g_iStateEntryMissing += 1
-			_VLog("State EntryID recovery ignored mismatched item: expectedDate=" & $sDateISO & " recoveredDate='" & $sRecoveredDate & "' entryIdShort='" & _EntryIdShort($sEntryID) & "'")
-			ContinueLoop
+			_VLog("State EntryID did not resolve to the expected WorkDays date/status: expectedDate=" & $sDateISO & " entryIdShort='" & _EntryIdShort($sEntryID) & "'.")
 		EndIf
 
-		Local $sStatus = _GetOutlookItemStatus($oItem)
-		If Not _IsKnownStatus($sStatus) Then
-			$g_iStateEntryMissing += 1
-			_VLog("State EntryID recovery ignored item with unknown status for " & $sDateISO & " entryIdShort='" & _EntryIdShort($sEntryID) & "'")
-			ContinueLoop
+		If $bNeedDateLookup And _Cfg("Safety", "RecoverMissingItemsByDate", "1") = "1" Then
+			Local $iComBeforeDate = $g_iComErrorCount
+			Local $sComBeforeDate = $g_sLastComError
+			Local $oDateItem = _FindWorkDaysOutlookItemByDate($oCalendar, $sDateISO)
+			Local $iDateError = @error
+
+			If $iDateError <> 0 Or _ComErrorOccurredSince($iComBeforeDate) Then
+				Local $sDateError = $g_sLastComError
+				If _IsStaleEntryComError($sDateError) Then
+					; A stale identifier should not normally affect a date query, but keep it local if Outlook reports it.
+					$g_iComErrorCount = $iComBeforeDate
+					$g_sLastComError = $sComBeforeDate
+				Else
+					$g_bStateRecoveryTransientError = True
+					_Log("Date-based Outlook recovery failed for " & $sDateISO & ". " & $sDateError)
+					Return SetError(3, 0, 0)
+				EndIf
+			EndIf
+
+			If IsObj($oDateItem) Then
+				Local $sDateStatus = _GetOutlookItemStatus($oDateItem)
+				If _IsKnownStatus($sDateStatus) Then
+					_AddRecoveredOutlookItemToMap($oOutlookMap, $sDateISO, $oDateItem, $sDateStatus)
+					$g_iStateDateRecovered += 1
+					ContinueLoop
+				EndIf
+			EndIf
 		EndIf
 
-		Local $sMarker = _CleanOutlookMarker($oItem.Body)
-		Local $sManaged = _GetUserProp($oItem, "WorkDaysManaged")
-		Local $sRecoveredEntryID = String($oItem.EntryID)
-		If $sRecoveredEntryID = "" Then $sRecoveredEntryID = $sEntryID
-		Local $sRec = $sRecoveredEntryID & $g_sSep & $sStatus & $g_sSep & $sMarker & $g_sSep & $sManaged
-
-		$oOutlookMap.Add($sDateISO, $sRec)
-		$g_iStateEntryRecovered += 1
+		$g_iStateDateMissing += 1
 	Next
 
 	$g_bStateEntryRecoveryComplete = True
-	_VLog("State EntryID recovery summary: lookups=" & $g_iStateEntryLookups & " recovered=" & $g_iStateEntryRecovered & " missing=" & $g_iStateEntryMissing & " resultingMapCount=" & $oOutlookMap.Count)
+	_VLog("State recovery summary: entryLookups=" & $g_iStateEntryLookups & " entryRecovered=" & $g_iStateEntryRecovered & " staleEntryIds=" & $g_iStateEntryStale & " dateRecovered=" & $g_iStateDateRecovered & " dateMissing=" & $g_iStateDateMissing & " namespaceStale=" & _BoolText($g_bStateEntryNamespaceStale) & " resultingMapCount=" & $oOutlookMap.Count)
 	Return 1
+EndFunc
+
+Func _IsStaleEntryComError($sError)
+	Local $sUpper = StringUpper(String($sError))
+	If StringInStr($sUpper, "80020009") > 0 Then Return True ; generic Outlook exception for an invalid/stale EntryID
+	If StringInStr($sUpper, "8004010F") > 0 Then Return True ; MAPI_E_NOT_FOUND
+	Return False
+EndFunc
+
+Func _AddRecoveredOutlookItemToMap(ByRef $oOutlookMap, $sDateISO, $oItem, $sStatus)
+	If Not IsObj($oOutlookMap) Or Not IsObj($oItem) Or Not _IsKnownStatus($sStatus) Then Return 0
+	Local $sMarker = _CleanOutlookMarker($oItem.Body)
+	Local $sManaged = _GetUserProp($oItem, "WorkDaysManaged")
+	Local $sEntryID = String($oItem.EntryID)
+	Local $sRec = $sEntryID & $g_sSep & $sStatus & $g_sSep & $sMarker & $g_sSep & $sManaged
+
+	If $oOutlookMap.Exists($sDateISO) Then
+		Local $sExisting = $oOutlookMap.Item($sDateISO)
+		Local $sExistingManaged = _OutlookRecordPart($sExisting, 3)
+		If $sExistingManaged = "1" And $sManaged <> "1" Then Return 1
+		$oOutlookMap.Item($sDateISO) = $sRec
+	Else
+		$oOutlookMap.Add($sDateISO, $sRec)
+	EndIf
+	Return 1
+EndFunc
+
+Func _FindWorkDaysOutlookItemByDate($oCalendar, $sDateISO)
+	If Not IsObj($oCalendar) Or Not _IsISODate($sDateISO) Then Return SetError(1, 0, 0)
+
+	Local $oItems = $oCalendar.Items
+	If Not IsObj($oItems) Then Return SetError(2, 0, 0)
+	$oItems.IncludeRecurrences = False
+	$oItems.Sort("[Start]")
+
+	Local $sFilter = "[Start] >= '" & _OutlookFilterDate($sDateISO) & "' AND [Start] < '" & _OutlookFilterDate(_ISOAddDays($sDateISO, 1)) & "'"
+	Local $oRange = $oItems.Restrict($sFilter)
+	If Not IsObj($oRange) Then Return SetError(3, 0, 0)
+
+	Local $oBest = 0
+	Local $oItem
+	For $oItem In $oRange
+		If Not IsObj($oItem) Then ContinueLoop
+		If Not _IsWorkDaysCandidate($oItem) Then ContinueLoop
+
+		Local $sItemDate = _GetUserProp($oItem, "WorkDaysDate")
+		If Not _IsISODate($sItemDate) Then $sItemDate = _OutlookDateToISOInRange($oItem.Start, $sDateISO, $sDateISO)
+		If $sItemDate <> $sDateISO Then ContinueLoop
+		If Not _IsKnownStatus(_GetOutlookItemStatus($oItem)) Then ContinueLoop
+
+		If _GetUserProp($oItem, "WorkDaysManaged") = "1" Then Return SetError(0, 0, $oItem)
+		If Not IsObj($oBest) Then $oBest = $oItem
+	Next
+	Return SetError(0, 0, $oBest)
+EndFunc
+
+Func _RepairStaleStateLinks($oOutlookMap, $sStartISO, $sEndISO)
+	If _Cfg("Safety", "AutoRepairStaleState", "1") <> "1" Then Return 0
+	If Not $g_bStateEntryRecoveryComplete Or $g_bStateRecoveryTransientError Then Return 0
+	If Not $g_bStateEntryNamespaceStale Or $g_iStateDateMissing < 1 Then Return 0
+
+	Local $sBackup = $g_sLogsDir & "\StateBeforeAutoRepair_" & @YEAR & @MON & @MDAY & "_" & @HOUR & @MIN & @SEC & ".db"
+	If FileExists($g_sState) Then FileCopy($g_sState, $sBackup, 9)
+
+	Local $iRepaired = 0
+	Local $iDays = _ISODiffDays($sStartISO, $sEndISO)
+	Local $i
+	For $i = 0 To $iDays
+		Local $sDateISO = _ISOAddDays($sStartISO, $i)
+		If IsObj($oOutlookMap) And $oOutlookMap.Exists($sDateISO) Then ContinueLoop
+
+		Local $sRegRec = _ReadRegistryDay($sDateISO)
+		If Not _ShouldSync(_RecordStatus($sRegRec), _RecordMarker($sRegRec)) Then ContinueLoop
+		Local $sEntryID = IniRead($g_sState, $sDateISO, "EntryID", "")
+		If $sEntryID = "" Then ContinueLoop
+
+		; Keep RegHash so WorkDays change detection remains intact, but clear the stale Outlook identity.
+		IniWrite($g_sState, $sDateISO, "OutHash", "")
+		IniWrite($g_sState, $sDateISO, "EntryID", "")
+		$iRepaired += 1
+	Next
+
+	If $iRepaired > 0 Then
+		_Log("Automatic state repair cleared " & $iRepaired & " stale Outlook links. Existing Outlook items were not deleted. State backup=" & $sBackup)
+	EndIf
+	Return $iRepaired
 EndFunc
 
 
@@ -786,8 +983,8 @@ Func _PreflightOutlookReadHealth($oOutlookMap, $sStartISO, $sEndISO)
 	If _Cfg("Safety", "BlockIncompleteOutlookRead", "1") <> "1" Then Return 1
 	If _Cfg("Safety", "AbortBeforePlanWhenOutlookReadIncomplete", "1") <> "1" Then Return 1
 
-	; Only use this preflight when the state file indicates Outlook should already contain many WorkDays items.
-	; This avoids blocking a legitimate first-time publish to an empty Outlook calendar.
+	; Only use this preflight when the state database indicates Outlook should already contain many WorkDays items.
+	; This avoids blocking a legitimate first-time publish or a controlled stale-state rebuild.
 	If $g_iPlanStateOutlookLinks < 10 Then
 		_VLog("Outlook read preflight skipped: state-linked Outlook items=" & $g_iPlanStateOutlookLinks & " (<10). This may be a first publish or a state rebuild.")
 		Return 1
@@ -834,6 +1031,9 @@ Func _WriteAbortedSyncPlan($sTitle, $sReason, $sStartISO = "", $sEndISO = "")
 		FileWriteLine($hPlan, "StateEntryLookups=" & $g_iStateEntryLookups)
 		FileWriteLine($hPlan, "StateEntryRecovered=" & $g_iStateEntryRecovered)
 		FileWriteLine($hPlan, "StateEntryMissing=" & $g_iStateEntryMissing)
+		FileWriteLine($hPlan, "StateEntryStale=" & $g_iStateEntryStale)
+		FileWriteLine($hPlan, "StateDateRecovered=" & $g_iStateDateRecovered)
+		FileWriteLine($hPlan, "StateDateMissing=" & $g_iStateDateMissing)
 		FileWriteLine($hPlan, "ComErrorCount=" & $g_iComErrorCount)
 		FileWriteLine($hPlan, "LastComError=" & $g_sLastComError)
 		FileClose($hPlan)
@@ -1067,7 +1267,7 @@ Func _CleanOutlookCalendarFromTray()
 
 	Local $sMsg = "This will delete WorkDays calendar items from Outlook only." & @CRLF & @CRLF & _
 		"Your WorkDays data will remain stored in the WorkDays app." & @CRLF & _
-		"The synchronization state file will also be deleted so stale Outlook links cannot affect the next sync." & @CRLF & _
+		"The synchronization state database will also be deleted so stale Outlook links cannot affect the next sync." & @CRLF & _
 		"After cleanup, sync will be paused if PauseAfterOutlookCleanup is enabled." & @CRLF & @CRLF & _
 		"Continue?"
 	If MsgBox(BitOR($MB_ICONWARNING, $MB_YESNO, $MB_DEFBUTTON2, $MB_TOPMOST), $g_sAppTitle, $sMsg) <> $IDYES Then Return
@@ -1084,7 +1284,7 @@ Func _CleanOutlookCalendarFromTray()
 		_TogglePause()
 	EndIf
 
-	MsgBox(BitOR($MB_ICONINFORMATION, $MB_TOPMOST), $g_sAppTitle, "Outlook cleanup completed." & @CRLF & @CRLF & "Deleted items: " & $iDeleted & @CRLF & "State file deleted: " & $g_sState)
+	MsgBox(BitOR($MB_ICONINFORMATION, $MB_TOPMOST), $g_sAppTitle, "Outlook cleanup completed." & @CRLF & @CRLF & "Deleted items: " & $iDeleted & @CRLF & "State database deleted: " & $g_sState)
 	_Log("Outlook cleanup completed. Deleted items: " & $iDeleted & ". State file reset.")
 EndFunc
 
@@ -1137,18 +1337,16 @@ Func _CleanOutlookCalendar()
 		EndIf
 	Next
 
-	; Cleanup invalidates every stored Outlook EntryID. Remove the complete state file
-	; so the next sync starts from a clean reconciliation state.
-	If FileExists($g_sState) Then
-		If FileDelete($g_sState) Then
-			_Log("Synchronization state file deleted after Outlook cleanup: " & $g_sState)
-		Else
-			_Log("WARNING: Could not delete synchronization state file after cleanup: " & $g_sState)
-			Return SetError(7, $iDeleted, 0)
-		EndIf
-	Else
-		_Log("Synchronization state file was already absent after Outlook cleanup: " & $g_sState)
+	; Cleanup invalidates every stored Outlook identity. Remove the current state database
+	; and any legacy .ini file so the next sync starts from a clean reconciliation state.
+	Local $bStateDeleteOK = True
+	If FileExists($g_sState) And Not FileDelete($g_sState) Then $bStateDeleteOK = False
+	If FileExists($g_sLegacyState) And Not FileDelete($g_sLegacyState) Then $bStateDeleteOK = False
+	If Not $bStateDeleteOK Then
+		_Log("WARNING: Could not delete one or more synchronization state files after cleanup.")
+		Return SetError(7, $iDeleted, 0)
 	EndIf
+	_Log("Synchronization state database deleted after Outlook cleanup: " & $g_sState)
 
 	Return $iDeleted
 EndFunc
@@ -1451,9 +1649,35 @@ Func _CreateOrUpdateOutlookItem($oOutlook, $oNs, $sDateISO, $sEntryID, $sStatus,
 	Local $bExisting = False
 	If $sEntryID <> "" Then
 		_VLog("CreateOrUpdate: trying existing Outlook item date=" & $sDateISO & " entryIdShort='" & _EntryIdShort($sEntryID) & "'")
+		Local $iComBeforeEntry = $g_iComErrorCount
+		Local $sComBeforeEntry = $g_sLastComError
 		$oItem = _GetOutlookItemByEntryID($oNs, $sEntryID)
+		If _ComErrorOccurredSince($iComBeforeEntry) Then
+			If _IsStaleEntryComError($g_sLastComError) Then
+				_Log("CreateOrUpdate ignored a stale EntryID for " & $sDateISO & " and will locate the item by date.")
+				$g_iComErrorCount = $iComBeforeEntry
+				$g_sLastComError = $sComBeforeEntry
+				$oItem = 0
+			Else
+				_Log("CreateOrUpdate aborted by Outlook COM error for " & $sDateISO & ". " & $g_sLastComError)
+				Return ""
+			EndIf
+		EndIf
 	EndIf
+
 	If IsObj($oItem) Then $bExisting = True
+	If Not IsObj($oItem) And IsObj($oNs) Then
+		Local $oCalendar = $oNs.GetDefaultFolder($OL_FOLDER_CALENDAR)
+		If IsObj($oCalendar) Then
+			Local $oDateItem = _FindWorkDaysOutlookItemByDate($oCalendar, $sDateISO)
+			If IsObj($oDateItem) Then
+				$oItem = $oDateItem
+				$bExisting = True
+				_Log("CreateOrUpdate recovered an existing Outlook item by date for " & $sDateISO & " instead of creating a duplicate.")
+			EndIf
+		EndIf
+	EndIf
+
 	If Not IsObj($oItem) Then
 		_VLog("CreateOrUpdate: creating new Outlook appointment for date=" & $sDateISO)
 		$oItem = $oOutlook.CreateItem($OL_APPOINTMENT_ITEM)
