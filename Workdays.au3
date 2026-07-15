@@ -3,7 +3,7 @@
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Icon=xcalendar4.ico
 #AutoIt3Wrapper_Res_Description=Work Day management
-#AutoIt3Wrapper_Res_Fileversion=2.1.4.17
+#AutoIt3Wrapper_Res_Fileversion=2.1.4.18
 #AutoIt3Wrapper_Res_ProductVersion=2.1.0.0
 #AutoIt3Wrapper_Res_ProductName=Work Days
 #AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
@@ -6872,7 +6872,20 @@ Func _OutlookAgent_OpenLog()
 	EndIf
 EndFunc   ;==>_OutlookAgent_OpenLog
 
-Func _OutlookAgent_CleanOutlookFromWorkDays()
+Func _OutlookAgent_CleanupConfirmationMessage()
+	Return "This will remove WorkDays calendar items from Outlook only." & @CRLF & @CRLF & _
+		"Your WorkDays data will remain saved in the WorkDays application." & @CRLF & _
+		"The agent will be stopped before cleanup to avoid recreating items during the operation." & @CRLF & _
+		"The synchronization state database will also be deleted." & @CRLF & @CRLF & _
+		"Continue?"
+EndFunc   ;==>_OutlookAgent_CleanupConfirmationMessage
+
+Func _OutlookAgent_ConfirmCleanup($hParent = 0)
+	If $hParent = 0 Then $hParent = $Form_WorkDays
+	Return MsgBox(BitOR($MB_ICONWARNING, $MB_YESNO, $MB_DEFBUTTON2, $MB_TOPMOST), "WorkDays Outlook Agent", _OutlookAgent_CleanupConfirmationMessage(), 0, $hParent) = $IDYES
+EndFunc   ;==>_OutlookAgent_ConfirmCleanup
+
+Func _OutlookAgent_CleanOutlookFromWorkDays($bSkipConfirm = False)
 	_OutlookAgent_EnsureDefaults()
 	If _OA_Read("Safety", "EnableOutlookCleanup", "1") <> "1" Then
 		MsgBox(BitOR($MB_ICONINFORMATION, $MB_TOPMOST), "WorkDays Outlook Agent", "Outlook cleanup is disabled in the Agent settings.", 0, $Form_WorkDays)
@@ -6884,12 +6897,9 @@ Func _OutlookAgent_CleanOutlookFromWorkDays()
 		Return 0
 	EndIf
 
-	Local $sMsg = "This will remove WorkDays calendar items from Outlook only." & @CRLF & @CRLF & _
-		"Your WorkDays data will remain saved in the WorkDays application." & @CRLF & _
-		"The agent will be stopped before cleanup to avoid recreating items during the operation." & @CRLF & _
-		"The synchronization state database will also be deleted." & @CRLF & @CRLF & _
-		"Continue?"
-	If MsgBox(BitOR($MB_ICONWARNING, $MB_YESNO, $MB_DEFBUTTON2, $MB_TOPMOST), "WorkDays Outlook Agent", $sMsg, 0, $Form_WorkDays) <> $IDYES Then Return 0
+	If Not $bSkipConfirm Then
+		If Not _OutlookAgent_ConfirmCleanup($Form_WorkDays) Then Return 0
+	EndIf
 
 	If _OutlookAgent_IsRunning() Then _OutlookAgent_Stop(False)
 
@@ -6899,15 +6909,15 @@ Func _OutlookAgent_CleanOutlookFromWorkDays()
 		Return 0
 	EndIf
 
-	; The agent deletes the state database as part of a successful cleanup.
+	; The agent deletes the state file as part of a successful cleanup.
 	; Repeat the deletion here as a defensive fallback in case an older installed agent was used.
-	Local $bStateDeleteOK = True
-	If FileExists($g_sOutlookAgentState) And Not FileDelete($g_sOutlookAgentState) Then $bStateDeleteOK = False
-	If FileExists($g_sOutlookAgentLegacyState) And Not FileDelete($g_sOutlookAgentLegacyState) Then $bStateDeleteOK = False
-	If Not $bStateDeleteOK Then
-		MsgBox(BitOR($MB_ICONERROR, $MB_TOPMOST), "WorkDays Outlook Agent", "Outlook items were cleaned, but one or more synchronization state databases could not be deleted:" & @CRLF & @CRLF & $g_sOutlookAgentState & @CRLF & $g_sOutlookAgentLegacyState & @CRLF & @CRLF & "Close any process using the files and delete them manually before restarting the agent.", 0, $Form_WorkDays)
-		Return 0
+	If FileExists($g_sOutlookAgentState) Then
+		If Not FileDelete($g_sOutlookAgentState) Then
+			MsgBox(BitOR($MB_ICONERROR, $MB_TOPMOST), "WorkDays Outlook Agent", "Outlook items were cleaned, but the synchronization state database could not be deleted:" & @CRLF & @CRLF & $g_sOutlookAgentState & @CRLF & @CRLF & "Close any process using the file and delete it manually before restarting the agent.", 0, $Form_WorkDays)
+			Return 0
+		EndIf
 	EndIf
+	If FileExists($g_sOutlookAgentLegacyState) Then FileDelete($g_sOutlookAgentLegacyState)
 
 	If _OA_Read("Safety", "PauseAfterOutlookCleanup", "1") = "1" Then
 		MsgBox(BitOR($MB_ICONINFORMATION, $MB_TOPMOST), "WorkDays Outlook Agent", "Outlook cleanup completed." & @CRLF & @CRLF & "The synchronization state was reset, and the agent was left stopped so the calendar stays clean until you start it again.", 0, $Form_WorkDays)
@@ -7173,16 +7183,6 @@ Func _OutlookAgent_RefreshWorkDaysFromAgentChange()
 	Return 1
 EndFunc   ;==>_OutlookAgent_RefreshWorkDaysFromAgentChange
 
-Func _OA_SetControlsEnabled(ByRef $aControls, $bEnabled)
-	Local $iState = $GUI_DISABLE
-	If $bEnabled Then $iState = $GUI_ENABLE
-	Local $i
-	For $i = 0 To UBound($aControls) - 1
-		If $aControls[$i] > 0 Then GUICtrlSetState($aControls[$i], $iState)
-	Next
-	Return 1
-EndFunc
-
 Func _OutlookAgent_SettingsWindow()
 	_OutlookAgent_EnsureDefaults()
 
@@ -7299,18 +7299,6 @@ Func _OutlookAgent_SettingsWindow()
 	Local $btnClean = GUICtrlCreateButton("Clean Outlook WorkDays items...", 18, 575, 210, 30)
 	Local $btnSave = GUICtrlCreateButton("Close", 838, 575, 100, 30)
 
-	; Interactive controls are disabled while Outlook cleanup runs so the user
-	; can clearly see that the operation is in progress and cannot start another action.
-	Local $aAgentControls[40] = [$btnInstall, $btnStart, $btnStop, $btnOpenLog, $btnUninstall, _
-		$inpInterval, $inpPast, $inpFuture, $chkConflictOutlook, $chkDeleteOutlookClears, _
-		$chkSyncBlank, $chkSyncWeekend, $chkSyncTaggedBlankWeekend, $chkStartup, _
-		$inpSubjectPrefix, $inpCategoryPrefix, $chkReminderSet, $chkManagedOnly, _
-		$chkShowMarkerSubject, $inpMarkerSuffix, $chkSeparateMarkerCategory, $inpMarkerCategory, _
-		$chkReminderMarker, $inpReminderMinutes, $chkCleanupEnabled, $chkCleanupPrefixOnly, _
-		$chkPauseAfterCleanup, $inpCleanupPast, $inpCleanupFuture, $chkBackupBeforeOutlookChanges, _
-		$chkBlockMassChanges, $inpMaxChanges, $inpMaxPercent, $inpMaxClears, $chkBlockIncompleteRead, _
-		$btnOpenBackupFolder, $btnOpenPlan, $chkVerboseMode, $btnClean, $btnSave]
-
 	GUISetState(@SW_SHOW, $hAgent)
 
 	While 1
@@ -7355,14 +7343,14 @@ Func _OutlookAgent_SettingsWindow()
 
 			Case $btnClean
 				_OutlookAgent_SaveSettings($inpInterval, $inpPast, $inpFuture, $chkConflictOutlook, $chkDeleteOutlookClears, $chkSyncBlank, $chkSyncWeekend, $chkSyncTaggedBlankWeekend, $chkStartup, $inpSubjectPrefix, $inpCategoryPrefix, $chkReminderSet, $chkManagedOnly, $chkShowMarkerSubject, $inpMarkerSuffix, $chkSeparateMarkerCategory, $inpMarkerCategory, $chkReminderMarker, $inpReminderMinutes, $chkCleanupEnabled, $inpCleanupPast, $inpCleanupFuture, $chkCleanupPrefixOnly, $chkPauseAfterCleanup, $chkVerboseMode, $chkBackupBeforeOutlookChanges, $chkBlockMassChanges, $inpMaxChanges, $inpMaxPercent, $inpMaxClears, $chkBlockIncompleteRead)
-				_OA_SetControlsEnabled($aAgentControls, False)
-				GUICtrlSetData($lblStatus, "Cleaning Outlook WorkDays items... Please wait.")
-				_CleanRepaint($hAgent)
-				Sleep(100)
-				_OutlookAgent_CleanOutlookFromWorkDays()
-				_OA_SetControlsEnabled($aAgentControls, True)
-				GUICtrlSetData($lblStatus, _OutlookAgent_StatusText())
-				_CleanRepaint($hAgent)
+				If _OutlookAgent_ConfirmCleanup($hAgent) Then
+					GUICtrlSetData($lblStatus, "Cleaning Outlook WorkDays items... Please wait.")
+					GUISetState(@SW_DISABLE, $hAgent)
+					_OutlookAgent_CleanOutlookFromWorkDays(True)
+					GUISetState(@SW_ENABLE, $hAgent)
+					WinActivate($hAgent)
+					GUICtrlSetData($lblStatus, _OutlookAgent_StatusText())
+				EndIf
 
 			Case $btnSave
 				_OutlookAgent_SaveSettings($inpInterval, $inpPast, $inpFuture, $chkConflictOutlook, $chkDeleteOutlookClears, $chkSyncBlank, $chkSyncWeekend, $chkSyncTaggedBlankWeekend, $chkStartup, $inpSubjectPrefix, $inpCategoryPrefix, $chkReminderSet, $chkManagedOnly, $chkShowMarkerSubject, $inpMarkerSuffix, $chkSeparateMarkerCategory, $inpMarkerCategory, $chkReminderMarker, $inpReminderMinutes, $chkCleanupEnabled, $inpCleanupPast, $inpCleanupFuture, $chkCleanupPrefixOnly, $chkPauseAfterCleanup, $chkVerboseMode, $chkBackupBeforeOutlookChanges, $chkBlockMassChanges, $inpMaxChanges, $inpMaxPercent, $inpMaxClears, $chkBlockIncompleteRead)

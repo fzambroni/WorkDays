@@ -3,7 +3,7 @@
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Icon=CalendarSync.ico
 #AutoIt3Wrapper_Res_Description=Work Day Sync Agent
-#AutoIt3Wrapper_Res_Fileversion=1.0.1.5
+#AutoIt3Wrapper_Res_Fileversion=1.0.1.6
 #AutoIt3Wrapper_Res_ProductName=Work Day Sync Agent
 #AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
 #AutoIt3Wrapper_Res_LegalCopyright=Copyright © 2026 Fabricio Zambroni
@@ -159,27 +159,141 @@ EndFunc
 
 Func _HandleCommandLine()
 	If $CmdLine[0] < 1 Then Return
-	Local $sCmd = StringLower(StringStripWS($CmdLine[1], 3))
-	Switch $sCmd
-		Case "/cleanoutlook"
-			_Log("Outlook cleanup requested by WorkDays.")
-			Local $iDeleted = _CleanOutlookCalendar()
-			If @error Then
-				_Log("Outlook cleanup failed. Error code: " & @error)
-				Exit 1
-			EndIf
-			_Log("Outlook cleanup completed. Deleted items: " & $iDeleted)
-			Exit 0
-		Case "/synconce", "/syncnow"
-			_Log("One-time sync requested by WorkDays.")
-			Local $iChanges = _RunSync(False)
-			If @error Then
-				_Log("One-time sync failed. Error code: " & @error)
-				Exit 1
-			EndIf
-			_Log("One-time sync completed. Changes: " & $iChanges)
-			Exit 0
-	EndSwitch
+
+	If _CmdLineHas("/cleanoutlook") Or _CmdLineHas("/cleanworker") Then
+		Opt("TrayIconHide", 1)
+		Local $iDeleted = _RunCleanWorker()
+		Local $iCleanErr = @error
+		If $iCleanErr Then Exit $iCleanErr
+		Exit 0
+	EndIf
+
+	If _CmdLineHas("/syncworker") Or _CmdLineHas("/synconce") Or _CmdLineHas("/syncnow") Then
+		Opt("TrayIconHide", 1)
+		Local $bDeferred = _CmdLineHas("/deferredstartup") Or _CmdLineHas("/deferred")
+		Local $iChanges = _RunSyncWorker($bDeferred)
+		Local $iSyncErr = @error
+		If $iSyncErr Then Exit $iSyncErr
+		Exit 0
+	EndIf
+EndFunc
+
+Func _CmdLineHas($sSwitch)
+	Local $sNeedle = StringLower($sSwitch)
+	Local $i
+	For $i = 1 To $CmdLine[0]
+		If StringLower(StringStripWS($CmdLine[$i], 3)) = $sNeedle Then Return True
+	Next
+	Return False
+EndFunc
+
+Func _CurrentPID()
+	Local $aPid = DllCall("kernel32.dll", "dword", "GetCurrentProcessId")
+	If @error Or Not IsArray($aPid) Then Return 0
+	Return $aPid[0]
+EndFunc
+
+Func _AgentRunCommandWithArgs($sArgs)
+	If @Compiled Then Return '"' & @ScriptFullPath & '" ' & $sArgs
+	Return '"' & @AutoItExe & '" "' & @ScriptFullPath & '" ' & $sArgs
+EndFunc
+
+Func _SetWorkerStatus($sStatus, $sMessage = "", $iExitCode = 0, $iChanges = 0, $iDeleted = 0)
+	Local $sNow = StringFormat("%04d-%02d-%02d %02d:%02d:%02d", @YEAR, @MON, @MDAY, @HOUR, @MIN, @SEC)
+	RegWrite($g_sAgentDB, "Worker_Status", "REG_SZ", $sStatus)
+	RegWrite($g_sAgentDB, "Worker_Message", "REG_SZ", $sMessage)
+	RegWrite($g_sAgentDB, "Worker_UpdatedAt", "REG_SZ", $sNow)
+	RegWrite($g_sAgentDB, "Worker_PID", "REG_SZ", String(_CurrentPID()))
+	RegWrite($g_sAgentDB, "Worker_ExitCode", "REG_SZ", String($iExitCode))
+	RegWrite($g_sAgentDB, "Worker_Changes", "REG_SZ", String($iChanges))
+	RegWrite($g_sAgentDB, "Worker_DeletedItems", "REG_SZ", String($iDeleted))
+	Return 1
+EndFunc
+
+Func _RunSyncWorker($bDeferredStartup = False)
+	If _Singleton($g_sAppTitle & " - Sync Worker", 1) = 0 Then
+		_Log("Another Outlook sync worker is already running. New sync request ignored by worker lock.")
+		_SetWorkerStatus("RUNNING", "Another Outlook sync worker is already running.", 90, 0, 0)
+		Return SetError(90, 0, 0)
+	EndIf
+
+	_SetWorkerStatus("RUNNING", "Sync worker started.", 0, 0, 0)
+	_Log("Sync worker started. PID=" & _CurrentPID() & " deferredStartup=" & _BoolText($bDeferredStartup))
+
+	Local $iChanges = _RunSync($bDeferredStartup)
+	Local $iSyncErr = @error
+	Local $sNow = StringFormat("%04d-%02d-%02d %02d:%02d:%02d", @YEAR, @MON, @MDAY, @HOUR, @MIN, @SEC)
+
+	If $iSyncErr Then
+		_SetWorkerStatus("WAITING", "Sync worker did not complete safely. Error code=" & $iSyncErr & ". " & $g_sLastSyncGuardReason, $iSyncErr, 0, 0)
+		_Log("Sync worker exiting with error. Error code=" & $iSyncErr & " Reason=" & $g_sLastSyncGuardReason)
+		Return SetError($iSyncErr, 0, 0)
+	EndIf
+
+	IniWrite($g_sState, "Global", "LastSync", $sNow)
+	_SetWorkerStatus("COMPLETED", "Sync worker completed successfully.", 0, $iChanges, 0)
+	_Log("Sync worker completed. Changes: " & $iChanges)
+	Return $iChanges
+EndFunc
+
+Func _RunCleanWorker()
+	If _Singleton($g_sAppTitle & " - Clean Worker", 1) = 0 Then
+		_Log("Another Outlook cleanup worker is already running. New cleanup request ignored by worker lock.")
+		_SetWorkerStatus("CLEANING", "Another Outlook cleanup worker is already running.", 91, 0, 0)
+		Return SetError(91, 0, 0)
+	EndIf
+
+	_SetWorkerStatus("CLEANING", "Outlook cleanup worker started.", 0, 0, 0)
+	_Log("Outlook cleanup worker started. PID=" & _CurrentPID())
+	Local $iDeleted = _CleanOutlookCalendar()
+	Local $iCleanErr = @error
+	If $iCleanErr Then
+		_SetWorkerStatus("CLEAN_FAILED", "Outlook cleanup worker failed. Error code=" & $iCleanErr, $iCleanErr, 0, $iDeleted)
+		_Log("Outlook cleanup worker failed. Error code=" & $iCleanErr & " DeletedBeforeFailure=" & $iDeleted)
+		Return SetError($iCleanErr, 0, 0)
+	EndIf
+
+	_SetWorkerStatus("CLEAN_COMPLETED", "Outlook cleanup completed successfully.", 0, 0, $iDeleted)
+	_Log("Outlook cleanup worker completed. Deleted items: " & $iDeleted)
+	Return $iDeleted
+EndFunc
+
+Func _StartSyncWorker($bDeferredStartup = False)
+	TrayItemSetText($g_iTrayStatus, "Syncing...")
+	TraySetToolTip($g_sAppTitle & " - sync worker running")
+
+	Local $sArgs = "/syncworker"
+	If $bDeferredStartup Then $sArgs &= " /deferredstartup"
+	Local $iRC = RunWait(_AgentRunCommandWithArgs($sArgs), $g_sAgentDir, @SW_HIDE)
+	Local $iChanges = Number(RegRead($g_sAgentDB, "Worker_Changes"))
+	Local $sNow = StringFormat("%04d-%02d-%02d %02d:%02d:%02d", @YEAR, @MON, @MDAY, @HOUR, @MIN, @SEC)
+
+	If $iRC <> 0 Then
+		TrayItemSetText($g_iTrayStatus, "Last sync deferred: " & @HOUR & ":" & @MIN)
+		TraySetToolTip($g_sAppTitle & " - waiting for a safe sync")
+		_Log("Sync worker process returned error code: " & $iRC)
+		Return SetError($iRC, 0, 0)
+	EndIf
+
+	TrayItemSetText($g_iTrayStatus, "Last sync: " & @HOUR & ":" & @MIN & " | Changes: " & $iChanges)
+	TraySetToolTip($g_sAppTitle & " - last sync " & $sNow)
+	Return $iChanges
+EndFunc
+
+Func _StartCleanWorker()
+	TrayItemSetText($g_iTrayStatus, "Cleaning Outlook...")
+	TraySetToolTip($g_sAppTitle & " - cleanup worker running")
+	Local $iRC = RunWait(_AgentRunCommandWithArgs("/cleanworker"), $g_sAgentDir, @SW_HIDE)
+	Local $iDeleted = Number(RegRead($g_sAgentDB, "Worker_DeletedItems"))
+	If $iRC <> 0 Then
+		TrayItemSetText($g_iTrayStatus, "Cleanup failed")
+		TraySetToolTip($g_sAppTitle & " - cleanup failed")
+		_Log("Clean worker process returned error code: " & $iRC)
+		Return SetError($iRC, 0, 0)
+	EndIf
+	TrayItemSetText($g_iTrayStatus, "Cleanup completed")
+	TraySetToolTip($g_sAppTitle & " - cleanup completed")
+	Return $iDeleted
 EndFunc
 
 Func _EnsureConfig()
@@ -447,25 +561,11 @@ Func _NotifyWorkDaysDatabaseChanged($sDateISO, $sStatus, $sMarker)
 EndFunc
 
 Func _SyncNow($bDeferredStartup = False)
-	TrayItemSetText($g_iTrayStatus, "Syncing...")
-	TraySetToolTip($g_sAppTitle & " - syncing")
-
-	Local $iChanges = _RunSync($bDeferredStartup)
-	Local $iSyncError = @error
-	Local $sNow = StringFormat("%04d-%02d-%02d %02d:%02d:%02d", @YEAR, @MON, @MDAY, @HOUR, @MIN, @SEC)
-
-	If $iSyncError Then
-		TrayItemSetText($g_iTrayStatus, "Last sync deferred: " & @HOUR & ":" & @MIN)
-		TraySetToolTip($g_sAppTitle & " - waiting for a safe sync")
-		_Log("Sync did not complete. Error code: " & $iSyncError)
-		Return SetError($iSyncError, 0, 0)
-	EndIf
-
-	TrayItemSetText($g_iTrayStatus, "Last sync: " & @HOUR & ":" & @MIN & " | Changes: " & $iChanges)
-	TraySetToolTip($g_sAppTitle & " - last sync " & $sNow)
-	IniWrite($g_sState, "Global", "LastSync", $sNow)
-	_Log("Sync completed. Changes: " & $iChanges)
-	Return $iChanges
+	; The resident agent never talks to Outlook COM directly. It launches a short-lived
+	; worker process and waits for it to exit. When the worker exits, Windows releases
+	; every Outlook COM/MAPI reference held by that process, which prevents Outlook
+	; calendar calls from staying slow after a sync.
+	Return _StartSyncWorker($bDeferredStartup)
 EndFunc
 
 Func _RunSync($bDeferredStartup = False)
@@ -1272,8 +1372,7 @@ Func _CleanOutlookCalendarFromTray()
 		"Continue?"
 	If MsgBox(BitOR($MB_ICONWARNING, $MB_YESNO, $MB_DEFBUTTON2, $MB_TOPMOST), $g_sAppTitle, $sMsg) <> $IDYES Then Return
 
-	TrayItemSetText($g_iTrayStatus, "Cleaning Outlook...")
-	Local $iDeleted = _CleanOutlookCalendar()
+	Local $iDeleted = _StartCleanWorker()
 	If @error Then
 		MsgBox(BitOR($MB_ICONERROR, $MB_TOPMOST), $g_sAppTitle, "Outlook cleanup failed. Check the log file for details.")
 		TrayItemSetText($g_iTrayStatus, "Cleanup failed")
