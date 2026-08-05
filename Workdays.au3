@@ -3,7 +3,7 @@
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Icon=xcalendar4.ico
 #AutoIt3Wrapper_Res_Description=Work Day management
-#AutoIt3Wrapper_Res_Fileversion=2.1.4.18
+#AutoIt3Wrapper_Res_Fileversion=2.1.4.19
 #AutoIt3Wrapper_Res_ProductVersion=2.1.0.0
 #AutoIt3Wrapper_Res_ProductName=Work Days
 #AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
@@ -191,6 +191,8 @@ Global $g_sOutlookAgentSyncBlockedReason = ""
 Global $g_sOutlookAgentSyncBlockedPlanFile = ""
 Global $g_sOutlookAgentLastGuardStatus = ""
 Global $g_hOutlookAgentSettingsWindow = 0
+Global $g_bOutlookAgentSyncButtonBusy = False
+Global $g_sOutlookAgentSyncButtonLastStatus = ""
 Global $g_bWorkDaysUpdaterAvailable = False
 Global $ResetPosition = 0
 Global $Progress_Splash, $Form_Splash, $Label_Percentage, $Splash, $Button_Close_Splash
@@ -1130,9 +1132,9 @@ GUISetState(@SW_SHOW, $Form_WorkDays)
 ConsoleWrite("Window is visible: " & _Monitor_IsVisibleWindow($Form_WorkDays) & @CRLF)
 
 GUIDelete($Form_Splash)
-If Not StringInStr(StringLower(@ScriptName), ".au3") Then
-	FileDelete($sSplashPath)
-EndIf
+;~ If Not StringInStr(StringLower(@ScriptName), ".au3") Then
+;~ 	FileDelete($sSplashPath)
+;~ EndIf
 
 
 $currentVersion = FileGetVersion(@ScriptDir & "\WorkDays.exe")
@@ -1172,6 +1174,7 @@ While 1
 	$nMsg = GUIGetMsg()
 
 	_OutlookAgent_CheckRefreshNotification()
+	_OutlookAgent_UpdateSyncButtonState()
 
 	; ── Custom calendar: prev/next navigation and day clicks ─────────
 	If $nMsg = $g_ccPrev Then
@@ -2840,108 +2843,8 @@ Func _Chart($Type = "", $bReset = False)
 
 
 	#Region ; PIE Chart
-;~ $Pass = 16;Total number of Passed
-;~ $Fail = 3;Total Number of Failed
-;~ $Warnings = 5;Total Number of Warnings
 
-	;===== The following functions calculate Percentages and Degrees =====
-;~ $Total = $Count_O + $Count_R + $Count_H + $Count_P + $Count_T + $Count_S + $Count_B + $Count_W;Get the total number of all "for Percentage calculations"
-	$Total = 0
-
-;~ If $Count_O > 0 and GUICtrlRead($Label_YSumary_OnSite) = $gui_checked Then
-	If $Count_O > 0 Then
-		$Total = $Total + $Count_O
-	EndIf
-
-;~ If $Count_R > 0 and GUICtrlRead($Label_YSumary_Remote) = $gui_checked Then
-	If $Count_R > 0 Then
-		$Total = $Total + $Count_R
-	EndIf
-
-;~ If $Count_H > 0 and GUICtrlRead($Label_YSumary_Holiday) = $gui_checked Then
-	If $Count_H > 0 Then
-		$Total = $Total + $Count_H
-	EndIf
-
-;~ If $Count_P > 0 and GUICtrlRead($Label_YSumary_PTO) = $gui_checked Then
-	If $Count_P > 0 Then
-		$Total = $Total + $Count_P
-	EndIf
-
-;~ If $Count_T > 0 and GUICtrlRead($Label_YSumary_Travel) = $gui_checked Then
-	If $Count_T > 0 Then
-		$Total = $Total + $Count_T
-	EndIf
-
-;~ If $Count_S > 0 and GUICtrlRead($Label_YSumary_Sick) = $gui_checked Then
-	If $Count_S > 0 Then
-		$Total = $Total + $Count_S
-	EndIf
-
-;~ If $Count_B > 0 and GUICtrlRead($Label_YSumary_Blank) = $gui_checked Then
-	If $Count_B > 0 Then
-		$Total = $Total + $Count_B
-	EndIf
-
-;~ If $Count_W > 0 and GUICtrlRead($Label_YSumary_Weekend) = $gui_checked Then
-	If $Count_W > 0 Then
-		$Total = $Total + $Count_W
-	EndIf
-
-
-;~ If $Count_O > 0 and GUICtrlRead($Label_YSumary_OnSite) = $gui_checked Then
-;~ 	If $Count_O > 0 Then
-	$Percentage_O = $Count_O / $Total     ; Get percentage
-	$Degrees_O = $Percentage_O * 360     ;Get the Degrees
-;~ 	EndIf
-
-;~ If $Count_R > 0 and GUICtrlRead($Label_YSumary_Remote) = $gui_checked Then
-;~ 	If $Count_R > 0 Then
-	$Percentage_R = $Count_R / $Total     ; Get percentage
-	$Degrees_R = $Percentage_R * 360     ;Get the Degrees
-;~ 	EndIf
-
-;~ If $Count_H > 0 and GUICtrlRead($Label_YSumary_Holiday) = $gui_checked Then
-;~ 	If $Count_H > 0 Then
-	$Percentage_H = $Count_H / $Total     ; Get percentage
-	$Degrees_H = $Percentage_H * 360     ;Get the Degrees
-;~ 	EndIf
-
-;~ If $Count_P > 0 and GUICtrlRead($Label_YSumary_PTO) = $gui_checked Then
-;~ 	If $Count_P > 0 Then
-	$Percentage_P = $Count_P / $Total     ; Get percentage
-	$Degrees_P = $Percentage_P * 360     ;Get the Degrees
-;~ 	EndIf
-
-;~ If $Count_T > 0 and GUICtrlRead($Label_YSumary_Travel) = $gui_checked Then
-;~ 	If $Count_T > 0 Then
-	$Percentage_T = $Count_T / $Total     ; Get percentage
-	$Degrees_T = $Percentage_T * 360     ;Get the Degrees
-;~ 	EndIf
-
-;~ If $Count_S > 0 and GUICtrlRead($Label_YSumary_Sick) = $gui_checked Then
-;~ 	If $Count_S > 0 Then
-	$Percentage_S = $Count_S / $Total     ; Get percentage
-	$Degrees_S = $Percentage_S * 360     ;Get the Degrees
-;~ 	EndIf
-
-;~ If $Count_B > 0 and GUICtrlRead($Label_YSumary_Blank) = $gui_checked Then
-;~ 	If $Count_B > 0 Then
-	$Percentage_B = $Count_B / $Total     ; Get percentage
-	$Degrees_B = $Percentage_B * 360     ;Get the Degrees
-;~ 	EndIf
-
-;~ If $Count_W > 0 and GUICtrlRead($Label_YSumary_Weekend) = $gui_checked Then
-;~ 	If $Count_W > 0 Then
-	$Percentage_W = $Count_W / $Total     ; Get percentage
-	$Degrees_W = $Percentage_W * 360     ;Get the Degrees
-;~ 	EndIf
-
-	;=== This section will create the Pie Chart ==========================
-
-	GUICtrlDelete($Pie1)
-	$Pie1 = GUICtrlCreateGraphic($Pie1_left, $Pie1_top, $Pie1_width, $Pie1_height) ;Create the main graphic area
-
+	; Remove categories with zero records from the active Year Summary filter.
 	If $Count_O = 0 And StringInStr($Chart, "O") Then $Chart = StringReplace($Chart, "O", "")
 	If $Count_R = 0 And StringInStr($Chart, "R") Then $Chart = StringReplace($Chart, "R", "")
 	If $Count_H = 0 And StringInStr($Chart, "H") Then $Chart = StringReplace($Chart, "H", "")
@@ -2953,7 +2856,75 @@ Func _Chart($Type = "", $bReset = False)
 
 	_ApplyMainGridCategoryFilter($Chart)
 
-	If $Count_O > 0 Then
+	; Keep the summary percentages based on the full year, but calculate the pie
+	; slices from the currently visible/selected categories. This prevents the pie
+	; from looking blank when a low-volume category is selected.
+	Local $TotalAll = 0
+	If $Count_O > 0 Then $TotalAll += $Count_O
+	If $Count_R > 0 Then $TotalAll += $Count_R
+	If $Count_H > 0 Then $TotalAll += $Count_H
+	If $Count_P > 0 Then $TotalAll += $Count_P
+	If $Count_T > 0 Then $TotalAll += $Count_T
+	If $Count_S > 0 Then $TotalAll += $Count_S
+	If $Count_B > 0 Then $TotalAll += $Count_B
+	If $Count_W > 0 Then $TotalAll += $Count_W
+
+	$Total = $TotalAll
+	$Percentage_O = 0
+	$Percentage_R = 0
+	$Percentage_H = 0
+	$Percentage_P = 0
+	$Percentage_T = 0
+	$Percentage_S = 0
+	$Percentage_B = 0
+	$Percentage_W = 0
+	$Degrees_O = 0
+	$Degrees_R = 0
+	$Degrees_H = 0
+	$Degrees_P = 0
+	$Degrees_T = 0
+	$Degrees_S = 0
+	$Degrees_B = 0
+	$Degrees_W = 0
+
+	If $TotalAll > 0 Then
+		If $Count_O > 0 Then $Percentage_O = $Count_O / $TotalAll
+		If $Count_R > 0 Then $Percentage_R = $Count_R / $TotalAll
+		If $Count_H > 0 Then $Percentage_H = $Count_H / $TotalAll
+		If $Count_P > 0 Then $Percentage_P = $Count_P / $TotalAll
+		If $Count_T > 0 Then $Percentage_T = $Count_T / $TotalAll
+		If $Count_S > 0 Then $Percentage_S = $Count_S / $TotalAll
+		If $Count_B > 0 Then $Percentage_B = $Count_B / $TotalAll
+		If $Count_W > 0 Then $Percentage_W = $Count_W / $TotalAll
+	EndIf
+
+	Local $TotalChart = 0
+	If $Count_O > 0 And ($Chart = "" Or StringInStr($Chart, "O")) Then $TotalChart += $Count_O
+	If $Count_R > 0 And ($Chart = "" Or StringInStr($Chart, "R")) Then $TotalChart += $Count_R
+	If $Count_H > 0 And ($Chart = "" Or StringInStr($Chart, "H")) Then $TotalChart += $Count_H
+	If $Count_P > 0 And ($Chart = "" Or StringInStr($Chart, "P")) Then $TotalChart += $Count_P
+	If $Count_T > 0 And ($Chart = "" Or StringInStr($Chart, "T")) Then $TotalChart += $Count_T
+	If $Count_S > 0 And ($Chart = "" Or StringInStr($Chart, "S")) Then $TotalChart += $Count_S
+	If $Count_B > 0 And ($Chart = "" Or StringInStr($Chart, "B")) Then $TotalChart += $Count_B
+	If $Count_W > 0 And ($Chart = "" Or StringInStr($Chart, "W")) Then $TotalChart += $Count_W
+
+	If $TotalChart > 0 Then
+		If $Count_O > 0 And ($Chart = "" Or StringInStr($Chart, "O")) Then $Degrees_O = ($Count_O / $TotalChart) * 360
+		If $Count_R > 0 And ($Chart = "" Or StringInStr($Chart, "R")) Then $Degrees_R = ($Count_R / $TotalChart) * 360
+		If $Count_H > 0 And ($Chart = "" Or StringInStr($Chart, "H")) Then $Degrees_H = ($Count_H / $TotalChart) * 360
+		If $Count_P > 0 And ($Chart = "" Or StringInStr($Chart, "P")) Then $Degrees_P = ($Count_P / $TotalChart) * 360
+		If $Count_T > 0 And ($Chart = "" Or StringInStr($Chart, "T")) Then $Degrees_T = ($Count_T / $TotalChart) * 360
+		If $Count_S > 0 And ($Chart = "" Or StringInStr($Chart, "S")) Then $Degrees_S = ($Count_S / $TotalChart) * 360
+		If $Count_B > 0 And ($Chart = "" Or StringInStr($Chart, "B")) Then $Degrees_B = ($Count_B / $TotalChart) * 360
+		If $Count_W > 0 And ($Chart = "" Or StringInStr($Chart, "W")) Then $Degrees_W = ($Count_W / $TotalChart) * 360
+	EndIf
+
+	;=== This section will create the Pie Chart ==========================
+
+	GUICtrlDelete($Pie1)
+	$Pie1 = GUICtrlCreateGraphic($Pie1_left, $Pie1_top, $Pie1_width, $Pie1_height) ;Create the main graphic area
+
+	If $Degrees_O > 0 Then
 
 		If $Color_Graphic_Transparent = "1" Then
 			$Color_bk_Graphic_OnSite = $Color_bk_OnSite
@@ -2973,7 +2944,7 @@ Func _Chart($Type = "", $bReset = False)
 	EndIf
 
 
-	If $Count_R > 0 Then
+	If $Degrees_R > 0 Then
 
 		If $Color_Graphic_Transparent = "1" Then
 			$Color_bk_Graphic_Remote = $Color_bk_Remote
@@ -2992,7 +2963,7 @@ Func _Chart($Type = "", $bReset = False)
 	EndIf
 
 
-	If $Count_H > 0 Then
+	If $Degrees_H > 0 Then
 
 		If $Color_Graphic_Transparent = "1" Then
 			$Color_bk_Graphic_holiday = $Color_bk_holiday
@@ -3011,7 +2982,7 @@ Func _Chart($Type = "", $bReset = False)
 	EndIf
 
 
-	If $Count_P > 0 Then
+	If $Degrees_P > 0 Then
 
 		If $Color_Graphic_Transparent = "1" Then
 			$Color_bk_Graphic_PTO = $Color_bk_PTO
@@ -3030,7 +3001,7 @@ Func _Chart($Type = "", $bReset = False)
 	EndIf
 
 
-	If $Count_T > 0 Then
+	If $Degrees_T > 0 Then
 
 		If $Color_Graphic_Transparent = "1" Then
 			$Color_bk_Graphic_Travel = $Color_bk_Travel
@@ -3048,7 +3019,7 @@ Func _Chart($Type = "", $bReset = False)
 		EndIf
 	EndIf
 
-	If $Count_S > 0 Then
+	If $Degrees_S > 0 Then
 
 		If $Color_Graphic_Transparent = "1" Then
 			$Color_bk_Graphic_Sick = $Color_bk_Sick
@@ -3067,7 +3038,7 @@ Func _Chart($Type = "", $bReset = False)
 	EndIf
 
 
-	If $Count_B > 0 Then
+	If $Degrees_B > 0 Then
 
 		If $Color_Graphic_Transparent = "1" Then
 			$Color_bk_Graphic_Blank = $Color_bk_Blank
@@ -3086,7 +3057,7 @@ Func _Chart($Type = "", $bReset = False)
 	EndIf
 
 
-	If $Count_W > 0 Then
+	If $Degrees_W > 0 Then
 
 		If $Color_Graphic_Transparent = "1" Then
 			$Color_bk_Graphic_Weekend = $Color_bk_Weekend
@@ -3104,6 +3075,9 @@ Func _Chart($Type = "", $bReset = False)
 		EndIf
 	EndIf
 
+
+	GUICtrlSetGraphic($Pie1, $GUI_GR_REFRESH)
+	GUICtrlSetState($Pie1, $GUI_SHOW)
 
 	#EndRegion ; PIE Chart
 
@@ -7035,33 +7009,73 @@ Func _OutlookAgent_StatusCodeToLabel($sStatus)
 	EndSwitch
 EndFunc   ;==>_OutlookAgent_StatusCodeToLabel
 
+
+Func _OutlookAgent_SetSyncButtonBusy($bBusy, $sText = "Sync...")
+	If $bBusy Then
+		GUICtrlSetData($Button_OutlookSync, $sText)
+		GUICtrlSetState($Button_OutlookSync, $GUI_DISABLE)
+		GUICtrlSetTip($Button_OutlookSync, "Outlook Agent sync is running. Please wait until it completes.")
+		$g_bOutlookAgentSyncButtonBusy = True
+	Else
+		GUICtrlSetData($Button_OutlookSync, "Sync")
+		GUICtrlSetState($Button_OutlookSync, $GUI_ENABLE)
+		GUICtrlSetTip($Button_OutlookSync, "Force an immediate Outlook Agent sync.")
+		$g_bOutlookAgentSyncButtonBusy = False
+	EndIf
+EndFunc   ;==>_OutlookAgent_SetSyncButtonBusy
+
+Func _OutlookAgent_ReadWorkerStatus()
+	Local $sStatus = RegRead($g_sOutlookAgentDB, "Worker_Status")
+	If @error Then Return ""
+	Return StringUpper(StringStripWS($sStatus, 3))
+EndFunc   ;==>_OutlookAgent_ReadWorkerStatus
+
+Func _OutlookAgent_UpdateSyncButtonState()
+	Local $sStatus = _OutlookAgent_ReadWorkerStatus()
+	If $sStatus = $g_sOutlookAgentSyncButtonLastStatus And Not $g_bOutlookAgentSyncButtonBusy Then Return
+	$g_sOutlookAgentSyncButtonLastStatus = $sStatus
+
+	Switch $sStatus
+		Case "PENDING", "RUNNING", "SYNCING"
+			_OutlookAgent_SetSyncButtonBusy(True, "Sync...")
+		Case "CLEANING"
+			_OutlookAgent_SetSyncButtonBusy(True, "Busy...")
+		Case Else
+			If $g_bOutlookAgentSyncButtonBusy Then _OutlookAgent_SetSyncButtonBusy(False)
+	EndSwitch
+EndFunc   ;==>_OutlookAgent_UpdateSyncButtonState
+
 Func _OutlookAgent_RequestSyncNow()
 	_OutlookAgent_EnsureDefaults()
-	GUICtrlSetData($Button_OutlookSync, "Sync...")
-
-	Local $sNow = StringFormat("%04d-%02d-%02d %02d:%02d:%02d", @YEAR, @MON, @MDAY, @HOUR, @MIN, @SEC) & "." & @MSEC
-	RegWrite($g_sOutlookAgentDB, "Sync_ForceNowRequest", "REG_SZ", $sNow)
-	RegWrite($g_sOutlookAgentDB, "Sync_ForceNowRequestedBy", "REG_SZ", "WorkDays")
-
-	If _OutlookAgent_IsRunning() Then
-		Sleep(500)
-		GUICtrlSetData($Button_OutlookSync, "Sync")
-		Return 1
-	EndIf
 
 	If Not _OutlookAgent_IsInstalled() Then
-		GUICtrlSetData($Button_OutlookSync, "Sync")
 		Local $iInstall = MsgBox(BitOR($MB_ICONQUESTION, $MB_YESNO, $MB_TOPMOST), "WorkDays Outlook Agent", "The Outlook Agent is not installed yet." & @CRLF & @CRLF & "Install it now?", 0, $Form_WorkDays)
 		If $iInstall <> $IDYES Then Return 0
 		If Not _OutlookAgent_Install() Then Return 0
-		GUICtrlSetData($Button_OutlookSync, "Sync...")
 	EndIf
+
+	Local $sNow = StringFormat("%04d-%02d-%02d %02d:%02d:%02d", @YEAR, @MON, @MDAY, @HOUR, @MIN, @SEC) & "." & @MSEC
+	_OutlookAgent_SetSyncButtonBusy(True, "Sync...")
+	RegWrite($g_sOutlookAgentDB, "Worker_Status", "REG_SZ", "PENDING")
+	RegWrite($g_sOutlookAgentDB, "Worker_Message", "REG_SZ", "Sync requested from WorkDays.")
+	RegWrite($g_sOutlookAgentDB, "Worker_UpdatedAt", "REG_SZ", $sNow)
+	RegWrite($g_sOutlookAgentDB, "Sync_ForceNowRequest", "REG_SZ", $sNow)
+	RegWrite($g_sOutlookAgentDB, "Sync_ForceNowRequestedBy", "REG_SZ", "WorkDays")
+
+	If _OutlookAgent_IsRunning() Then Return 1
 
 	; Start the resident agent instead of a one-time COM sync. The agent keeps the request queued
 	; and waits until a visible Outlook session is fully initialized.
 	Run(_OutlookAgent_RunCommand(), $g_sOutlookAgentDir)
 	Sleep(500)
-	GUICtrlSetData($Button_OutlookSync, "Sync")
+	If Not _OutlookAgent_IsRunning() Then
+		RegWrite($g_sOutlookAgentDB, "Worker_Status", "REG_SZ", "START_FAILED")
+		RegWrite($g_sOutlookAgentDB, "Worker_Message", "REG_SZ", "WorkDays requested a sync, but the Outlook Agent did not start.")
+		RegWrite($g_sOutlookAgentDB, "Worker_UpdatedAt", "REG_SZ", $sNow)
+		_OutlookAgent_SetSyncButtonBusy(False)
+		MsgBox(BitOR($MB_ICONWARNING, $MB_TOPMOST), "WorkDays Outlook Agent", "WorkDays requested a sync, but the Outlook Agent does not appear to be running." & @CRLF & @CRLF & "Check the agent installation or open the log file for details.", 0, $Form_WorkDays)
+		Return 0
+	EndIf
 	Return 1
 EndFunc   ;==>_OutlookAgent_RequestSyncNow
 

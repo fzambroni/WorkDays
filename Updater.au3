@@ -5,7 +5,7 @@
 #AutoIt3Wrapper_Res_Description=Updater
 #AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
 #AutoIt3Wrapper_Res_LegalCopyright=Copyright © 2026 Fabricio Zambroni
-#AutoIt3Wrapper_Res_Fileversion=1.1.1.5
+#AutoIt3Wrapper_Res_Fileversion=1.1.1.6
 #AutoIt3Wrapper_Res_ProductVersion=1.1.1.1
 #AutoIt3Wrapper_Res_ProductName=Updater
 #AutoIt3Wrapper_Res_File_Add=E:\GitHub\Workdays\splash.jpg
@@ -72,7 +72,7 @@ _UpdaterVerboseLog("Updater started. Application path: " & $Path)
 
 If Not FileExists($Path & "\" & $AppName & ".tmp") Then
 	_UpdaterVerboseLog("Update aborted: staged file not found: " & $Path & "\" & $AppName & ".tmp")
-	FileDelete($sSplashPath)
+;~ 	FileDelete($sSplashPath)
 	Exit
 Else
 	_UpdaterVerboseLog("Staged file found. Starting replacement.")
@@ -88,7 +88,7 @@ Else
 		_UpdaterVerboseLog("Replacement completed: " & $Path & "\" & $AppName & ".exe")
 	Else
 		_UpdaterVerboseLog("Replacement failed. Source=" & $Path & "\" & $AppName & ".tmp" & " | Target=" & $Path & "\" & $AppName & ".exe")
-		FileDelete($sSplashPath)
+;~ 		FileDelete($sSplashPath)
 		Exit
 	EndIf
 	Sleep(2000)
@@ -112,7 +112,7 @@ Else
 	EndIf
 
 EndIf
-FileDelete($sSplashPath)
+;~ FileDelete($sSplashPath)
 Exit
 
 Func _splash()
