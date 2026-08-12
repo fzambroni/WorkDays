@@ -3,7 +3,7 @@
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Icon=CalendarSync.ico
 #AutoIt3Wrapper_Res_Description=Work Day Sync Agent
-#AutoIt3Wrapper_Res_Fileversion=1.0.2.1
+#AutoIt3Wrapper_Res_Fileversion=1.0.1.6
 #AutoIt3Wrapper_Res_ProductName=Work Day Sync Agent
 #AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
 #AutoIt3Wrapper_Res_LegalCopyright=Copyright © 2026 Fabricio Zambroni
@@ -314,7 +314,6 @@ Func _EnsureConfig()
 	_EnsureRegDefault("Outlook", "ReminderSet", "0")
 	_EnsureRegDefault("Outlook", "ManagedOnly", "0")
 	_EnsureRegDefault("Outlook", "DateOrder", "Auto")
-	_EnsureRegDefault("Outlook", "IncludeCurrentQuarterStatsInTodayBody", "0")
 
 	_EnsureRegDefault("Markers", "ShowMarkerTagInSubject", "1")
 	_EnsureRegDefault("Markers", "MarkerSubjectSuffix", " [Marker]")
@@ -995,7 +994,7 @@ EndFunc
 
 Func _AddRecoveredOutlookItemToMap(ByRef $oOutlookMap, $sDateISO, $oItem, $sStatus)
 	If Not IsObj($oOutlookMap) Or Not IsObj($oItem) Or Not _IsKnownStatus($sStatus) Then Return 0
-	Local $sMarker = _GetOutlookMarker($oItem)
+	Local $sMarker = _CleanOutlookMarker($oItem.Body)
 	Local $sManaged = _GetUserProp($oItem, "WorkDaysManaged")
 	Local $sEntryID = String($oItem.EntryID)
 	Local $sRec = $sEntryID & $g_sSep & $sStatus & $g_sSep & $sMarker & $g_sSep & $sManaged
@@ -1662,7 +1661,7 @@ Func _LoadOutlookMap($oCalendar, $sStartISO, $sEndISO)
 			ContinueLoop
 		EndIf
 
-		Local $sMarker = _GetOutlookMarker($oItem)
+		Local $sMarker = _CleanOutlookMarker($oItem.Body)
 		Local $sEntryID = String($oItem.EntryID)
 		Local $sManaged = _GetUserProp($oItem, "WorkDaysManaged")
 		Local $sRec = $sEntryID & $g_sSep & $sStatus & $g_sSep & $sMarker & $g_sSep & $sManaged
@@ -1795,12 +1794,11 @@ Func _CreateOrUpdateOutlookItem($oOutlook, $oNs, $sDateISO, $sEntryID, $sStatus,
 	$oItem.AllDayEvent = True
 	$oItem.BusyStatus = $OL_FREE
 	_SetOutlookReminder($oItem, $sMarker)
-	$oItem.Body = _BuildOutlookBody($sDateISO, $sMarker)
+	$oItem.Body = $sMarker
 	$oItem.Categories = $sCategories
 	_SetUserProp($oItem, "WorkDaysManaged", "1")
 	_SetUserProp($oItem, "WorkDaysDate", $sDateISO)
 	_SetUserProp($oItem, "WorkDaysStatus", $sStatus)
-	_SetUserProp($oItem, "WorkDaysMarker", $sMarker)
 	$oItem.Save()
 	_VLog("CreateOrUpdate saved: existing=" & _BoolText($bExisting) & " date=" & $sDateISO & " status=" & $sStatus & " subject='" & _DbgValue($sSubject, 160) & "' categories='" & _DbgValue($sCategories, 160) & "' markerLen=" & StringLen($sMarker) & " entryIdShort='" & _EntryIdShort(String($oItem.EntryID)) & "'")
 	Return String($oItem.EntryID)
@@ -1828,16 +1826,14 @@ Func _EnsureOutlookItemFree($oNs, $sEntryID, $sDateISO, $sStatus, $sMarker)
 		$oItem.Categories = _BuildCategories($sStatus, $sMarker)
 		$bChanged = True
 	EndIf
-	Local $sExpectedBody = _BuildOutlookBody($sDateISO, $sMarker)
-	If String($oItem.Body) <> $sExpectedBody Then
-		$oItem.Body = $sExpectedBody
+	If String($oItem.Body) <> $sMarker Then
+		$oItem.Body = $sMarker
 		$bChanged = True
 	EndIf
 	If _SetOutlookReminder($oItem, $sMarker) Then $bChanged = True
 	_SetUserProp($oItem, "WorkDaysManaged", "1")
 	_SetUserProp($oItem, "WorkDaysDate", $sDateISO)
 	_SetUserProp($oItem, "WorkDaysStatus", $sStatus)
-	_SetUserProp($oItem, "WorkDaysMarker", $sMarker)
 	_SetUserProp($oItem, "WorkDaysHash", _RecordHash($sStatus, $sMarker))
 	If $bChanged Then $oItem.Save()
 	Return 1
@@ -2125,154 +2121,9 @@ Func _IsKnownStatus($sStatus)
 	Return False
 EndFunc
 
-Func _BuildOutlookBody($sDateISO, $sMarker)
-	Local $sCleanMarker = StringStripWS(String($sMarker), 2)
-	Local $sStats = ""
-	If _ShouldIncludeTodayQuarterStats($sDateISO) Then $sStats = _BuildCurrentQuarterStatsText()
-
-	If $sStats = "" Then Return $sCleanMarker
-
-	If $sCleanMarker = "" Then Return $sStats
-
-	Return "Marker:" & @CRLF & $sCleanMarker & @CRLF & @CRLF & $sStats
-EndFunc
-
-Func _ShouldIncludeTodayQuarterStats($sDateISO)
-	If _Cfg("Outlook", "IncludeCurrentQuarterStatsInTodayBody", "0") <> "1" Then Return False
-	If $sDateISO <> _TodayISO() Then Return False
-	Return True
-EndFunc
-
-Func _BuildCurrentQuarterStatsText()
-	Local $aStats = _CurrentQuarterStats()
-	If @error Or Not IsArray($aStats) Then Return ""
-
-	Return "WorkDays Quarter Statistics" & @CRLF & _
-		"Quarter: " & $aStats[0] & " " & $aStats[1] & @CRLF & _
-		"Total Days: " & $aStats[2] & @CRLF & _
-		"Estm. On-Site: " & $aStats[3] & @CRLF & _
-		"Work Days: " & $aStats[4] & "/" & $aStats[5] & @CRLF & _
-		"Real On-Site: " & $aStats[6] & @CRLF & _
-		"Ratio: " & $aStats[7] & @CRLF & _
-		"Ratio to Date: " & $aStats[8]
-EndFunc
-
-Func _CurrentQuarterStats()
-	Local $iYear = Number(@YEAR)
-	Local $iMonth = Number(@MON)
-	Local $iQuarter = Int(($iMonth - 1) / 3) + 1
-	Local $iStartMonth = (($iQuarter - 1) * 3) + 1
-	Local $iEndMonth = $iStartMonth + 2
-
-	Local $iTotalDays = 0
-	Local $iWorkDays = 0
-	Local $iWorkDaysToDate = 0
-	Local $iRealOnSite = 0
-	Local $iRealOnSiteToDate = 0
-	Local $iM, $iD
-
-	For $iM = $iStartMonth To $iEndMonth
-		For $iD = 1 To 31
-			If _DateIsValid($iYear & "/" & StringFormat("%02d", $iM) & "/" & StringFormat("%02d", $iD)) = 0 Then ContinueLoop
-			$iTotalDays += 1
-
-			Local $sStatus = _QuarterStatsReadStatus($iYear, $iM, $iD)
-			Local $bToDate = False
-			If $iM < Number(@MON) Then
-				$bToDate = True
-			ElseIf $iM = Number(@MON) And $iD <= Number(@MDAY) Then
-				$bToDate = True
-			EndIf
-
-			If _QuarterStatsIsWorkDay($sStatus) Then
-				$iWorkDays += 1
-				If $bToDate Then $iWorkDaysToDate += 1
-			EndIf
-
-			If _QuarterStatsIsRealOnSite($sStatus) Then
-				$iRealOnSite += 1
-				If $bToDate Then $iRealOnSiteToDate += 1
-			EndIf
-		Next
-	Next
-
-	Local $a[9]
-	$a[0] = "Q" & $iQuarter
-	$a[1] = $iYear
-	$a[2] = $iTotalDays
-	$a[3] = Ceiling(($iWorkDays / 5) * 3)
-	$a[4] = $iWorkDaysToDate
-	$a[5] = $iWorkDays
-	$a[6] = $iRealOnSite
-	$a[7] = _SafeQuarterRatio($iRealOnSite, $iWorkDays)
-	$a[8] = _SafeQuarterRatio($iRealOnSiteToDate, $iWorkDaysToDate)
-	Return $a
-EndFunc
-
-Func _QuarterStatsReadStatus($iYear, $iMonth, $iDay)
-	Local $sValue = RegRead($g_sDB & "\" & $iYear & "\" & StringFormat("%02d", $iMonth), StringFormat("%02d", $iDay))
-	If @error Or $sValue = "" Then Return ""
-	Return StringUpper(StringLeft(String($sValue), 1))
-EndFunc
-
-Func _QuarterStatsIsWorkDay($sStatus)
-	Switch StringUpper(String($sStatus))
-		Case "O", "R", "T", "", "B"
-			Return True
-	EndSwitch
-	Return False
-EndFunc
-
-Func _QuarterStatsIsRealOnSite($sStatus)
-	Switch StringUpper(String($sStatus))
-		Case "O", "T"
-			Return True
-	EndSwitch
-	Return False
-EndFunc
-
-Func _SafeQuarterRatio($iRealOnSite, $iWorkDays)
-	If Number($iWorkDays) <= 0 Then Return "-"
-	If Number($iWorkDays) < 4 Then Return "-"
-	Return Round($iRealOnSite / ($iWorkDays / 5), 2)
-EndFunc
-
-Func _GetOutlookMarker($oItem)
-	If Not IsObj($oItem) Then Return ""
-
-	Local $sBody = String($oItem.Body)
-	Local $sMarkerFromBody = _CleanOutlookMarker($sBody)
-
-	; When the generated statistics block is present, the visible body is authoritative.
-	; This prevents an old WorkDaysMarker user property from reintroducing a marker
-	; after the user has removed it from the Outlook body.
-	If StringInStr($sBody, "WorkDays Quarter Statistics") > 0 Then Return $sMarkerFromBody
-
-	If StringStripWS($sMarkerFromBody, 3) <> "" Then Return $sMarkerFromBody
-
-	Local $sMarkerProp = _GetUserProp($oItem, "WorkDaysMarker")
-	If $sMarkerProp <> "" Then Return $sMarkerProp
-
-	Return ""
-EndFunc
-
 Func _CleanOutlookMarker($sBody)
 	Local $s = String($sBody)
 	$s = StringReplace($s, Chr(0), "")
-	$s = StringReplace($s, @CRLF, @LF)
-	$s = StringReplace($s, @CR, @LF)
-
-	Local $iStats = StringInStr($s, "WorkDays Quarter Statistics")
-	If $iStats > 0 Then
-		$s = StringLeft($s, $iStats - 1)
-	EndIf
-
-	$s = StringStripWS($s, 2)
-	If StringLeft($s, 7) = "Marker:" Then
-		$s = StringTrimLeft($s, 7)
-	EndIf
-
-	$s = StringReplace($s, @LF, @CRLF)
 	Return StringStripWS($s, 2)
 EndFunc
 
@@ -2424,7 +2275,7 @@ Func _VLogConfigSnapshot()
 	_VLog("Paths: registryRoot='" & $g_sDB & "' agentRegistry='" & $g_sAgentDB & "' state='" & $g_sState & "' log='" & $g_sLog & "'")
 	_VLog("Settings snapshot: IntervalMinutes=" & _Cfg("Sync", "IntervalMinutes", "15") & " PastDays=" & _Cfg("Sync", "PastDays", "60") & " FutureDays=" & _Cfg("Sync", "FutureDays", "370") & " OutlookWinsOnConflict=" & _Cfg("Sync", "OutlookWinsOnConflict", "1") & " DeleteInOutlookClearsWorkDays=" & _Cfg("Sync", "DeleteInOutlookClearsWorkDays", "0"))
 	_VLog("Settings snapshot: SyncBlank=" & _Cfg("Sync", "SyncBlank", "0") & " SyncWeekend=" & _Cfg("Sync", "SyncWeekend", "0") & " SyncTaggedBlankOrWeekend=" & _Cfg("Sync", "SyncTaggedBlankOrWeekend", "1") & " RunAtWindowsStartup=" & _Cfg("Sync", "RunAtWindowsStartup", "0"))
-	_VLog("Settings snapshot: SubjectPrefix='" & _Cfg("Outlook", "SubjectPrefix", "WorkDays -") & "' CategoryPrefix='" & _Cfg("Outlook", "CategoryPrefix", "WorkDays -") & "' ManagedOnly=" & _Cfg("Outlook", "ManagedOnly", "0") & " DateOrder=" & _Cfg("Outlook", "DateOrder", "Auto") & " IncludeCurrentQuarterStatsInTodayBody=" & _Cfg("Outlook", "IncludeCurrentQuarterStatsInTodayBody", "0") & " VerboseMode=" & _Cfg("Logging", "VerboseMode", "0") & " LogLevel=" & _Cfg("Advanced", "LogLevel", "Normal"))
+	_VLog("Settings snapshot: SubjectPrefix='" & _Cfg("Outlook", "SubjectPrefix", "WorkDays -") & "' CategoryPrefix='" & _Cfg("Outlook", "CategoryPrefix", "WorkDays -") & "' ManagedOnly=" & _Cfg("Outlook", "ManagedOnly", "0") & " DateOrder=" & _Cfg("Outlook", "DateOrder", "Auto") & " VerboseMode=" & _Cfg("Logging", "VerboseMode", "0") & " LogLevel=" & _Cfg("Advanced", "LogLevel", "Normal"))
 	_VLog("Safety snapshot: CreateBackupBeforeOutlookChanges=" & _Cfg("Safety", "CreateBackupBeforeOutlookChanges", "1") & " BlockMassChanges=" & _Cfg("Safety", "BlockMassChanges", "1") & " MaxWorkDaysChangesPerSync=" & _Cfg("Safety", "MaxWorkDaysChangesPerSync", "20") & " MaxChangePercentPerSync=" & _Cfg("Safety", "MaxChangePercentPerSync", "15") & " MaxClearsPerSync=" & _Cfg("Safety", "MaxClearsPerSync", "0") & " BlockIncompleteOutlookRead=" & _Cfg("Safety", "BlockIncompleteOutlookRead", "1") & " AbortBeforePlanWhenOutlookReadIncomplete=" & _Cfg("Safety", "AbortBeforePlanWhenOutlookReadIncomplete", "1") & " BlockOnOutlookComError=" & _Cfg("Safety", "BlockOnOutlookComError", "1") & " AllowOutlookDeleteClearWorkDays=" & _Cfg("Safety", "AllowOutlookDeleteClearWorkDays", "0") & " RequireVisibleOutlookSession=" & _Cfg("Safety", "RequireVisibleOutlookSession", "1") & " StartupGraceSeconds=" & _Cfg("Safety", "OutlookStartupGraceSeconds", "30") & " IncompleteReadRetries=" & _Cfg("Safety", "IncompleteReadRetries", "3") & " RecoverMissingItemsFromState=" & _Cfg("Safety", "RecoverMissingItemsFromState", "1") & " StartupIncompleteReadIsWaiting=" & _Cfg("Safety", "StartupIncompleteReadIsWaiting", "1"))
 EndFunc
 

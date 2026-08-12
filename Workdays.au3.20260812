@@ -3,7 +3,7 @@
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Icon=xcalendar4.ico
 #AutoIt3Wrapper_Res_Description=Work Day management
-#AutoIt3Wrapper_Res_Fileversion=2.1.5.0
+#AutoIt3Wrapper_Res_Fileversion=2.1.4.19
 #AutoIt3Wrapper_Res_ProductVersion=2.1.0.0
 #AutoIt3Wrapper_Res_ProductName=Work Days
 #AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
@@ -6718,7 +6718,6 @@ Func _OutlookAgent_EnsureDefaults()
 	_OA_EnsureDefault("Outlook", "ReminderSet", "0")
 	_OA_EnsureDefault("Outlook", "ManagedOnly", "0")
 	_OA_EnsureDefault("Outlook", "DateOrder", "Auto")
-	_OA_EnsureDefault("Outlook", "IncludeCurrentQuarterStatsInTodayBody", "0")
 
 	_OA_EnsureDefault("Markers", "ShowMarkerTagInSubject", "1")
 	_OA_EnsureDefault("Markers", "MarkerSubjectSuffix", " [Marker]")
@@ -6920,7 +6919,7 @@ Func _OutlookAgent_Uninstall()
 	Return 1
 EndFunc   ;==>_OutlookAgent_Uninstall
 
-Func _OutlookAgent_SaveSettings($idInterval, $idPast, $idFuture, $idConflictOutlook, $idDeleteOutlookClears, $idSyncBlank, $idSyncWeekend, $idSyncTaggedBlankWeekend, $idStartup, $idSubjectPrefix, $idCategoryPrefix, $idReminderSet, $idManagedOnly, $idIncludeQuarterStatsBody, $idShowMarkerSubject, $idMarkerSuffix, $idSeparateMarkerCategory, $idMarkerCategoryName, $idReminderMarker, $idReminderMinutes, $idCleanupEnabled, $idCleanupPastYears, $idCleanupFutureYears, $idCleanupPrefixOnly, $idPauseAfterCleanup, $idVerboseMode, $idBackupBeforeOutlookChanges, $idBlockMassChanges, $idMaxChanges, $idMaxPercent, $idMaxClears, $idBlockIncompleteRead)
+Func _OutlookAgent_SaveSettings($idInterval, $idPast, $idFuture, $idConflictOutlook, $idDeleteOutlookClears, $idSyncBlank, $idSyncWeekend, $idSyncTaggedBlankWeekend, $idStartup, $idSubjectPrefix, $idCategoryPrefix, $idReminderSet, $idManagedOnly, $idShowMarkerSubject, $idMarkerSuffix, $idSeparateMarkerCategory, $idMarkerCategoryName, $idReminderMarker, $idReminderMinutes, $idCleanupEnabled, $idCleanupPastYears, $idCleanupFutureYears, $idCleanupPrefixOnly, $idPauseAfterCleanup, $idVerboseMode, $idBackupBeforeOutlookChanges, $idBlockMassChanges, $idMaxChanges, $idMaxPercent, $idMaxClears, $idBlockIncompleteRead)
 	Local $iInterval = Number(GUICtrlRead($idInterval))
 	If $iInterval < 1 Then $iInterval = 15
 	Local $iPast = Number(GUICtrlRead($idPast))
@@ -6954,7 +6953,6 @@ Func _OutlookAgent_SaveSettings($idInterval, $idPast, $idFuture, $idConflictOutl
 	_OA_Write("Outlook", "CategoryPrefix", GUICtrlRead($idCategoryPrefix))
 	_OA_Write("Outlook", "ReminderSet", _OA_CheckTo01(GUICtrlRead($idReminderSet)))
 	_OA_Write("Outlook", "ManagedOnly", _OA_CheckTo01(GUICtrlRead($idManagedOnly)))
-	_OA_Write("Outlook", "IncludeCurrentQuarterStatsInTodayBody", _OA_CheckTo01(GUICtrlRead($idIncludeQuarterStatsBody)))
 
 	_OA_Write("Markers", "ShowMarkerTagInSubject", _OA_CheckTo01(GUICtrlRead($idShowMarkerSubject)))
 	_OA_Write("Markers", "MarkerSubjectSuffix", GUICtrlRead($idMarkerSuffix))
@@ -7246,8 +7244,8 @@ Func _OutlookAgent_SettingsWindow()
 	Local $inpCategoryPrefix = GUICtrlCreateInput(_OA_Read("Outlook", "CategoryPrefix", "WorkDays -"), 794, 150, 130, 22)
 	Local $chkReminderSet = GUICtrlCreateCheckbox("Always use Outlook reminder", 504, 184, 210, 20)
 	Local $chkManagedOnly = GUICtrlCreateCheckbox("Only read items created by the agent", 720, 184, 210, 20)
-	Local $chkIncludeQuarterStatsBody = GUICtrlCreateCheckbox("Add current quarter stats to today's Outlook body", 504, 216, 340, 20)
-	GUICtrlSetTip($chkIncludeQuarterStatsBody, "Adds Total Days, Estm. On-Site, Work Days, Real On-Site, Ratio and Ratio to Date to today's WorkDays Outlook item body. If there is no marker, the body will show only the statistics.")
+	GUICtrlCreateLabel("Appointments are created as all-day Free time events.", 504, 216, 410, 18)
+	GUICtrlSetColor(-1, 0x577590)
 
 	; Left column: marker alerts.
 	GUICtrlCreateGroup("Marker alerts", 18, 308, 460, 142)
@@ -7301,7 +7299,6 @@ Func _OutlookAgent_SettingsWindow()
 	_OA_SetCheck($chkStartup, _OA_Read("Sync", "RunAtWindowsStartup", "0"))
 	_OA_SetCheck($chkReminderSet, _OA_Read("Outlook", "ReminderSet", "0"))
 	_OA_SetCheck($chkManagedOnly, _OA_Read("Outlook", "ManagedOnly", "0"))
-	_OA_SetCheck($chkIncludeQuarterStatsBody, _OA_Read("Outlook", "IncludeCurrentQuarterStatsInTodayBody", "0"))
 	_OA_SetCheck($chkShowMarkerSubject, _OA_Read("Markers", "ShowMarkerTagInSubject", "1"))
 	_OA_SetCheck($chkSeparateMarkerCategory, _OA_Read("Markers", "UseSeparateMarkerCategory", "1"))
 	_OA_SetCheck($chkReminderMarker, _OA_Read("Markers", "ReminderWhenMarkerExists", "1"))
@@ -7359,7 +7356,7 @@ Func _OutlookAgent_SettingsWindow()
 				EndIf
 
 			Case $btnClean
-				_OutlookAgent_SaveSettings($inpInterval, $inpPast, $inpFuture, $chkConflictOutlook, $chkDeleteOutlookClears, $chkSyncBlank, $chkSyncWeekend, $chkSyncTaggedBlankWeekend, $chkStartup, $inpSubjectPrefix, $inpCategoryPrefix, $chkReminderSet, $chkManagedOnly, $chkIncludeQuarterStatsBody, $chkShowMarkerSubject, $inpMarkerSuffix, $chkSeparateMarkerCategory, $inpMarkerCategory, $chkReminderMarker, $inpReminderMinutes, $chkCleanupEnabled, $inpCleanupPast, $inpCleanupFuture, $chkCleanupPrefixOnly, $chkPauseAfterCleanup, $chkVerboseMode, $chkBackupBeforeOutlookChanges, $chkBlockMassChanges, $inpMaxChanges, $inpMaxPercent, $inpMaxClears, $chkBlockIncompleteRead)
+				_OutlookAgent_SaveSettings($inpInterval, $inpPast, $inpFuture, $chkConflictOutlook, $chkDeleteOutlookClears, $chkSyncBlank, $chkSyncWeekend, $chkSyncTaggedBlankWeekend, $chkStartup, $inpSubjectPrefix, $inpCategoryPrefix, $chkReminderSet, $chkManagedOnly, $chkShowMarkerSubject, $inpMarkerSuffix, $chkSeparateMarkerCategory, $inpMarkerCategory, $chkReminderMarker, $inpReminderMinutes, $chkCleanupEnabled, $inpCleanupPast, $inpCleanupFuture, $chkCleanupPrefixOnly, $chkPauseAfterCleanup, $chkVerboseMode, $chkBackupBeforeOutlookChanges, $chkBlockMassChanges, $inpMaxChanges, $inpMaxPercent, $inpMaxClears, $chkBlockIncompleteRead)
 				If _OutlookAgent_ConfirmCleanup($hAgent) Then
 					GUICtrlSetData($lblStatus, "Cleaning Outlook WorkDays items... Please wait.")
 					GUISetState(@SW_DISABLE, $hAgent)
@@ -7370,7 +7367,7 @@ Func _OutlookAgent_SettingsWindow()
 				EndIf
 
 			Case $btnSave
-				_OutlookAgent_SaveSettings($inpInterval, $inpPast, $inpFuture, $chkConflictOutlook, $chkDeleteOutlookClears, $chkSyncBlank, $chkSyncWeekend, $chkSyncTaggedBlankWeekend, $chkStartup, $inpSubjectPrefix, $inpCategoryPrefix, $chkReminderSet, $chkManagedOnly, $chkIncludeQuarterStatsBody, $chkShowMarkerSubject, $inpMarkerSuffix, $chkSeparateMarkerCategory, $inpMarkerCategory, $chkReminderMarker, $inpReminderMinutes, $chkCleanupEnabled, $inpCleanupPast, $inpCleanupFuture, $chkCleanupPrefixOnly, $chkPauseAfterCleanup, $chkVerboseMode, $chkBackupBeforeOutlookChanges, $chkBlockMassChanges, $inpMaxChanges, $inpMaxPercent, $inpMaxClears, $chkBlockIncompleteRead)
+				_OutlookAgent_SaveSettings($inpInterval, $inpPast, $inpFuture, $chkConflictOutlook, $chkDeleteOutlookClears, $chkSyncBlank, $chkSyncWeekend, $chkSyncTaggedBlankWeekend, $chkStartup, $inpSubjectPrefix, $inpCategoryPrefix, $chkReminderSet, $chkManagedOnly, $chkShowMarkerSubject, $inpMarkerSuffix, $chkSeparateMarkerCategory, $inpMarkerCategory, $chkReminderMarker, $inpReminderMinutes, $chkCleanupEnabled, $inpCleanupPast, $inpCleanupFuture, $chkCleanupPrefixOnly, $chkPauseAfterCleanup, $chkVerboseMode, $chkBackupBeforeOutlookChanges, $chkBlockMassChanges, $inpMaxChanges, $inpMaxPercent, $inpMaxClears, $chkBlockIncompleteRead)
 				GUIDelete($hAgent)
 				$g_hOutlookAgentSettingsWindow = 0
 				WinActivate("Work Days")
