@@ -3,7 +3,7 @@
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Icon=CalendarSync.ico
 #AutoIt3Wrapper_Res_Description=Work Day Sync Agent
-#AutoIt3Wrapper_Res_Fileversion=1.0.2.1
+#AutoIt3Wrapper_Res_Fileversion=1.0.2.2
 #AutoIt3Wrapper_Res_ProductName=Work Day Sync Agent
 #AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
 #AutoIt3Wrapper_Res_LegalCopyright=Copyright © 2026 Fabricio Zambroni
@@ -2154,7 +2154,8 @@ Func _BuildCurrentQuarterStatsText()
 		"Work Days: " & $aStats[4] & "/" & $aStats[5] & @CRLF & _
 		"Real On-Site: " & $aStats[6] & @CRLF & _
 		"Ratio: " & $aStats[7] & @CRLF & _
-		"Ratio to Date: " & $aStats[8]
+		"Ratio to Date: " & $aStats[8] & @CRLF & _
+		"Remaining: " & $aStats[9]
 EndFunc
 
 Func _CurrentQuarterStats()
@@ -2196,16 +2197,21 @@ Func _CurrentQuarterStats()
 		Next
 	Next
 
-	Local $a[9]
+	Local $iEstmOnSite = Ceiling(($iWorkDays / 5) * 3)
+	Local $iRemaining = $iEstmOnSite - $iRealOnSite
+	If $iRemaining < 0 Then $iRemaining = 0
+
+	Local $a[10]
 	$a[0] = "Q" & $iQuarter
 	$a[1] = $iYear
 	$a[2] = $iTotalDays
-	$a[3] = Ceiling(($iWorkDays / 5) * 3)
+	$a[3] = $iEstmOnSite
 	$a[4] = $iWorkDaysToDate
 	$a[5] = $iWorkDays
 	$a[6] = $iRealOnSite
 	$a[7] = _SafeQuarterRatio($iRealOnSite, $iWorkDays)
 	$a[8] = _SafeQuarterRatio($iRealOnSiteToDate, $iWorkDaysToDate)
+	$a[9] = $iRemaining
 	Return $a
 EndFunc
 

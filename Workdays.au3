@@ -3,7 +3,7 @@
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Icon=xcalendar4.ico
 #AutoIt3Wrapper_Res_Description=Work Day management
-#AutoIt3Wrapper_Res_Fileversion=2.1.5.0
+#AutoIt3Wrapper_Res_Fileversion=2.1.5.1
 #AutoIt3Wrapper_Res_ProductVersion=2.1.0.0
 #AutoIt3Wrapper_Res_ProductName=Work Days
 #AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
@@ -7247,7 +7247,7 @@ Func _OutlookAgent_SettingsWindow()
 	Local $chkReminderSet = GUICtrlCreateCheckbox("Always use Outlook reminder", 504, 184, 210, 20)
 	Local $chkManagedOnly = GUICtrlCreateCheckbox("Only read items created by the agent", 720, 184, 210, 20)
 	Local $chkIncludeQuarterStatsBody = GUICtrlCreateCheckbox("Add current quarter stats to today's Outlook body", 504, 216, 340, 20)
-	GUICtrlSetTip($chkIncludeQuarterStatsBody, "Adds Total Days, Estm. On-Site, Work Days, Real On-Site, Ratio and Ratio to Date to today's WorkDays Outlook item body. If there is no marker, the body will show only the statistics.")
+	GUICtrlSetTip($chkIncludeQuarterStatsBody, "Adds Total Days, Estm. On-Site, Work Days, Real On-Site, Ratio, Ratio to Date and Remaining to today's WorkDays Outlook item body. If there is no marker, the body will show only the statistics.")
 
 	; Left column: marker alerts.
 	GUICtrlCreateGroup("Marker alerts", 18, 308, 460, 142)
