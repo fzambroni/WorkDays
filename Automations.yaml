@@ -1,0 +1,2350 @@
+- id: '1780598141374'
+  alias: NSPanel Office
+  description: ''
+  use_blueprint:
+    path: edwardtfn/nspanel_easy_blueprint.yaml
+    input:
+      nspanel_name: 0b5b54fa7c43ce42355443fc6a9570c5
+      timezone: America/New_York (EST5EDT,M3.2.0,M11.1.0)
+      compact_unit_display: true
+      temperature_unit: °F
+      outdoortemp: sensor.zb_th_sensor_square_01_backyard_porch_temperature
+      indoortemp: sensor.zb_th_sensor_round_03_office_temperature
+      weather_entity: weather.nws_33_06175423861175_80_11849880218507_kmks
+      home_indoor_temp_icon_color:
+      - 0
+      - 0
+      - 0
+      home_outdoor_temp_label_color:
+      - 0
+      - 8
+      - 245
+      home_indoor_temp_icon: mdi:home-thermometer-outline
+      home_indoor_temp_label_color:
+      - 55
+      - 0
+      - 255
+      home_value01: lock.aqara_smart_lock_u400
+      home_value01_label_color:
+      - 255
+      - 51
+      - 0
+      home_value01_icon: mdi:door-closed-lock
+      utilities_page01_home_value1: sensor.berkeley_electric_cooperative_smarthub_energy_monthly_usage_6622863001_house_berkeley_electric_cooperative_smarthub_energy_monthly_usage_6622863001_house
+      utilities_enabled: true
+      home_button08_icon_color:
+      - 0
+      - 0
+      - 0
+      home_value01_icon_color:
+      - 0
+      - 0
+      - 0
+      time_label_color:
+      - 16
+      - 126
+      - 2
+      date_label_color:
+      - 255
+      - 0
+      - 0
+      climate: climate.second_floor_thermostat_t6_pro_thermostat
+      climate_value01: climate.bedroom_bedroom_thermostat_t6_pro_thermostat
+      climate_value01_icon: mdi:bed
+      climate_button08_icon: mdi:hvac
+      utilities_page01_home_color:
+      - 255
+      - 149
+      - 0
+      utilities_page01_grid_color:
+      - 0
+      - 179
+      - 255
+      utilities_page01_main_line_reference: sensor.berkeley_electric_cooperative_smarthub_energy_monthly_usage_6622863001_house_berkeley_electric_cooperative_smarthub_energy_monthly_usage_6622863001_house
+      home_value02: cover.garage_gate
+      home_value02_label_color:
+      - 0
+      - 0
+      - 0
+      home_value02_icon: mdi:garage-open
+      home_value02_icon_color:
+      - 94
+      - 54
+      - 242
+      chip01: cover.garage_gate
+      chip01_icon: mdi:garage-open
+      chip01_icon_color:
+      - 250
+      - 0
+      - 0
+      chip02: lock.aqara_smart_lock_u400
+      chip02_icon: phu:panel-door-open
+      chip02_icon_color:
+      - 255
+      - 162
+      - 0
+      date_format: '%A, %-d/%-m'
+      time_format: '%I:%M %p'
+      chip03: alarm_control_panel.carnes_crossroads
+      chip03_icon_color:
+      - 240
+      - 100
+      - 40
+      home_custom_button01: alarm_control_panel.carnes_crossroads
+      home_custom_button01_name: Alarm
+      left_button_entity: switch.office_sonoff_1000f9f3d6
+      left_button_name: Office
+      left_button_state_entity: switch.office_sonoff_1000f9f3d6
+      left_button_color:
+      - 0
+      - 0
+      - 0
+      right_button_entity: lock.aqara_smart_lock_u400
+      right_button_name: Front Lock
+      right_button_state_entity: lock.aqara_smart_lock_u400
+      right_button_color:
+      - 255
+      - 0
+      - 13
+      home_custom_button02: media_player.hallway_hallway
+      home_custom_button02_icon: mdi:motion-play-outline
+      home_custom_button02_name: Media
+      climate_value02: climate.living_room_living_room_thermostat_t6_pro_thermostat
+      climate_value02_icon: mdi:sofa-outline
+      climate_value03: climate.second_floor_thermostat_t6_pro_thermostat
+      climate_value03_icon: mdi:television
+      climate_page_button_font_size: '10'
+      utilities_page01_home_value2: sensor.berkeley_electric_projected_monthly_bill
+      utilities_page01_grid_value1: sensor.berkeley_electric_cooperative_smarthub_energy_monthly_usage_6622863001_house_berkeley_electric_cooperative_smarthub_energy_monthly_usage_6622863001_house
+- id: '1780622631330'
+  alias: Garage External - Night Schedule
+  description: Liga o switch externo da garagem 1 hora antes do pôr do sol e desliga
+    2 horas antes do nascer do sol. Se for ligado fora desse período, desliga após
+    2 minutos.
+  triggers:
+  - event: sunset
+    offset: -01:00:00
+    id: turn_on
+    trigger: sun
+  - event: sunrise
+    offset: -02:00:00
+    id: turn_off
+    trigger: sun
+  - entity_id: switch.nspanel_garage_relay_2
+    to: 'on'
+    id: accidental_on
+    trigger: state
+  conditions: []
+  actions:
+  - choose:
+    - conditions:
+      - condition: trigger
+        id: turn_on
+      sequence:
+      - target:
+          entity_id: switch.nspanel_garage_relay_2
+        action: switch.turn_on
+    - conditions:
+      - condition: trigger
+        id: turn_off
+      sequence:
+      - target:
+          entity_id: switch.nspanel_garage_relay_2
+        action: switch.turn_off
+    - conditions:
+      - condition: trigger
+        id: accidental_on
+      - condition: sun
+        after: sunrise
+        after_offset: -02:00:00
+      - condition: sun
+        before: sunset
+        before_offset: -01:00:00
+      sequence:
+      - delay:
+          hours: 0
+          minutes: 1
+          seconds: 0
+          milliseconds: 0
+      - target:
+          entity_id: switch.nspanel_garage_relay_2
+        action: switch.turn_off
+  mode: restart
+- id: hvac_coordinator_sync_active_thermostat_mode
+  alias: HVAC Coordinator - Sync Active Thermostat Mode
+  mode: restart
+  trigger:
+  - platform: state
+    entity_id:
+    - climate.living_room_living_room_thermostat_t6_pro_thermostat
+    - climate.bedroom_bedroom_thermostat_t6_pro_thermostat
+    - climate.second_floor_thermostat_t6_pro_thermostat
+  condition:
+  - condition: state
+    entity_id: input_boolean.hvac_mode_sync_enabled
+    state: 'on'
+  - condition: template
+    value_template: '{{ trigger.to_state.state in [''heat'', ''cool''] }}
+
+      '
+  action:
+  - variables:
+      source_entity: '{{ trigger.entity_id }}'
+      new_mode: '{{ trigger.to_state.state }}'
+      thermostats:
+      - climate.living_room_living_room_thermostat_t6_pro_thermostat
+      - climate.bedroom_bedroom_thermostat_t6_pro_thermostat
+      - climate.second_floor_thermostat_t6_pro_thermostat
+  - repeat:
+      for_each: '{{ thermostats }}'
+      sequence:
+      - condition: template
+        value_template: "{{ repeat.item != source_entity\n   and states(repeat.item)
+          not in ['off', 'unknown', 'unavailable', new_mode] }}\n"
+      - service: climate.set_hvac_mode
+        target:
+          entity_id: '{{ repeat.item }}'
+        data:
+          hvac_mode: '{{ new_mode }}'
+- id: hvac_coordinator_apply_house_mode_from_dashboard
+  alias: HVAC Coordinator - Apply House Mode From Dashboard
+  mode: restart
+  trigger:
+  - platform: state
+    entity_id: input_select.hvac_house_mode
+  condition:
+  - condition: state
+    entity_id: input_boolean.hvac_mode_sync_enabled
+    state: 'on'
+  - condition: template
+    value_template: '{{ states(''input_select.hvac_house_mode'') in [''Heat'', ''Cool'',
+      ''Off''] }}
+
+      '
+  action:
+  - variables:
+      selected_mode: '{{ states(''input_select.hvac_house_mode'') }}'
+      selected_hvac_mode: "{{ 'heat' if selected_mode == 'Heat'\n   else 'cool' if
+        selected_mode == 'Cool'\n   else 'off' }}\n"
+      thermostats:
+      - climate.living_room_living_room_thermostat_t6_pro_thermostat
+      - climate.bedroom_bedroom_thermostat_t6_pro_thermostat
+      - climate.second_floor_thermostat_t6_pro_thermostat
+  - repeat:
+      for_each: '{{ thermostats }}'
+      sequence:
+      - choose:
+        - conditions:
+          - condition: template
+            value_template: '{{ selected_mode == ''Off'' }}'
+          sequence:
+          - service: climate.set_hvac_mode
+            target:
+              entity_id: '{{ repeat.item }}'
+            data:
+              hvac_mode: 'off'
+        - conditions:
+          - condition: template
+            value_template: "{{ selected_mode in ['Heat', 'Cool']\n   and states(repeat.item)
+              not in ['unknown', 'unavailable']\n   and (\n     is_state('input_boolean.hvac_preserve_individual_off_zones',
+              'off')\n     or states(repeat.item) != 'off'\n   ) }}\n"
+          sequence:
+          - service: climate.set_hvac_mode
+            target:
+              entity_id: '{{ repeat.item }}'
+            data:
+              hvac_mode: '{{ selected_hvac_mode }}'
+- id: hvac_coordinator_startup_mode_reconciliation
+  alias: HVAC Coordinator - Startup Mode Reconciliation
+  mode: single
+  trigger:
+  - platform: homeassistant
+    event: start
+  - platform: state
+    entity_id: input_boolean.hvac_mode_sync_enabled
+    to: 'on'
+  condition:
+  - condition: state
+    entity_id: input_boolean.hvac_mode_sync_enabled
+    state: 'on'
+  - condition: template
+    value_template: '{{ states(''input_select.hvac_startup_sync_policy'') != ''Do
+      nothing'' }}
+
+      '
+  action:
+  - delay:
+      minutes: 1
+  - variables:
+      policy: '{{ states(''input_select.hvac_startup_sync_policy'') }}'
+      thermostats:
+      - climate.living_room_living_room_thermostat_t6_pro_thermostat
+      - climate.bedroom_bedroom_thermostat_t6_pro_thermostat
+      - climate.second_floor_thermostat_t6_pro_thermostat
+      target_mode: "{% if policy == 'Force Heat' %}\n  heat\n{% elif policy == 'Force
+        Cool' %}\n  cool\n{% else %}\n  {% set modes = [\n    states('climate.living_room_living_room_thermostat_t6_pro_thermostat'),\n
+        \   states('climate.bedroom_bedroom_thermostat_t6_pro_thermostat'),\n    states('climate.second_floor_thermostat_t6_pro_thermostat')\n
+        \ ] %}\n  {% set active = modes | reject('in', ['off', 'unknown', 'unavailable'])
+        | list %}\n  {{ active[0] if active | count > 0 else 'none' }}\n{% endif %}\n"
+  - condition: template
+    value_template: '{{ target_mode in [''heat'', ''cool''] }}'
+  - repeat:
+      for_each: '{{ thermostats }}'
+      sequence:
+      - condition: template
+        value_template: '{{ states(repeat.item) not in [''off'', ''unknown'', ''unavailable'',
+          target_mode] }}
+
+          '
+      - service: climate.set_hvac_mode
+        target:
+          entity_id: '{{ repeat.item }}'
+        data:
+          hvac_mode: '{{ target_mode }}'
+- id: hvac_coordinator_smart_away
+  alias: HVAC Coordinator - Smart Away
+  mode: single
+  max_exceeded: silent
+  trigger:
+  - platform: state
+    entity_id:
+    - person.fabricio_zambroni
+    - person.lucas_zambroni
+    - input_select.hvac_test_fabricio_presence
+    - input_select.hvac_test_lucas_presence
+  - platform: event
+    event_type: timer.finished
+    event_data:
+      entity_id: timer.hvac_arrival_comfort
+  condition:
+  - condition: state
+    entity_id: input_boolean.hvac_smart_away_enabled
+    state: 'on'
+  - condition: state
+    entity_id: input_boolean.hvac_guest_mode
+    state: 'off'
+  - condition: state
+    entity_id: input_boolean.hvac_smart_away_active
+    state: 'off'
+  - condition: state
+    entity_id: timer.hvac_arrival_comfort
+    state: idle
+  - condition: template
+    value_template: '{{ is_state(''sensor.hvac_effective_occupancy'', ''Away'') }}'
+  action:
+  - delay:
+      minutes: '{{ states(''input_number.hvac_away_delay_minutes'') | int(20) }}'
+  - condition: state
+    entity_id: input_boolean.hvac_smart_away_enabled
+    state: 'on'
+  - condition: state
+    entity_id: input_boolean.hvac_guest_mode
+    state: 'off'
+  - condition: state
+    entity_id: input_boolean.hvac_smart_away_active
+    state: 'off'
+  - condition: state
+    entity_id: timer.hvac_arrival_comfort
+    state: idle
+  - condition: template
+    value_template: '{{ is_state(''sensor.hvac_effective_occupancy'', ''Away'') }}'
+  - service: input_select.select_option
+    target:
+      entity_id: input_select.hvac_restore_living_room_mode
+    data:
+      option: '{% set mode = states(''climate.living_room_living_room_thermostat_t6_pro_thermostat'')
+        %} {{ mode if mode in [''heat'', ''cool'', ''off''] else ''unknown'' }}
+
+        '
+  - service: input_select.select_option
+    target:
+      entity_id: input_select.hvac_restore_bedroom_mode
+    data:
+      option: '{% set mode = states(''climate.bedroom_bedroom_thermostat_t6_pro_thermostat'')
+        %} {{ mode if mode in [''heat'', ''cool'', ''off''] else ''unknown'' }}
+
+        '
+  - service: input_select.select_option
+    target:
+      entity_id: input_select.hvac_restore_second_floor_mode
+    data:
+      option: '{% set mode = states(''climate.second_floor_thermostat_t6_pro_thermostat'')
+        %} {{ mode if mode in [''heat'', ''cool'', ''off''] else ''unknown'' }}
+
+        '
+  - service: input_number.set_value
+    target:
+      entity_id: input_number.hvac_restore_living_room_temperature
+    data:
+      value: "{{ state_attr('climate.living_room_living_room_thermostat_t6_pro_thermostat',
+        'temperature')\n   | float(states('input_number.hvac_restore_living_room_temperature')
+        | float(75)) }}\n"
+  - service: input_number.set_value
+    target:
+      entity_id: input_number.hvac_restore_bedroom_temperature
+    data:
+      value: "{{ state_attr('climate.bedroom_bedroom_thermostat_t6_pro_thermostat',
+        'temperature')\n   | float(states('input_number.hvac_restore_bedroom_temperature')
+        | float(75)) }}\n"
+  - service: input_number.set_value
+    target:
+      entity_id: input_number.hvac_restore_second_floor_temperature
+    data:
+      value: "{{ state_attr('climate.second_floor_thermostat_t6_pro_thermostat', 'temperature')\n
+        \  | float(states('input_number.hvac_restore_second_floor_temperature') |
+        float(75)) }}\n"
+  - service: input_boolean.turn_on
+    target:
+      entity_id: input_boolean.hvac_smart_away_active
+  - repeat:
+      for_each:
+      - climate.living_room_living_room_thermostat_t6_pro_thermostat
+      - climate.bedroom_bedroom_thermostat_t6_pro_thermostat
+      - climate.second_floor_thermostat_t6_pro_thermostat
+      sequence:
+      - choose:
+        - conditions:
+          - condition: template
+            value_template: '{{ states(repeat.item) == ''cool'' }}'
+          sequence:
+          - service: climate.set_temperature
+            target:
+              entity_id: '{{ repeat.item }}'
+            data:
+              temperature: '{{ states(''input_number.hvac_away_cool_temperature'')
+                | float(78) }}'
+        - conditions:
+          - condition: template
+            value_template: '{{ states(repeat.item) == ''heat'' }}'
+          sequence:
+          - service: climate.set_temperature
+            target:
+              entity_id: '{{ repeat.item }}'
+            data:
+              temperature: '{{ states(''input_number.hvac_away_heat_temperature'')
+                | float(62) }}'
+- id: hvac_coordinator_restore_on_return
+  alias: HVAC Coordinator - Restore On Return
+  mode: restart
+  trigger:
+  - platform: state
+    entity_id:
+    - person.fabricio_zambroni
+    - person.lucas_zambroni
+    - input_select.hvac_test_fabricio_presence
+    - input_select.hvac_test_lucas_presence
+  condition:
+  - condition: state
+    entity_id: input_boolean.hvac_smart_away_active
+    state: 'on'
+  - condition: state
+    entity_id: input_boolean.hvac_restore_on_return
+    state: 'on'
+  - condition: template
+    value_template: "{% set test_trigger = trigger is defined and trigger.entity_id
+      in [\n  'input_select.hvac_test_fabricio_presence',\n  'input_select.hvac_test_lucas_presence'\n]
+      %} {% if test_trigger and not is_state('input_boolean.hvac_presence_test_mode_enabled',
+      'on') %}\n  false\n{% elif is_state('input_boolean.hvac_presence_test_mode_enabled',
+      'on') %}\n  {{ is_state('input_select.hvac_test_fabricio_presence', 'Home')\n
+      \    or is_state('input_select.hvac_test_lucas_presence', 'Home') }}\n{% else
+      %}\n  {{ is_state('person.fabricio_zambroni', 'home')\n     or is_state('person.lucas_zambroni',
+      'home') }}\n{% endif %}\n"
+  action:
+  - delay:
+      minutes: '{{ states(''input_number.hvac_return_restore_delay_minutes'') | int(2)
+        }}'
+  - condition: template
+    value_template: "{% set test_trigger = trigger is defined and trigger.entity_id
+      in [\n  'input_select.hvac_test_fabricio_presence',\n  'input_select.hvac_test_lucas_presence'\n]
+      %} {% if test_trigger and not is_state('input_boolean.hvac_presence_test_mode_enabled',
+      'on') %}\n  false\n{% elif is_state('input_boolean.hvac_presence_test_mode_enabled',
+      'on') %}\n  {{ is_state('input_select.hvac_test_fabricio_presence', 'Home')\n
+      \    or is_state('input_select.hvac_test_lucas_presence', 'Home') }}\n{% else
+      %}\n  {{ is_state('person.fabricio_zambroni', 'home')\n     or is_state('person.lucas_zambroni',
+      'home') }}\n{% endif %}\n"
+  - choose:
+    - conditions:
+      - condition: template
+        value_template: '{{ states(''input_select.hvac_restore_living_room_mode'')
+          in [''heat'', ''cool''] }}'
+      sequence:
+      - service: climate.set_hvac_mode
+        target:
+          entity_id: climate.living_room_living_room_thermostat_t6_pro_thermostat
+        data:
+          hvac_mode: '{{ states(''input_select.hvac_restore_living_room_mode'') }}'
+      - delay:
+          seconds: 8
+      - service: climate.set_temperature
+        target:
+          entity_id: climate.living_room_living_room_thermostat_t6_pro_thermostat
+        data:
+          temperature: '{{ states(''input_number.hvac_restore_living_room_temperature'')
+            | float(75) }}'
+      - delay:
+          seconds: 5
+      - service: climate.set_temperature
+        target:
+          entity_id: climate.living_room_living_room_thermostat_t6_pro_thermostat
+        data:
+          temperature: '{{ states(''input_number.hvac_restore_living_room_temperature'')
+            | float(75) }}'
+    - conditions:
+      - condition: template
+        value_template: '{{ states(''input_select.hvac_restore_living_room_mode'')
+          == ''off'' }}'
+      sequence:
+      - service: climate.set_hvac_mode
+        target:
+          entity_id: climate.living_room_living_room_thermostat_t6_pro_thermostat
+        data:
+          hvac_mode: 'off'
+  - choose:
+    - conditions:
+      - condition: template
+        value_template: '{{ states(''input_select.hvac_restore_bedroom_mode'') in
+          [''heat'', ''cool''] }}'
+      sequence:
+      - service: climate.set_hvac_mode
+        target:
+          entity_id: climate.bedroom_bedroom_thermostat_t6_pro_thermostat
+        data:
+          hvac_mode: '{{ states(''input_select.hvac_restore_bedroom_mode'') }}'
+      - delay:
+          seconds: 8
+      - service: climate.set_temperature
+        target:
+          entity_id: climate.bedroom_bedroom_thermostat_t6_pro_thermostat
+        data:
+          temperature: '{{ states(''input_number.hvac_restore_bedroom_temperature'')
+            | float(75) }}'
+      - delay:
+          seconds: 5
+      - service: climate.set_temperature
+        target:
+          entity_id: climate.bedroom_bedroom_thermostat_t6_pro_thermostat
+        data:
+          temperature: '{{ states(''input_number.hvac_restore_bedroom_temperature'')
+            | float(75) }}'
+    - conditions:
+      - condition: template
+        value_template: '{{ states(''input_select.hvac_restore_bedroom_mode'') ==
+          ''off'' }}'
+      sequence:
+      - service: climate.set_hvac_mode
+        target:
+          entity_id: climate.bedroom_bedroom_thermostat_t6_pro_thermostat
+        data:
+          hvac_mode: 'off'
+  - choose:
+    - conditions:
+      - condition: template
+        value_template: '{{ states(''input_select.hvac_restore_second_floor_mode'')
+          in [''heat'', ''cool''] }}'
+      sequence:
+      - service: climate.set_hvac_mode
+        target:
+          entity_id: climate.second_floor_thermostat_t6_pro_thermostat
+        data:
+          hvac_mode: '{{ states(''input_select.hvac_restore_second_floor_mode'') }}'
+      - delay:
+          seconds: 8
+      - service: climate.set_temperature
+        target:
+          entity_id: climate.second_floor_thermostat_t6_pro_thermostat
+        data:
+          temperature: '{{ states(''input_number.hvac_restore_second_floor_temperature'')
+            | float(75) }}'
+      - delay:
+          seconds: 5
+      - service: climate.set_temperature
+        target:
+          entity_id: climate.second_floor_thermostat_t6_pro_thermostat
+        data:
+          temperature: '{{ states(''input_number.hvac_restore_second_floor_temperature'')
+            | float(75) }}'
+    - conditions:
+      - condition: template
+        value_template: '{{ states(''input_select.hvac_restore_second_floor_mode'')
+          == ''off'' }}'
+      sequence:
+      - service: climate.set_hvac_mode
+        target:
+          entity_id: climate.second_floor_thermostat_t6_pro_thermostat
+        data:
+          hvac_mode: 'off'
+  - service: input_boolean.turn_off
+    target:
+      entity_id: input_boolean.hvac_smart_away_active
+- id: hvac_coordinator_guest_mode_cancels_smart_away
+  alias: HVAC Coordinator - Guest Mode Cancels Smart Away
+  mode: single
+  trigger:
+  - platform: state
+    entity_id: input_boolean.hvac_guest_mode
+    to: 'on'
+  condition:
+  - condition: state
+    entity_id: input_boolean.hvac_smart_away_active
+    state: 'on'
+  action:
+  - choose:
+    - conditions:
+      - condition: template
+        value_template: '{{ states(''input_select.hvac_restore_living_room_mode'')
+          in [''heat'', ''cool''] }}'
+      sequence:
+      - service: climate.set_hvac_mode
+        target:
+          entity_id: climate.living_room_living_room_thermostat_t6_pro_thermostat
+        data:
+          hvac_mode: '{{ states(''input_select.hvac_restore_living_room_mode'') }}'
+      - delay:
+          seconds: 8
+      - service: climate.set_temperature
+        target:
+          entity_id: climate.living_room_living_room_thermostat_t6_pro_thermostat
+        data:
+          temperature: '{{ states(''input_number.hvac_restore_living_room_temperature'')
+            | float(75) }}'
+      - delay:
+          seconds: 5
+      - service: climate.set_temperature
+        target:
+          entity_id: climate.living_room_living_room_thermostat_t6_pro_thermostat
+        data:
+          temperature: '{{ states(''input_number.hvac_restore_living_room_temperature'')
+            | float(75) }}'
+    - conditions:
+      - condition: template
+        value_template: '{{ states(''input_select.hvac_restore_living_room_mode'')
+          == ''off'' }}'
+      sequence:
+      - service: climate.set_hvac_mode
+        target:
+          entity_id: climate.living_room_living_room_thermostat_t6_pro_thermostat
+        data:
+          hvac_mode: 'off'
+  - choose:
+    - conditions:
+      - condition: template
+        value_template: '{{ states(''input_select.hvac_restore_bedroom_mode'') in
+          [''heat'', ''cool''] }}'
+      sequence:
+      - service: climate.set_hvac_mode
+        target:
+          entity_id: climate.bedroom_bedroom_thermostat_t6_pro_thermostat
+        data:
+          hvac_mode: '{{ states(''input_select.hvac_restore_bedroom_mode'') }}'
+      - delay:
+          seconds: 8
+      - service: climate.set_temperature
+        target:
+          entity_id: climate.bedroom_bedroom_thermostat_t6_pro_thermostat
+        data:
+          temperature: '{{ states(''input_number.hvac_restore_bedroom_temperature'')
+            | float(75) }}'
+      - delay:
+          seconds: 5
+      - service: climate.set_temperature
+        target:
+          entity_id: climate.bedroom_bedroom_thermostat_t6_pro_thermostat
+        data:
+          temperature: '{{ states(''input_number.hvac_restore_bedroom_temperature'')
+            | float(75) }}'
+    - conditions:
+      - condition: template
+        value_template: '{{ states(''input_select.hvac_restore_bedroom_mode'') ==
+          ''off'' }}'
+      sequence:
+      - service: climate.set_hvac_mode
+        target:
+          entity_id: climate.bedroom_bedroom_thermostat_t6_pro_thermostat
+        data:
+          hvac_mode: 'off'
+  - choose:
+    - conditions:
+      - condition: template
+        value_template: '{{ states(''input_select.hvac_restore_second_floor_mode'')
+          in [''heat'', ''cool''] }}'
+      sequence:
+      - service: climate.set_hvac_mode
+        target:
+          entity_id: climate.second_floor_thermostat_t6_pro_thermostat
+        data:
+          hvac_mode: '{{ states(''input_select.hvac_restore_second_floor_mode'') }}'
+      - delay:
+          seconds: 8
+      - service: climate.set_temperature
+        target:
+          entity_id: climate.second_floor_thermostat_t6_pro_thermostat
+        data:
+          temperature: '{{ states(''input_number.hvac_restore_second_floor_temperature'')
+            | float(75) }}'
+      - delay:
+          seconds: 5
+      - service: climate.set_temperature
+        target:
+          entity_id: climate.second_floor_thermostat_t6_pro_thermostat
+        data:
+          temperature: '{{ states(''input_number.hvac_restore_second_floor_temperature'')
+            | float(75) }}'
+    - conditions:
+      - condition: template
+        value_template: '{{ states(''input_select.hvac_restore_second_floor_mode'')
+          == ''off'' }}'
+      sequence:
+      - service: climate.set_hvac_mode
+        target:
+          entity_id: climate.second_floor_thermostat_t6_pro_thermostat
+        data:
+          hvac_mode: 'off'
+  - service: input_boolean.turn_off
+    target:
+      entity_id: input_boolean.hvac_smart_away_active
+- id: hvac_coordinator_presence_test_buttons
+  alias: HVAC Coordinator - Presence Test Buttons
+  mode: restart
+  trigger:
+  - platform: state
+    entity_id: input_button.hvac_test_start_new_away_cycle
+    id: start_new_away_cycle
+  - platform: state
+    entity_id: input_button.hvac_test_simulate_both_away
+    id: both_away
+  - platform: state
+    entity_id: input_button.hvac_test_simulate_both_home
+    id: both_home
+  - platform: state
+    entity_id: input_button.hvac_test_simulate_fabricio_home
+    id: fabricio_home
+  - platform: state
+    entity_id: input_button.hvac_test_simulate_lucas_home
+    id: lucas_home
+  - platform: state
+    entity_id: input_button.hvac_test_disable_presence_simulation
+    id: disable_simulation
+  action:
+  - choose:
+    - conditions:
+      - condition: trigger
+        id: start_new_away_cycle
+      sequence:
+      - service: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.hvac_presence_test_mode_enabled
+      - service: input_select.select_option
+        target:
+          entity_id:
+          - input_select.hvac_test_fabricio_presence
+          - input_select.hvac_test_lucas_presence
+        data:
+          option: Home
+      - service: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.hvac_smart_away_active
+      - delay:
+          seconds: 2
+      - service: input_select.select_option
+        target:
+          entity_id:
+          - input_select.hvac_test_fabricio_presence
+          - input_select.hvac_test_lucas_presence
+        data:
+          option: Away
+    - conditions:
+      - condition: trigger
+        id: both_away
+      sequence:
+      - service: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.hvac_presence_test_mode_enabled
+      - service: input_select.select_option
+        target:
+          entity_id:
+          - input_select.hvac_test_fabricio_presence
+          - input_select.hvac_test_lucas_presence
+        data:
+          option: Away
+    - conditions:
+      - condition: trigger
+        id: both_home
+      sequence:
+      - service: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.hvac_presence_test_mode_enabled
+      - service: input_select.select_option
+        target:
+          entity_id:
+          - input_select.hvac_test_fabricio_presence
+          - input_select.hvac_test_lucas_presence
+        data:
+          option: Home
+    - conditions:
+      - condition: trigger
+        id: fabricio_home
+      sequence:
+      - service: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.hvac_presence_test_mode_enabled
+      - service: input_select.select_option
+        target:
+          entity_id: input_select.hvac_test_fabricio_presence
+        data:
+          option: Home
+      - service: input_select.select_option
+        target:
+          entity_id: input_select.hvac_test_lucas_presence
+        data:
+          option: Away
+    - conditions:
+      - condition: trigger
+        id: lucas_home
+      sequence:
+      - service: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.hvac_presence_test_mode_enabled
+      - service: input_select.select_option
+        target:
+          entity_id: input_select.hvac_test_fabricio_presence
+        data:
+          option: Away
+      - service: input_select.select_option
+        target:
+          entity_id: input_select.hvac_test_lucas_presence
+        data:
+          option: Home
+    - conditions:
+      - condition: trigger
+        id: disable_simulation
+      sequence:
+      - service: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.hvac_presence_test_mode_enabled
+- id: hvac_coordinator_mode_mismatch_notification
+  alias: HVAC Coordinator - Mode Mismatch Notification
+  mode: single
+  trigger:
+  - platform: state
+    entity_id: binary_sensor.hvac_mode_mismatch
+    to: 'on'
+    for:
+      minutes: 2
+  condition:
+  - condition: state
+    entity_id: input_boolean.hvac_notifications_enabled
+    state: 'on'
+  action:
+  - service: persistent_notification.create
+    data:
+      notification_id: hvac_mode_mismatch
+      title: HVAC Mode Mismatch
+      message: 'Active thermostats are using conflicting HVAC modes. The coordinator
+        tried to keep them synchronized, but one thermostat may be unavailable or
+        may have rejected the requested mode.
+
+        '
+- id: hvac_coordinator_clear_mode_mismatch_notification
+  alias: HVAC Coordinator - Clear Mode Mismatch Notification
+  mode: single
+  trigger:
+  - platform: state
+    entity_id: binary_sensor.hvac_mode_mismatch
+    to: 'off'
+  action:
+  - service: persistent_notification.dismiss
+    data:
+      notification_id: hvac_mode_mismatch
+- id: '1781813089708'
+  alias: ZB One Button 01 Toggle Office Light
+  description: ''
+  triggers:
+  - trigger: event.received
+    target:
+      entity_id: event.zb_one_button_01_action
+    options:
+      event_type:
+      - single
+      - double
+      - long
+  conditions: []
+  actions:
+  - action: switch.toggle
+    metadata: {}
+    data: {}
+    target:
+      entity_id: switch.office_sonoff_1000f9f3d6
+  mode: single
+- id: '1782438241365'
+  alias: Restart Matter Server When Unavailable
+  description: ''
+  triggers:
+  - entity_id:
+    - lock.aqara_smart_lock_u400
+    to:
+    - unavailable
+    for:
+      hours: 0
+      minutes: 3
+      seconds: 0
+    trigger: state
+  actions:
+  - data:
+      addon: core_matter_server
+    action: hassio.addon_restart
+  - delay: 00:01:30
+  mode: single
+- id: rainbird_controller_offline_watch
+  alias: Rain Bird - Controller Offline Watch
+  description: Creates a persistent Home Assistant notification if the Rain Bird controller
+    stays offline longer than the dashboard-configured delay.
+  triggers:
+  - trigger: state
+    entity_id: binary_sensor.carnes_crossroads_connected
+    to: 'off'
+    for:
+      minutes: '{{ states(''input_number.rainbird_offline_alert_delay_minutes'') |
+        int(10) }}'
+  conditions:
+  - condition: state
+    entity_id: input_boolean.rainbird_offline_alert_enabled
+    state: 'on'
+  actions:
+  - action: persistent_notification.create
+    data:
+      notification_id: rainbird_controller_offline
+      title: Rain Bird Controller Offline
+      message: Rain Bird ESP-TM2 has been offline for more than {{ states('input_number.rainbird_offline_alert_delay_minutes')
+        | int(10) }} minutes. Check Wi-Fi, controller power, Rain Bird cloud status,
+        or the integration.
+  - action: input_text.set_value
+    target:
+      entity_id: input_text.rainbird_last_dashboard_action
+    data:
+      value: Controller offline alert created by automation.
+  mode: single
+- id: rainbird_controller_back_online
+  alias: Rain Bird - Controller Back Online
+  description: Dismisses the Rain Bird offline notification when the controller reconnects.
+  triggers:
+  - trigger: state
+    entity_id: binary_sensor.carnes_crossroads_connected
+    to: 'on'
+  conditions: []
+  actions:
+  - action: persistent_notification.dismiss
+    data:
+      notification_id: rainbird_controller_offline
+  - action: input_text.set_value
+    target:
+      entity_id: input_text.rainbird_last_dashboard_action
+    data:
+      value: Controller came back online.
+  mode: single
+- id: rainbird_watering_state_logger
+  alias: Rain Bird - Watering State Logger
+  description: Stores a simple dashboard note when any Rain Bird zone changes state.
+  triggers:
+  - trigger: state
+    entity_id:
+    - sensor.carnes_crossroads_1_front_curb
+    - sensor.carnes_crossroads_2_garage_side
+    - sensor.carnes_crossroads_3_sides
+    - sensor.carnes_crossroads_4_front
+    - sensor.carnes_crossroads_5_backyard
+    - sensor.carnes_crossroads_station_006
+  conditions:
+  - condition: template
+    value_template: '{{ trigger.from_state is not none and trigger.to_state is not
+      none and trigger.from_state.state != trigger.to_state.state }}'
+  actions:
+  - action: input_text.set_value
+    target:
+      entity_id: input_text.rainbird_last_zone_event
+    data:
+      value: '{{ trigger.to_state.name }} changed from {{ trigger.from_state.state
+        }} to {{ trigger.to_state.state }}.'
+  mode: queued
+  max: 10
+- id: front_porch_presence_light_sunset_sunrise_window
+  alias: Front Porch Presence Light - Sunset to Sunrise Window
+  description: 'Turns on the front porch light when presence is detected, but only
+    inside the configured sunset-to-sunrise motion window. The timer restarts on each
+    new motion event.
+
+    '
+  mode: restart
+  triggers:
+  - trigger: state
+    entity_id: binary_sensor.zb_presence_sensor_01_external_occupancy
+    to: 'on'
+  - trigger: state
+    entity_id: binary_sensor.front_porch_presence_window_active
+    to: 'on'
+  conditions:
+  - condition: state
+    entity_id: input_boolean.front_porch_presence_light_enabled
+    state: 'on'
+  - condition: state
+    entity_id: binary_sensor.front_porch_presence_window_active
+    state: 'on'
+  - condition: state
+    entity_id: binary_sensor.zb_presence_sensor_01_external_occupancy
+    state: 'on'
+  actions:
+  - action: switch.turn_on
+    target:
+      entity_id: switch.front_porch
+  - delay:
+      minutes: '{{ states(''input_number.front_porch_presence_light_duration_minutes'')
+        | int(5) }}'
+  - action: switch.turn_off
+    target:
+      entity_id: switch.front_porch
+- id: '1783105868311'
+  alias: Garage One Button - Toggle Workbench
+  description: ''
+  triggers:
+  - trigger: event.received
+    target:
+      entity_id: event.zb_one_button_02_garage_action
+    options:
+      event_type:
+      - single
+  conditions: []
+  actions:
+  - action: switch.toggle
+    metadata: {}
+    target:
+      entity_id: switch.sonoff_1000d4cf1a_1
+    data: {}
+  mode: single
+- id: '1783105981113'
+  alias: Garage One Button - Toggle Garage
+  description: ''
+  triggers:
+  - trigger: event.received
+    target:
+      entity_id: event.zb_one_button_02_garage_action
+    options:
+      event_type:
+      - double
+  conditions: []
+  actions:
+  - action: switch.toggle
+    metadata: {}
+    target:
+      entity_id: switch.nspanel_garage_relay_1
+    data: {}
+  mode: single
+- id: garage_light_turn_off_without_occupancy
+  alias: Garage Light - Turn Off Without Occupancy
+  description: Desliga a luz interna da garagem quando os dois sensores permanecem
+    sem ocupação por 5 minutos.
+  triggers:
+  - trigger: state
+    entity_id:
+    - binary_sensor.zb_occupancy_sensor_garage_1_occupancy
+    - binary_sensor.zb_occupancy_sensor_garage_2_occupancy
+    to: 'off'
+    for: 00:05:00
+  - trigger: time_pattern
+    minutes: /1
+  conditions:
+  - condition: state
+    entity_id: switch.nspanel_garage_relay_1
+    state: 'on'
+  - condition: state
+    entity_id: binary_sensor.zb_occupancy_sensor_garage_1_occupancy
+    state: 'off'
+    for: 00:05:00
+  - condition: state
+    entity_id: binary_sensor.zb_occupancy_sensor_garage_2_occupancy
+    state: 'off'
+    for: 00:05:00
+  actions:
+  - action: switch.turn_off
+    target:
+      entity_id: switch.nspanel_garage_relay_1
+  mode: single
+- id: '1783199441267'
+  alias: 'Aqara Lock locking for more than 30 seconds '
+  description: ''
+  triggers:
+  - entity_id:
+    - lock.aqara_smart_lock_u400
+    for:
+      hours: 0
+      minutes: 0
+      seconds: 30
+    trigger: state
+    to:
+    - locking
+  conditions: []
+  actions:
+  - data:
+      addon: core_matter_server
+    action: hassio.addon_restart
+  - delay: 00:01:30
+  mode: single
+- id: '1783220983194'
+  alias: 'Aqara unlocking for mor than 30 seconds '
+  description: ''
+  triggers:
+  - entity_id:
+    - lock.aqara_smart_lock_u400
+    for:
+      hours: 0
+      minutes: 0
+      seconds: 30
+    trigger: state
+    to:
+    - unlocking
+  conditions: []
+  actions:
+  - data:
+      addon: core_matter_server
+    action: hassio.addon_restart
+  - delay: 00:01:30
+  mode: single
+- id: environment_monitor_initialize_defaults
+  alias: Environment Monitor - Initialize Recommended Thresholds
+  description: Applies the recommended temperature and humidity thresholds only once.
+    Future dashboard changes are restored normally after Home Assistant restarts.
+  mode: single
+  triggers:
+  - trigger: homeassistant
+    event: start
+  conditions:
+  - condition: state
+    entity_id: input_boolean.environment_monitor_defaults_initialized
+    state: 'off'
+  actions:
+  - action: input_number.set_value
+    target:
+      entity_id: input_number.environment_monitor_temperature_minimum
+    data:
+      value: 60
+  - action: input_number.set_value
+    target:
+      entity_id: input_number.environment_monitor_temperature_maximum
+    data:
+      value: 80
+  - action: input_number.set_value
+    target:
+      entity_id: input_number.environment_monitor_humidity_minimum
+    data:
+      value: 30
+  - action: input_number.set_value
+    target:
+      entity_id: input_number.environment_monitor_humidity_maximum
+    data:
+      value: 60
+  - action: input_boolean.turn_on
+    target:
+      entity_id:
+      - input_boolean.environment_monitor_alerts_enabled
+      - input_boolean.environment_monitor_defaults_initialized
+- id: '1783457499401'
+  alias: NSPanel Garage
+  description: ''
+  use_blueprint:
+    path: edwardtfn/nspanel_easy_blueprint.yaml
+    input:
+      nspanel_name: 8ce27512dea3f5cc1250f9f21cda5187
+      timezone: America/New_York (EST5EDT,M3.2.0,M11.1.0)
+      compact_unit_display: true
+      temperature_unit: °C
+      outdoortemp: sensor.zb_th_sensor_square_01_backyard_porch_temperature
+      indoortemp: sensor.blink_blink_camera_temperature
+      weather_entity: weather.nws_33_06175423861175_80_11849880218507_kmks
+      home_indoor_temp_icon_color:
+      - 250
+      - 250
+      - 250
+      home_outdoor_temp_label_color:
+      - 255
+      - 255
+      - 255
+      home_indoor_temp_icon: mdi:home-thermometer-outline
+      home_indoor_temp_label_color:
+      - 255
+      - 255
+      - 255
+      home_value01: lock.aqara_smart_lock_u400
+      home_value01_label_color:
+      - 97
+      - 194
+      - 0
+      home_value01_icon: mdi:door-closed-lock
+      utilities_page01_home_value1: sensor.berkeley_electric_cooperative_smarthub_energy_monthly_usage_6622863001_house_berkeley_electric_cooperative_smarthub_energy_monthly_usage_6622863001_house
+      utilities_enabled: false
+      home_button08_icon_color:
+      - 0
+      - 0
+      - 0
+      home_value01_icon_color:
+      - 255
+      - 255
+      - 255
+      time_label_color:
+      - 222
+      - 223
+      - 247
+      date_label_color:
+      - 207
+      - 253
+      - 191
+      climate: climate.living_room_living_room_thermostat_t6_pro_thermostat
+      climate_value01: climate.bedroom_bedroom_thermostat_t6_pro_thermostat
+      climate_value01_icon: mdi:bed
+      climate_button08_icon: mdi:hvac
+      utilities_page01_home_color:
+      - 255
+      - 149
+      - 0
+      utilities_page01_grid_color:
+      - 0
+      - 179
+      - 255
+      utilities_page01_main_line_reference: sensor.berkeley_electric_cooperative_smarthub_energy_monthly_usage_6622863001_house_berkeley_electric_cooperative_smarthub_energy_monthly_usage_6622863001_house
+      home_value02_label_color:
+      - 255
+      - 255
+      - 255
+      home_value02_icon: ''
+      home_value02_icon_color:
+      - 209
+      - 198
+      - 251
+      chip01: cover.garage_gate
+      chip01_icon: mdi:garage-open-variant
+      chip01_icon_color:
+      - 238
+      - 119
+      - 119
+      chip02: lock.aqara_smart_lock_u400
+      chip02_icon: mdi:door-open
+      chip02_icon_color:
+      - 255
+      - 162
+      - 0
+      date_format: '%A, %-d/%-m'
+      time_format: '%I:%M %p'
+      chip03: alarm_control_panel.carnes_crossroads
+      chip03_icon_color:
+      - 82
+      - 214
+      - 252
+      left_button_name: Garage
+      left_button_color:
+      - 255
+      - 255
+      - 255
+      right_button_name: External
+      right_button_color:
+      - 255
+      - 255
+      - 255
+      home_custom_button02_icon: ''
+      climate_value02: climate.living_room_living_room_thermostat_t6_pro_thermostat
+      climate_value02_icon: mdi:sofa-outline
+      climate_value03: climate.second_floor_thermostat_t6_pro_thermostat
+      climate_value03_icon: mdi:television
+      climate_page_button_font_size: '10'
+      utilities_page01_home_value2: sensor.berkeley_electric_projected_monthly_bill
+      utilities_page01_grid_value1: sensor.berkeley_electric_cooperative_smarthub_energy_monthly_usage_6622863001_house_berkeley_electric_cooperative_smarthub_energy_monthly_usage_6622863001_house
+      home_outdoor_temp_font: '5'
+      home_value03: alarm_control_panel.carnes_crossroads
+      home_value03_label_color:
+      - 244
+      - 167
+      - 154
+      relay01_icon_color:
+      - 255
+      - 210
+      - 87
+      relay02_icon_color:
+      - 255
+      - 210
+      - 87
+      home_value03_icon_color:
+      - 255
+      - 255
+      - 255
+      relay01_icon: mdi:lightbulb-on-10
+      relay02_icon: mdi:outdoor-lamp
+      climate_chip_visibility: never
+      hw_buttons_bar_color_off:
+      - 255
+      - 255
+      - 255
+      hw_buttons_bar_color_on:
+      - 255
+      - 210
+      - 0
+      relay_1_local_fallback: true
+      relay_2_local_fallback: true
+      button_pages_icon_size: '10'
+      button_page01_label: Alarme
+      entity01: alarm_control_panel.carnes_crossroads
+      entity01_name: Alarm
+      entitypages_show_entities_icons: true
+      home_button08_icon: ''
+      home_button04_icon_color01:
+      - 0
+      - 0
+      - 0
+      wake_up_sensors:
+      - binary_sensor.zb_occupancy_sensor_garage_1_occupancy
+      - binary_sensor.zb_occupancy_sensor_garage_2_occupancy
+      - binary_sensor.blink_camera_motion
+      icon_color_fallback_on:
+      - 0
+      - 0
+      - 0
+      icon_color_fallback_off:
+      - 236
+      - 213
+      - 213
+      button_back_font_size: '10'
+      home_custom_button02: alarm_control_panel.carnes_crossroads
+      left_button_entity: switch.nspanel_garage_relay_1
+      right_button_entity: switch.nspanel_garage_relay_2
+      entity01_icon_color:
+      - 0
+      - 66
+      - 169
+      home_button04_icon_color02:
+      - 255
+      - 210
+      - 0
+      entity06: lock.aqara_smart_lock_u400
+      entity06_name: Front Door
+      chip_font_size: '8'
+      entity06_confirm: true
+      entity05: cover.garage_gate
+      entity05_icon_color:
+      - 253
+      - 199
+      - 0
+      entity05_confirm: true
+      entity07: switch.zb_plug_01
+      entity07_name: Laser
+      entity07_icon: mdi:laser-pointer
+      entity07_icon_color:
+      - 118
+      - 187
+      - 64
+      chip03_icon: ''
+      chip04: switch.zb_plug_01
+      chip04_inverted: false
+      chip04_icon: mdi:laser-pointer
+      chip04_icon_color:
+      - 102
+      - 157
+      - 52
+- id: hvac_coordinator_start_arrival_comfort
+  alias: HVAC Coordinator - Start Arrival Comfort
+  description: Treats the home as occupied for two hours. When Smart Away is active,
+    restores the saved thermostat modes and temperatures before starting the temporary
+    occupied-home override.
+  mode: restart
+  trigger:
+  - platform: state
+    entity_id: input_button.hvac_start_arrival_comfort
+  condition: []
+  action:
+  - service: timer.start
+    target:
+      entity_id: timer.hvac_arrival_comfort
+    data:
+      duration: 02:00:00
+  - choose:
+    - conditions:
+      - condition: state
+        entity_id: input_boolean.hvac_smart_away_active
+        state: 'on'
+      sequence:
+      - choose:
+        - conditions:
+          - condition: template
+            value_template: '{{ states(''input_select.hvac_restore_living_room_mode'')
+              in [''heat'', ''cool''] }}'
+          sequence:
+          - service: climate.set_hvac_mode
+            target:
+              entity_id: climate.living_room_living_room_thermostat_t6_pro_thermostat
+            data:
+              hvac_mode: '{{ states(''input_select.hvac_restore_living_room_mode'')
+                }}'
+          - delay:
+              seconds: 8
+          - service: climate.set_temperature
+            target:
+              entity_id: climate.living_room_living_room_thermostat_t6_pro_thermostat
+            data:
+              temperature: '{{ states(''input_number.hvac_restore_living_room_temperature'')
+                | float(75) }}'
+          - delay:
+              seconds: 5
+          - service: climate.set_temperature
+            target:
+              entity_id: climate.living_room_living_room_thermostat_t6_pro_thermostat
+            data:
+              temperature: '{{ states(''input_number.hvac_restore_living_room_temperature'')
+                | float(75) }}'
+        - conditions:
+          - condition: template
+            value_template: '{{ states(''input_select.hvac_restore_living_room_mode'')
+              == ''off'' }}'
+          sequence:
+          - service: climate.set_hvac_mode
+            target:
+              entity_id: climate.living_room_living_room_thermostat_t6_pro_thermostat
+            data:
+              hvac_mode: 'off'
+      - choose:
+        - conditions:
+          - condition: template
+            value_template: '{{ states(''input_select.hvac_restore_bedroom_mode'')
+              in [''heat'', ''cool''] }}'
+          sequence:
+          - service: climate.set_hvac_mode
+            target:
+              entity_id: climate.bedroom_bedroom_thermostat_t6_pro_thermostat
+            data:
+              hvac_mode: '{{ states(''input_select.hvac_restore_bedroom_mode'') }}'
+          - delay:
+              seconds: 8
+          - service: climate.set_temperature
+            target:
+              entity_id: climate.bedroom_bedroom_thermostat_t6_pro_thermostat
+            data:
+              temperature: '{{ states(''input_number.hvac_restore_bedroom_temperature'')
+                | float(75) }}'
+          - delay:
+              seconds: 5
+          - service: climate.set_temperature
+            target:
+              entity_id: climate.bedroom_bedroom_thermostat_t6_pro_thermostat
+            data:
+              temperature: '{{ states(''input_number.hvac_restore_bedroom_temperature'')
+                | float(75) }}'
+        - conditions:
+          - condition: template
+            value_template: '{{ states(''input_select.hvac_restore_bedroom_mode'')
+              == ''off'' }}'
+          sequence:
+          - service: climate.set_hvac_mode
+            target:
+              entity_id: climate.bedroom_bedroom_thermostat_t6_pro_thermostat
+            data:
+              hvac_mode: 'off'
+      - choose:
+        - conditions:
+          - condition: template
+            value_template: '{{ states(''input_select.hvac_restore_second_floor_mode'')
+              in [''heat'', ''cool''] }}'
+          sequence:
+          - service: climate.set_hvac_mode
+            target:
+              entity_id: climate.second_floor_thermostat_t6_pro_thermostat
+            data:
+              hvac_mode: '{{ states(''input_select.hvac_restore_second_floor_mode'')
+                }}'
+          - delay:
+              seconds: 8
+          - service: climate.set_temperature
+            target:
+              entity_id: climate.second_floor_thermostat_t6_pro_thermostat
+            data:
+              temperature: '{{ states(''input_number.hvac_restore_second_floor_temperature'')
+                | float(75) }}'
+          - delay:
+              seconds: 5
+          - service: climate.set_temperature
+            target:
+              entity_id: climate.second_floor_thermostat_t6_pro_thermostat
+            data:
+              temperature: '{{ states(''input_number.hvac_restore_second_floor_temperature'')
+                | float(75) }}'
+        - conditions:
+          - condition: template
+            value_template: '{{ states(''input_select.hvac_restore_second_floor_mode'')
+              == ''off'' }}'
+          sequence:
+          - service: climate.set_hvac_mode
+            target:
+              entity_id: climate.second_floor_thermostat_t6_pro_thermostat
+            data:
+              hvac_mode: 'off'
+      - service: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.hvac_smart_away_active
+  - service: persistent_notification.create
+    data:
+      notification_id: hvac_arrival_comfort
+      title: Arrival Comfort started
+      message: Home comfort mode is active for two hours. Smart Away is temporarily
+        suspended and saved comfort settings have been restored.
+- id: hvac_coordinator_cancel_arrival_comfort
+  alias: HVAC Coordinator - Cancel Arrival Comfort
+  description: Ends Arrival Comfort early, waits for the timer state to settle, and
+    re-evaluates Smart Away using real or simulated presence without depending on
+    a potentially stale template sensor.
+  mode: single
+  trigger:
+  - platform: state
+    entity_id: input_button.hvac_cancel_arrival_comfort
+  condition: []
+  action:
+  - service: timer.cancel
+    target:
+      entity_id: timer.hvac_arrival_comfort
+  - service: persistent_notification.dismiss
+    data:
+      notification_id: hvac_arrival_comfort
+  - delay:
+      seconds: 1
+  - choose:
+    - conditions:
+      - condition: template
+        value_template: "{% if is_state('input_boolean.hvac_presence_test_mode_enabled',
+          'on') %}\n  {{ is_state('input_select.hvac_test_fabricio_presence', 'Away')\n
+          \    and is_state('input_select.hvac_test_lucas_presence', 'Away') }}\n{%
+          else %}\n  {{ not is_state('person.fabricio_zambroni', 'home')\n     and
+          not is_state('person.lucas_zambroni', 'home') }}\n{% endif %}"
+      - condition: state
+        entity_id: input_boolean.hvac_smart_away_enabled
+        state: 'on'
+      - condition: state
+        entity_id: input_boolean.hvac_guest_mode
+        state: 'off'
+      - condition: state
+        entity_id: input_boolean.hvac_smart_away_active
+        state: 'off'
+      sequence:
+      - service: automation.trigger
+        target:
+          entity_id: automation.hvac_coordinator_smart_away
+        data:
+          skip_condition: false
+- id: hvac_coordinator_arrival_comfort_finished
+  alias: HVAC Coordinator - Arrival Comfort Finished
+  description: Dismisses the Arrival Comfort notification when the two-hour timer
+    ends. The main Smart Away automation receives the same timer.finished event and
+    resumes normal occupancy evaluation.
+  mode: single
+  trigger:
+  - platform: event
+    event_type: timer.finished
+    event_data:
+      entity_id: timer.hvac_arrival_comfort
+  condition: []
+  action:
+  - service: persistent_notification.dismiss
+    data:
+      notification_id: hvac_arrival_comfort
+- id: '1784125614921'
+  alias: Aqara - Restart if unavailable for 2 min
+  description: ''
+  triggers:
+  - trigger: state
+    entity_id:
+    - lock.aqara_smart_lock_u400
+    from:
+    to:
+    - unavailable
+    for:
+      hours: 0
+      minutes: 1
+      seconds: 15
+  conditions: []
+  actions:
+  - data:
+      addon: core_matter_server
+    action: hassio.addon_restart
+  - delay: 00:01:30
+  mode: single
+- id: '1784144940174'
+  alias: ESPHome - Automatically Update NSPanel Office
+  description: Automatically installs ESPHome firmware updates for the office NSPanel
+  triggers:
+  - trigger: state
+    entity_id: update.nspanel_office_firmware
+    to: 'on'
+    for:
+      minutes: 10
+  conditions:
+  - condition: state
+    entity_id: update.nspanel_office_firmware
+    state: 'on'
+  actions:
+  - action: update.install
+    target:
+      entity_id: update.nspanel_office_firmware
+    data:
+      backup: false
+  mode: single
+- id: '1784469130818'
+  alias: 'Blink - Restar if Unavailable for Two Minutes '
+  description: ''
+  triggers:
+  - trigger: state
+    entity_id:
+    - alarm_control_panel.device_control_center_blink
+    from:
+    to:
+    - unavailable
+    for:
+      hours: 0
+      minutes: 2
+      seconds: 0
+  conditions: []
+  actions:
+  - action: homeassistant.reload_config_entry
+    metadata: {}
+    target:
+      entity_id: alarm_control_panel.device_control_center_blink
+    data: {}
+  - delay: 00:01:30
+  mode: single
+- id: garage_gate_reconcile_smart_cover_state
+  alias: Garage Gate - Reconcile Smart Cover State
+  description: Clears any temporary opening or closing state when the physical contact
+    confirms an endpoint or Home Assistant restarts.
+  mode: restart
+  triggers:
+  - trigger: homeassistant
+    event: start
+  - trigger: state
+    entity_id: binary_sensor.garage_contact_sensor_garage_gate_intrusion
+  conditions: []
+  actions:
+  - delay:
+      seconds: 1
+  - action: input_select.select_option
+    target:
+      entity_id: input_select.garage_gate_motion_state
+    data:
+      option: idle
+- id: '1784635556150'
+  alias: Garage Laser - ON
+  description: ''
+  triggers:
+  - trigger: state
+    entity_id:
+    - binary_sensor.garage_contact_sensor_garage_gate_intrusion
+    to:
+    - 'on'
+  conditions: []
+  actions:
+  - action: switch.turn_on
+    metadata: {}
+    target:
+      entity_id: switch.zb_plug_01
+    data: {}
+  mode: single
+- id: '1784635586753'
+  alias: Garage Gate - OFF
+  description: ''
+  triggers:
+  - trigger: state
+    entity_id:
+    - binary_sensor.garage_contact_sensor_garage_gate_intrusion
+    to:
+    - 'off'
+  conditions: []
+  actions:
+  - action: switch.turn_off
+    metadata: {}
+    target:
+      entity_id: switch.zb_plug_01
+    data: {}
+  mode: single
+- id: '1785203561823'
+  alias: ZB One Button Bedroom Long
+  description: ''
+  triggers:
+  - trigger: event.received
+    target:
+      device_id: 35c478042e04fb021c883a31ce742ee2
+    options:
+      event_type:
+      - long
+  - trigger: event.received
+    target:
+      device_id: 3eecdd29cd8641cf8c21b9a6a18fc966
+    options:
+      event_type:
+      - long
+  conditions: []
+  actions:
+  - action: switch.toggle
+    target:
+      entity_id: switch.bedroom
+    data: {}
+  mode: single
+- id: '1785204125564'
+  alias: ZB One Button Angel Single
+  description: ''
+  triggers:
+  - trigger: event.received
+    target:
+      device_id: 35c478042e04fb021c883a31ce742ee2
+    options:
+      event_type:
+      - single
+  - trigger: event.received
+    target:
+      device_id: 3eecdd29cd8641cf8c21b9a6a18fc966
+    options:
+      event_type:
+      - single
+  conditions: []
+  actions:
+  - action: light.toggle
+    target:
+      entity_id: light.angel
+    data:
+      brightness_pct: 100
+  mode: single
+- id: '1785204234546'
+  alias: ZB One Button Angel Double Dimmer
+  description: ''
+  triggers:
+  - trigger: event.received
+    target:
+      device_id: 35c478042e04fb021c883a31ce742ee2
+    options:
+      event_type:
+      - double
+  - trigger: event.received
+    target:
+      device_id: 3eecdd29cd8641cf8c21b9a6a18fc966
+    options:
+      event_type:
+      - double
+  conditions: []
+  actions:
+  - variables:
+      current_brightness: '{{ state_attr(''light.angel'', ''brightness'') | int(0)
+        }}
+
+        '
+      next_percent: "{% if not is_state('light.angel', 'on') %}\n  100\n{% elif current_brightness
+        > 190 %}\n  50\n{% elif current_brightness > 85 %}\n  20\n{% elif current_brightness
+        > 25 %}\n  1\n{% else %}\n  100\n{% endif %}\n"
+  - action: light.turn_on
+    target:
+      entity_id: light.angel
+    data:
+      brightness_pct: '{{ next_percent | int }}'
+  - delay:
+      milliseconds: 500
+  mode: queued
+  max: 5
+- id: '1781573308727'
+  alias: Door Open Close Light - Master Closet
+  description: Turns the closet light off when the door closes and provides a restart-safe
+    maximum-on-time watchdog if a door or timer event is missed.
+  triggers:
+  - trigger: state
+    entity_id: binary_sensor.bedroom_contact_sensor_master_closet_intrusion
+    to: 'off'
+    id: door_closed
+  - trigger: state
+    entity_id: switch.master_closet
+    to: 'on'
+    id: light_on
+  - trigger: time_pattern
+    minutes: /1
+    id: watchdog
+  conditions:
+  - condition: state
+    entity_id: input_boolean.door_lighting_enabled
+    state: 'on'
+  - condition: state
+    entity_id: input_boolean.door_lighting_master_closet_enabled
+    state: 'on'
+  actions:
+  - choose:
+    - conditions:
+      - condition: state
+        entity_id: switch.master_closet
+        state: 'on'
+      - condition: template
+        value_template: "{{ is_state('binary_sensor.bedroom_contact_sensor_master_closet_intrusion',
+          'off')\n   or (as_timestamp(now()) -\n       as_timestamp(states.switch.master_closet.last_changed,
+          as_timestamp(now())))\n      >= (states('input_number.door_lighting_master_closet_max_on_minutes')\n
+          \         | float(15) * 60) }}"
+      sequence:
+      - action: switch.turn_off
+        target:
+          entity_id: switch.master_closet
+  mode: single
+- id: '1781573113745'
+  alias: Door Open Close Light - Pantry
+  description: Turns the pantry light off when the door closes and provides a restart-safe
+    maximum-on-time watchdog if a door or timer event is missed.
+  triggers:
+  - trigger: state
+    entity_id: binary_sensor.kitchen_contact_sensor_pantry_intrusion
+    to: 'off'
+    id: door_closed
+  - trigger: state
+    entity_id: switch.pantry
+    to: 'on'
+    id: light_on
+  - trigger: time_pattern
+    minutes: /1
+    id: watchdog
+  conditions:
+  - condition: state
+    entity_id: input_boolean.door_lighting_enabled
+    state: 'on'
+  - condition: state
+    entity_id: input_boolean.door_lighting_pantry_enabled
+    state: 'on'
+  actions:
+  - choose:
+    - conditions:
+      - condition: state
+        entity_id: switch.pantry
+        state: 'on'
+      - condition: template
+        value_template: "{{ is_state('binary_sensor.kitchen_contact_sensor_pantry_intrusion',
+          'off')\n   or (as_timestamp(now()) -\n       as_timestamp(states.switch.pantry.last_changed,
+          as_timestamp(now())))\n      >= (states('input_number.door_lighting_pantry_max_on_minutes')\n
+          \         | float(20) * 60) }}"
+      sequence:
+      - action: switch.turn_off
+        target:
+          entity_id: switch.pantry
+  mode: single
+- id: '1783966464268'
+  alias: Door Open Close Light - Under Stairs
+  description: Turns the under-stairs light off when the door closes and provides
+    a restart-safe maximum-on-time watchdog if a door or timer event is missed.
+  triggers:
+  - trigger: state
+    entity_id: binary_sensor.hallway_contact_sensor_under_stairs_intrusion
+    to: 'off'
+    id: door_closed
+  - trigger: state
+    entity_id: switch.hallway_under_stairs
+    to: 'on'
+    id: light_on
+  - trigger: time_pattern
+    minutes: /1
+    id: watchdog
+  conditions:
+  - condition: state
+    entity_id: input_boolean.door_lighting_enabled
+    state: 'on'
+  - condition: state
+    entity_id: input_boolean.door_lighting_under_stairs_enabled
+    state: 'on'
+  actions:
+  - choose:
+    - conditions:
+      - condition: state
+        entity_id: switch.hallway_under_stairs
+        state: 'on'
+      - condition: template
+        value_template: "{{ is_state('binary_sensor.hallway_contact_sensor_under_stairs_intrusion',
+          'off')\n   or (as_timestamp(now()) -\n       as_timestamp(states.switch.hallway_under_stairs.last_changed,\n
+          \                   as_timestamp(now())))\n      >= (states('input_number.door_lighting_under_stairs_max_on_minutes')\n
+          \         | float(5) * 60) }}"
+      sequence:
+      - action: switch.turn_off
+        target:
+          entity_id: switch.hallway_under_stairs
+  mode: single
+- id: '1783968999131'
+  alias: Door Open Close Light - Laundry
+  description: Turns the laundry light off when the door closes and provides a restart-safe
+    maximum-on-time watchdog if a door or timer event is missed.
+  triggers:
+  - trigger: state
+    entity_id: binary_sensor.laundry_contact_sensor_laundry_intrusion
+    to: 'off'
+    id: door_closed
+  - trigger: state
+    entity_id: switch.garage_internal_sonoff_100103ca19
+    to: 'on'
+    id: light_on
+  - trigger: time_pattern
+    minutes: /1
+    id: watchdog
+  conditions:
+  - condition: state
+    entity_id: input_boolean.door_lighting_enabled
+    state: 'on'
+  - condition: state
+    entity_id: input_boolean.door_lighting_laundry_enabled
+    state: 'on'
+  actions:
+  - choose:
+    - conditions:
+      - condition: state
+        entity_id: switch.garage_internal_sonoff_100103ca19
+        state: 'on'
+      - condition: template
+        value_template: "{{ is_state('binary_sensor.laundry_contact_sensor_laundry_intrusion',
+          'off')\n   or (as_timestamp(now()) -\n       as_timestamp(states.switch.garage_internal_sonoff_100103ca19.last_changed,\n
+          \                   as_timestamp(now())))\n      >= (states('input_number.door_lighting_laundry_max_on_minutes')\n
+          \         | float(15) * 60) }}"
+      sequence:
+      - action: switch.turn_off
+        target:
+          entity_id: switch.garage_internal_sonoff_100103ca19
+  mode: single
+- id: '20260812013915'
+  alias: Sanitize Master Bathroom Ventilation Status
+  description: Restores slashes HTML-escaped by the Node-RED status template.
+  triggers:
+  - trigger: state
+    entity_id: input_text.master_bathroom_ventilation_status
+  conditions:
+  - condition: template
+    value_template: '{{ ''&#x2F;'' in trigger.to_state.state }}'
+  actions:
+  - action: input_text.set_value
+    target:
+      entity_id: input_text.master_bathroom_ventilation_status
+    data:
+      value: '{{ trigger.to_state.state | replace(''&#x2F;'', ''/'') }}'
+  mode: restart
+- id: water_leak_fridge_alert_and_containment
+  alias: Water Leak - Alert and Containment
+  description: Monitors the Fridge, Laundry, Kitchen Sink, and Filtration Center leak
+    sensors. A new dry-to-wet transition can send independently configurable critical
+    mobile alerts and can optionally close the master water valve. The valve is not
+    repeatedly forced closed while a sensor remains wet, so it can be reopened manually
+    during an active leak. Dashboard test buttons never move the valve.
+  triggers:
+  - trigger: state
+    entity_id:
+    - binary_sensor.zb_water_sensor_fridge_water_leak
+    - binary_sensor.zb_water_sensor_laundry_water_leak
+    - binary_sensor.zb_water_sensor_kitchen_sink_water_leak
+    - binary_sensor.zb_water_sensor_filtration_center_water_leak
+    from: 'off'
+    to: 'on'
+    id: leak
+  - trigger: state
+    entity_id: input_button.water_leak_fridge_test_alert
+    id: test_fridge
+  - trigger: state
+    entity_id: input_button.water_leak_laundry_test_alert
+    id: test_laundry
+  - trigger: state
+    entity_id: input_button.water_leak_kitchen_sink_test_alert
+    id: test_kitchen_sink
+  - trigger: state
+    entity_id: input_button.water_leak_filtration_center_test_alert
+    id: test_filtration_center
+  conditions: []
+  actions:
+  - variables:
+      is_test: '{{ trigger.id != ''leak'' }}'
+      leak_location: "{{ {\n  'binary_sensor.zb_water_sensor_fridge_water_leak': 'Fridge',\n
+        \ 'input_button.water_leak_fridge_test_alert': 'Fridge',\n  'binary_sensor.zb_water_sensor_laundry_water_leak':
+        'Laundry',\n  'input_button.water_leak_laundry_test_alert': 'Laundry',\n  'binary_sensor.zb_water_sensor_kitchen_sink_water_leak':
+        'Kitchen Sink',\n  'input_button.water_leak_kitchen_sink_test_alert': 'Kitchen
+        Sink',\n  'binary_sensor.zb_water_sensor_filtration_center_water_leak': 'Filtration
+        Center',\n  'input_button.water_leak_filtration_center_test_alert': 'Filtration
+        Center'\n}.get(trigger.entity_id, trigger.entity_id) }}"
+      auto_shutoff_enabled: '{{ is_state(''input_boolean.water_leak_fridge_auto_shutoff'',
+        ''on'') }}'
+      event_time: '{{ now().strftime(''%Y-%m-%d %H:%M:%S'') }}'
+      notification_tag: '{{ ''water-leak-'' ~ (leak_location | lower | replace(''
+        '', ''-'')) }}'
+      alert_title: '{{ ''TEST - Water Leak: '' ~ leak_location if is_test else ''URGENT
+        - Water Leak: '' ~ leak_location }}'
+      alert_message: "{% if is_test %}\n  Test alert for the {{ leak_location }} water
+        leak sensor. This test does\n  not change the master water valve.\n{% else
+        %}\n  The {{ leak_location }} water leak sensor is WET. Check the\n  {{ leak_location
+        }} area immediately.\n  {% if auto_shutoff_enabled %}\n    Automatic water
+        shutoff is enabled. The master water valve is being closed.\n  {% else %}\n
+        \   Automatic water shutoff is disabled. The master water valve has not been
+        changed.\n  {% endif %}\n{% endif %}"
+  - action: input_text.set_value
+    target:
+      entity_id: input_text.water_leak_fridge_last_event
+    data:
+      value: "{% if is_test %}\n  {{ event_time }} - Test alert: {{ leak_location
+        }}\n{% elif auto_shutoff_enabled %}\n  {{ event_time }} - LEAK: {{ leak_location
+        }} - Master water close requested\n{% else %}\n  {{ event_time }} - LEAK:
+        {{ leak_location }} - Auto shutoff disabled\n{% endif %}"
+  - if:
+    - condition: template
+      value_template: '{{ not is_test and auto_shutoff_enabled }}'
+    then:
+    - action: switch.turn_off
+      target:
+        entity_id: switch.master_water
+  - parallel:
+    - sequence:
+      - condition: state
+        entity_id: input_boolean.water_leak_fridge_notify_fabricio
+        state: 'on'
+      - action: notify.mobile_app_fabricio_zambroni_17
+        data:
+          title: '{{ alert_title }}'
+          message: '{{ alert_message }}'
+          data:
+            tag: '{{ notification_tag }}'
+            push:
+              interruption-level: critical
+              sound:
+                name: default
+                critical: 1
+                volume: 1
+    - sequence:
+      - condition: state
+        entity_id: input_boolean.water_leak_fridge_notify_lucas
+        state: 'on'
+      - action: notify.mobile_app_lucas_zambroni_new
+        data:
+          title: '{{ alert_title }}'
+          message: '{{ alert_message }}'
+          data:
+            tag: '{{ notification_tag }}'
+            push:
+              interruption-level: critical
+              sound:
+                name: default
+                critical: 1
+                volume: 1
+  mode: queued
+  max: 10
+  max_exceeded: warning
+- id: water_leak_fridge_initialize_defaults
+  alias: Water Leak - Initialize Alert Defaults
+  description: Establishes the water leak protection defaults only on the first load.
+    Later dashboard choices are restored and are not overwritten.
+  triggers:
+  - trigger: homeassistant
+    event: start
+  - trigger: state
+    entity_id: input_boolean.water_leak_fridge_defaults_initialized
+    to: 'off'
+  conditions:
+  - condition: state
+    entity_id: input_boolean.water_leak_fridge_defaults_initialized
+    state: 'off'
+  actions:
+  - action: input_boolean.turn_on
+    target:
+      entity_id:
+      - input_boolean.water_leak_fridge_notify_fabricio
+      - input_boolean.water_leak_fridge_notify_lucas
+      - input_boolean.water_leak_fridge_auto_shutoff
+  - action: input_boolean.turn_on
+    target:
+      entity_id: input_boolean.water_leak_fridge_defaults_initialized
+  mode: single
+- id: '1787160829771'
+  alias: Ring Keypad Automations
+  description: ''
+  use_blueprint:
+    path: ImSorryButWho/synchronize-ring-alarm-keypad-v2-with-alarmo.yaml
+    input:
+      keypad: cbfcb0e2a5760365600543712ea806bf
+      alarm: alarm_control_panel.carnes_crossroads
+      selected_action_police:
+      - action: input_button.press
+        metadata: {}
+        target:
+          entity_id: input_button.smoke_co_reset_ring_keypad
+        data: {}
+      selected_action_fire:
+      - action: input_button.press
+        metadata: {}
+        target:
+          entity_id: input_button.smoke_co_reset_ring_keypad
+        data: {}
+      selected_action_medical:
+      - action: input_button.press
+        metadata: {}
+        target:
+          entity_id: input_button.smoke_co_reset_ring_keypad
+        data: {}
+- id: '1787185717647'
+  alias: Alarmo Home
+  description: ''
+  triggers:
+  - trigger: switch.turned_on
+    target:
+      entity_id: input_boolean.alarmo_home_toggle
+    options:
+      behavior: each
+      for: 00:00:00
+  conditions: []
+  actions:
+  - action: alarm_control_panel.alarm_arm_home
+    metadata: {}
+    target:
+      entity_id: alarm_control_panel.carnes_crossroads
+    data:
+      code: '3113'
+  - action: input_boolean.turn_off
+    metadata: {}
+    target:
+      entity_id: input_boolean.alarmo_home_toggle
+    data: {}
+  mode: single
+- id: '1787338193737'
+  alias: Doorbell button pressed
+  description: ''
+  triggers:
+  - trigger: occupancy.detected
+    target:
+      entity_id: binary_sensor.doorbell_ringing_occupancy
+    options:
+      behavior: each
+      for: 00:00:00
+  conditions: []
+  actions:
+  - action: number.min
+    metadata: {}
+    target:
+      entity_id: number.living_room_alarm_keypad_1_generic_event_sound_notification_5_sound_level
+    data: {}
+  - delay:
+      hours: 0
+      minutes: 0
+      seconds: 0
+      milliseconds: 500
+  - action: input_boolean.turn_off
+    metadata: {}
+    target:
+      entity_id: input_boolean.doorbell_button_pressed
+    data: {}
+  - action: number.max
+    metadata: {}
+    target:
+      entity_id: number.living_room_alarm_keypad_1_generic_event_sound_notification_5_sound_level
+    data: {}
+  mode: single
+- id: '1787577711288'
+  alias: System - Critical Entity Availability Monitor
+  description: Report critical entities that remain unavailable or unknown.
+  triggers:
+  - trigger: state
+    entity_id:
+    - alarm_control_panel.carnes_crossroads
+    - switch.master_water
+    - binary_sensor.zb_water_sensor_laundry_water_leak
+    - binary_sensor.zb_water_sensor_fridge_water_leak
+    - binary_sensor.zb_water_sensor_kitchen_sink_water_leak
+    - binary_sensor.zb_water_sensor_filtration_center_water_leak
+    - binary_sensor.contact_sensor_front_door_intrusion
+    - binary_sensor.backyard_porch_contact_sensor_backyard_door_intrusion
+    - binary_sensor.garage_contact_sensor_garage_gate_intrusion
+    - binary_sensor.garage_contact_sensor_garage_door_intrusion
+    to: unavailable
+    for: 00:05:00
+    id: problem
+  - trigger: state
+    entity_id:
+    - alarm_control_panel.carnes_crossroads
+    - switch.master_water
+    - binary_sensor.zb_water_sensor_laundry_water_leak
+    - binary_sensor.zb_water_sensor_fridge_water_leak
+    - binary_sensor.zb_water_sensor_kitchen_sink_water_leak
+    - binary_sensor.zb_water_sensor_filtration_center_water_leak
+    - binary_sensor.contact_sensor_front_door_intrusion
+    - binary_sensor.backyard_porch_contact_sensor_backyard_door_intrusion
+    - binary_sensor.garage_contact_sensor_garage_gate_intrusion
+    - binary_sensor.garage_contact_sensor_garage_door_intrusion
+    to: unknown
+    for: 00:05:00
+    id: problem
+  - trigger: state
+    entity_id:
+    - alarm_control_panel.carnes_crossroads
+    - switch.master_water
+    - binary_sensor.zb_water_sensor_laundry_water_leak
+    - binary_sensor.zb_water_sensor_fridge_water_leak
+    - binary_sensor.zb_water_sensor_kitchen_sink_water_leak
+    - binary_sensor.zb_water_sensor_filtration_center_water_leak
+    - binary_sensor.contact_sensor_front_door_intrusion
+    - binary_sensor.backyard_porch_contact_sensor_backyard_door_intrusion
+    - binary_sensor.garage_contact_sensor_garage_gate_intrusion
+    - binary_sensor.garage_contact_sensor_garage_door_intrusion
+    from: unavailable
+    id: recovered
+  - trigger: state
+    entity_id:
+    - alarm_control_panel.carnes_crossroads
+    - switch.master_water
+    - binary_sensor.zb_water_sensor_laundry_water_leak
+    - binary_sensor.zb_water_sensor_fridge_water_leak
+    - binary_sensor.zb_water_sensor_kitchen_sink_water_leak
+    - binary_sensor.zb_water_sensor_filtration_center_water_leak
+    - binary_sensor.contact_sensor_front_door_intrusion
+    - binary_sensor.backyard_porch_contact_sensor_backyard_door_intrusion
+    - binary_sensor.garage_contact_sensor_garage_gate_intrusion
+    - binary_sensor.garage_contact_sensor_garage_door_intrusion
+    from: unknown
+    id: recovered
+  conditions:
+  - condition: state
+    entity_id: input_boolean.critical_entity_monitor_enabled
+    state: 'on'
+  actions:
+  - variables:
+      entity_name: '{{ trigger.to_state.name | default(trigger.entity_id, true) }}
+
+        '
+      notification_id: 'critical_entity_{{ trigger.entity_id | replace(''.'', ''_'')
+        }}
+
+        '
+  - choose:
+    - conditions:
+      - condition: trigger
+        id: problem
+      sequence:
+      - action: persistent_notification.create
+        data:
+          notification_id: '{{ notification_id }}'
+          title: Critical Entity Unavailable
+          message: '{{ entity_name }} has remained {{ trigger.to_state.state }} for
+            more than five minutes.
+
+            '
+    - conditions:
+      - condition: trigger
+        id: recovered
+      - condition: template
+        value_template: '{{ trigger.to_state.state not in [''unknown'', ''unavailable'']
+          }}
+
+          '
+      sequence:
+      - action: persistent_notification.dismiss
+        data:
+          notification_id: '{{ notification_id }}'
+  mode: parallel
+  max: 10
+- id: garage_co2_safety_alert_control
+  alias: Garage CO2 Safety Alert - Control Outputs
+  description: >-
+    Controls the repeating garage warning, automatic gate ventilation, and
+    SenseGuard siren from the garage CO2 reading. The dashboard enable and
+    temporary inhibit controls override every automatic response.
+  triggers:
+  - trigger: state
+    entity_id:
+    - sensor.co2_sensor_garage_co2
+    - input_boolean.garage_co2_alerts_enabled
+    - input_boolean.garage_co2_alerts_inhibited
+  - trigger: homeassistant
+    event: start
+  conditions: []
+  actions:
+  - variables:
+      co2_ppm: "{{ states('sensor.co2_sensor_garage_co2') | float(-1) }}"
+      responses_allowed: >-
+        {{ is_state('input_boolean.garage_co2_alerts_enabled', 'on')
+           and is_state('input_boolean.garage_co2_alerts_inhibited', 'off') }}
+  - choose:
+    - conditions:
+      - condition: template
+        value_template: "{{ not responses_allowed or co2_ppm < 0 }}"
+      sequence:
+      - action: switch.turn_off
+        target:
+          entity_id: switch.zb_senseguard_siren_siren_on
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.garage_co2_gate_opened_automatically
+    default:
+    - choose:
+      - conditions:
+        - condition: template
+          value_template: "{{ co2_ppm > 2000 }}"
+        sequence:
+        - action: switch.turn_on
+          target:
+            entity_id: switch.zb_senseguard_siren_siren_on
+      default:
+      - action: switch.turn_off
+        target:
+          entity_id: switch.zb_senseguard_siren_siren_on
+    - choose:
+      - conditions:
+        - condition: template
+          value_template: "{{ co2_ppm > 1500 }}"
+        - condition: state
+          entity_id: cover.garage_gate
+          state: closed
+        - condition: state
+          entity_id: input_boolean.garage_co2_gate_opened_automatically
+          state: 'off'
+        sequence:
+        - action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.garage_co2_gate_opened_automatically
+        - action: cover.open_cover
+          target:
+            entity_id: cover.garage_gate
+        - if:
+          - condition: state
+            entity_id: input_boolean.garage_co2_notify_fabricio
+            state: 'on'
+          then:
+          - action: notify.mobile_app_fabricio_zambroni_17
+            data:
+              title: Garage CO2 Safety Alert
+              message: >-
+                The garage gate was opened automatically because garage CO2 is
+                {{ co2_ppm | round(0) }} ppm, above the 1,500 ppm ventilation threshold.
+        - if:
+          - condition: state
+            entity_id: input_boolean.garage_co2_notify_lucas
+            state: 'on'
+          then:
+          - action: notify.mobile_app_lucas_zambroni_new
+            data:
+              title: Garage CO2 Safety Alert
+              message: >-
+                The garage gate was opened automatically because garage CO2 is
+                {{ co2_ppm | round(0) }} ppm, above the 1,500 ppm ventilation threshold.
+      - conditions:
+        - condition: template
+          value_template: "{{ co2_ppm <= 1500 }}"
+        - condition: state
+          entity_id: input_boolean.garage_co2_gate_opened_automatically
+          state: 'on'
+        sequence:
+        - action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.garage_co2_gate_opened_automatically
+    - if:
+      - condition: template
+        value_template: "{{ co2_ppm > 1000 }}"
+      then:
+      - repeat:
+          while:
+          - condition: numeric_state
+            entity_id: sensor.co2_sensor_garage_co2
+            above: 1000
+          - condition: state
+            entity_id: input_boolean.garage_co2_alerts_enabled
+            state: 'on'
+          - condition: state
+            entity_id: input_boolean.garage_co2_alerts_inhibited
+            state: 'off'
+          sequence:
+          - action: button.press
+            target:
+              entity_id: button.garage_fingerprint_play_garage_warning
+          - delay: 00:00:05
+  mode: restart
+  max_exceeded: silent

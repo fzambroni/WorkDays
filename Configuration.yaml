@@ -1,0 +1,2639 @@
+###############################################################################
+# Home Assistant Main Configuration
+# Organized by platform/integration first, then helper domains grouped by routine.
+###############################################################################
+
+# Loads the default set of integrations. Do not remove.
+default_config:
+
+homeassistant:
+  # Packages are loaded from /config/packages
+  packages: !include_dir_named packages
+
+###############################################################################
+# System / Core Integrations
+###############################################################################
+
+recorder:
+  purge_keep_days: 20
+
+api:
+
+# Text to speech
+tts:
+  - platform: google_translate
+
+# External YAML includes
+automation: !include automations.yaml
+script: !include scripts.yaml
+scene: !include scenes.yaml
+sensor: !include sensors.yaml
+
+shell_command:
+  outlook_calendar_upload: '/config/scripts/outlook_calendar_upload.sh "{{ operation }}" "{{ filename }}" "{{ chunk }}"'
+
+###############################################################################
+# Frontend / Lovelace
+###############################################################################
+
+frontend:
+  extra_module_url:
+    - /local/community/lovelace-card-mod/card-mod.js
+    - /local/community/custom-brand-icons/custom-brand-icons.js
+  themes: !include_dir_merge_named themes
+
+###############################################################################
+# Notifications
+###############################################################################
+
+notify:
+  - name: WhatsApp
+    platform: rest
+    resource: https://api.callmebot.com/whatsapp.php
+    data:
+      source: HA
+      phone: +13513530362
+      apikey: 3992692
+
+###############################################################################
+# Bluetooth / BLE
+###############################################################################
+
+ble_monitor:
+  active_scan: true
+  bt_auto_restart: true
+
+###############################################################################
+# MQTT
+###############################################################################
+
+mqtt:
+  sensor:
+    - state_topic: "home/bedroom/temperature"
+
+
+###############################################################################
+# Template Entities
+###############################################################################
+
+template:
+
+  - sensor:
+      # Used by: Home dashboard update badge.
+      # Purpose: counts every pending update exposed by Home Assistant.
+      - name: "Atualizações Pendentes"
+        unique_id: atualizacoes_pendentes
+        unit_of_measurement: "pendentes"
+        icon: mdi:update
+        state: >
+          {{ states.update | selectattr('state', 'eq', 'on') | list | count }}
+        attributes:
+          atualizacoes: >
+            {{ states.update
+               | selectattr('state', 'eq', 'on')
+               | map(attribute='name')
+               | list
+               | join(', ') }}
+
+      - name: "Berkeley Electric Projected Monthly Bill"
+        unique_id: berkeley_electric_projected_monthly_bill
+        unit_of_measurement: "$"
+        icon: mdi:chart-line
+        state: >
+          {% set usage = states('sensor.berkeley_electric_cooperative_smarthub_energy_monthly_usage_6622863001_house_berkeley_electric_cooperative_smarthub_energy_monthly_usage_6622863001_house') | float(0) %}
+          {% set rate = 0.1262 %}
+          {% set daily_fee = 1.50 %}
+          {% set start_day = states('input_number.berkeley_electric_billing_cycle_start_day') | int(1) %}
+          {% set month_start = now().replace(day=1, hour=0, minute=0, second=0, microsecond=0) %}
+          {% set next_month_start = (month_start + timedelta(days=32)).replace(day=1) %}
+          {% set current_month_last_day = (next_month_start - timedelta(days=1)).day %}
+          {% set current_cycle_start = month_start.replace(day=[start_day, current_month_last_day] | min) %}
+          {% if now() < current_cycle_start %}
+            {% set previous_month_last = month_start - timedelta(days=1) %}
+            {% set previous_month_start = previous_month_last.replace(day=1) %}
+            {% set cycle_start = previous_month_start.replace(day=[start_day, previous_month_last.day] | min) %}
+          {% else %}
+            {% set cycle_start = current_cycle_start %}
+          {% endif %}
+          {% set following_month_start = (cycle_start.replace(day=1) + timedelta(days=32)).replace(day=1) %}
+          {% set following_month_last_day = ((following_month_start + timedelta(days=32)).replace(day=1) - timedelta(days=1)).day %}
+          {% set next_cycle_start = following_month_start.replace(day=[start_day, following_month_last_day] | min) %}
+          {% set elapsed_days = (now() - cycle_start).days + 1 %}
+          {% set total_days = (next_cycle_start - cycle_start).days %}
+          {% if elapsed_days > 0 and usage > 0 %}
+            {% set projected_kwh = (usage / elapsed_days) * total_days %}
+            {{ ((projected_kwh * rate) + (total_days * daily_fee)) | round(2) }}
+          {% else %}
+            0
+          {% endif %}
+        attributes:
+          projection_period: >
+            {% set start_day = states('input_number.berkeley_electric_billing_cycle_start_day') | int(1) %}
+            {% set month_start = now().replace(day=1, hour=0, minute=0, second=0, microsecond=0) %}
+            {% set next_month_start = (month_start + timedelta(days=32)).replace(day=1) %}
+            {% set current_month_last_day = (next_month_start - timedelta(days=1)).day %}
+            {% set current_cycle_start = month_start.replace(day=[start_day, current_month_last_day] | min) %}
+            {% if now() < current_cycle_start %}
+              {% set previous_month_last = month_start - timedelta(days=1) %}
+              {% set previous_month_start = previous_month_last.replace(day=1) %}
+              {% set cycle_start = previous_month_start.replace(day=[start_day, previous_month_last.day] | min) %}
+            {% else %}
+              {% set cycle_start = current_cycle_start %}
+            {% endif %}
+            {% set following_month_start = (cycle_start.replace(day=1) + timedelta(days=32)).replace(day=1) %}
+            {% set following_month_last_day = ((following_month_start + timedelta(days=32)).replace(day=1) - timedelta(days=1)).day %}
+            {% set next_cycle_start = following_month_start.replace(day=[start_day, following_month_last_day] | min) %}
+            {% set cycle_end = next_cycle_start - timedelta(days=1) %}
+            {{ cycle_start.strftime('%b %d, %Y') }} – {{ cycle_end.strftime('%b %d, %Y') }}
+          period_start: >
+            {% set start_day = states('input_number.berkeley_electric_billing_cycle_start_day') | int(1) %}
+            {% set month_start = now().replace(day=1, hour=0, minute=0, second=0, microsecond=0) %}
+            {% set next_month_start = (month_start + timedelta(days=32)).replace(day=1) %}
+            {% set current_month_last_day = (next_month_start - timedelta(days=1)).day %}
+            {% set current_cycle_start = month_start.replace(day=[start_day, current_month_last_day] | min) %}
+            {% if now() < current_cycle_start %}
+              {% set previous_month_last = month_start - timedelta(days=1) %}
+              {% set previous_month_start = previous_month_last.replace(day=1) %}
+              {{ previous_month_start.replace(day=[start_day, previous_month_last.day] | min).date() }}
+            {% else %}
+              {{ current_cycle_start.date() }}
+            {% endif %}
+          period_end: >
+            {% set start_day = states('input_number.berkeley_electric_billing_cycle_start_day') | int(1) %}
+            {% set month_start = now().replace(day=1, hour=0, minute=0, second=0, microsecond=0) %}
+            {% set next_month_start = (month_start + timedelta(days=32)).replace(day=1) %}
+            {% set current_month_last_day = (next_month_start - timedelta(days=1)).day %}
+            {% set current_cycle_start = month_start.replace(day=[start_day, current_month_last_day] | min) %}
+            {% if now() < current_cycle_start %}
+              {% set previous_month_last = month_start - timedelta(days=1) %}
+              {% set previous_month_start = previous_month_last.replace(day=1) %}
+              {% set cycle_start = previous_month_start.replace(day=[start_day, previous_month_last.day] | min) %}
+            {% else %}
+              {% set cycle_start = current_cycle_start %}
+            {% endif %}
+            {% set following_month_start = (cycle_start.replace(day=1) + timedelta(days=32)).replace(day=1) %}
+            {% set following_month_last_day = ((following_month_start + timedelta(days=32)).replace(day=1) - timedelta(days=1)).day %}
+            {{ (following_month_start.replace(day=[start_day, following_month_last_day] | min) - timedelta(days=1)).date() }}
+          elapsed_days: >
+            {% set start_day = states('input_number.berkeley_electric_billing_cycle_start_day') | int(1) %}
+            {% set month_start = now().replace(day=1, hour=0, minute=0, second=0, microsecond=0) %}
+            {% set next_month_start = (month_start + timedelta(days=32)).replace(day=1) %}
+            {% set current_month_last_day = (next_month_start - timedelta(days=1)).day %}
+            {% set current_cycle_start = month_start.replace(day=[start_day, current_month_last_day] | min) %}
+            {% if now() < current_cycle_start %}
+              {% set previous_month_last = month_start - timedelta(days=1) %}
+              {% set previous_month_start = previous_month_last.replace(day=1) %}
+              {% set cycle_start = previous_month_start.replace(day=[start_day, previous_month_last.day] | min) %}
+            {% else %}
+              {% set cycle_start = current_cycle_start %}
+            {% endif %}
+            {{ (now() - cycle_start).days + 1 }}
+          total_days: >
+            {% set start_day = states('input_number.berkeley_electric_billing_cycle_start_day') | int(1) %}
+            {% set month_start = now().replace(day=1, hour=0, minute=0, second=0, microsecond=0) %}
+            {% set next_month_start = (month_start + timedelta(days=32)).replace(day=1) %}
+            {% set current_month_last_day = (next_month_start - timedelta(days=1)).day %}
+            {% set current_cycle_start = month_start.replace(day=[start_day, current_month_last_day] | min) %}
+            {% if now() < current_cycle_start %}
+              {% set previous_month_last = month_start - timedelta(days=1) %}
+              {% set previous_month_start = previous_month_last.replace(day=1) %}
+              {% set cycle_start = previous_month_start.replace(day=[start_day, previous_month_last.day] | min) %}
+            {% else %}
+              {% set cycle_start = current_cycle_start %}
+            {% endif %}
+            {% set following_month_start = (cycle_start.replace(day=1) + timedelta(days=32)).replace(day=1) %}
+            {% set following_month_last_day = ((following_month_start + timedelta(days=32)).replace(day=1) - timedelta(days=1)).day %}
+            {% set next_cycle_start = following_month_start.replace(day=[start_day, following_month_last_day] | min) %}
+            {{ (next_cycle_start - cycle_start).days }}
+          billing_cycle_start_day: >
+            {{ states('input_number.berkeley_electric_billing_cycle_start_day') | int(1) }}
+
+      - name: "Berkeley Electric Estimated Monthly Bill"
+        unique_id: berkeley_electric_estimated_monthly_bill
+        unit_of_measurement: "$"
+        icon: mdi:cash-multiple
+        state: >
+          {% set usage = states('sensor.berkeley_electric_cooperative_smarthub_energy_monthly_usage_6622863001_house_berkeley_electric_cooperative_smarthub_energy_monthly_usage_6622863001_house') | float(0) %}
+          {% set start_day = states('input_number.berkeley_electric_billing_cycle_start_day') | int(1) %}
+          {% set month_start = now().replace(day=1, hour=0, minute=0, second=0, microsecond=0) %}
+          {% set next_month_start = (month_start + timedelta(days=32)).replace(day=1) %}
+          {% set current_month_last_day = (next_month_start - timedelta(days=1)).day %}
+          {% set current_cycle_start = month_start.replace(day=[start_day, current_month_last_day] | min) %}
+          {% if now() < current_cycle_start %}
+            {% set previous_month_last = month_start - timedelta(days=1) %}
+            {% set previous_month_start = previous_month_last.replace(day=1) %}
+            {% set cycle_start = previous_month_start.replace(day=[start_day, previous_month_last.day] | min) %}
+          {% else %}
+            {% set cycle_start = current_cycle_start %}
+          {% endif %}
+          {% set elapsed_days = (now() - cycle_start).days + 1 %}
+          {{ ((usage * 0.1262) + (elapsed_days * 1.50)) | round(2) }}
+        attributes:
+          billing_period: >
+            {% set start_day = states('input_number.berkeley_electric_billing_cycle_start_day') | int(1) %}
+            {% set month_start = now().replace(day=1, hour=0, minute=0, second=0, microsecond=0) %}
+            {% set next_month_start = (month_start + timedelta(days=32)).replace(day=1) %}
+            {% set current_month_last_day = (next_month_start - timedelta(days=1)).day %}
+            {% set current_cycle_start = month_start.replace(day=[start_day, current_month_last_day] | min) %}
+            {% if now() < current_cycle_start %}
+              {% set previous_month_last = month_start - timedelta(days=1) %}
+              {% set previous_month_start = previous_month_last.replace(day=1) %}
+              {% set cycle_start = previous_month_start.replace(day=[start_day, previous_month_last.day] | min) %}
+            {% else %}
+              {% set cycle_start = current_cycle_start %}
+            {% endif %}
+            {% set following_month_start = (cycle_start.replace(day=1) + timedelta(days=32)).replace(day=1) %}
+            {% set following_month_last_day = ((following_month_start + timedelta(days=32)).replace(day=1) - timedelta(days=1)).day %}
+            {% set cycle_end = following_month_start.replace(day=[start_day, following_month_last_day] | min) - timedelta(days=1) %}
+            {{ cycle_start.strftime('%b %d, %Y') }} – {{ cycle_end.strftime('%b %d, %Y') }}
+ 
+  # Used by: Master Bathroom Smart Ventilation routine.
+  # Purpose: compares bathroom humidity against kitchen humidity.
+      - name: "Unavailable Entities Count"
+        unique_id: unavailable_entities_count
+        icon: mdi:lan-disconnect
+        state: >
+          {{ states
+            | selectattr('state', 'in', ['unavailable', 'unknown'])
+            | rejectattr('entity_id', 'search', 'button.')
+            | rejectattr('entity_id', 'search', 'event.')
+            | rejectattr('entity_id', 'search', 'update.')
+            | list
+            | count }}
+
+      - name: "Front Door Auto-Lock Countdown"
+        unique_id: front_door_auto_lock_countdown
+        icon: >
+          {% if states('input_text.front_door_auto_lock_countdown') not in ['Idle', 'Waiting', 'unknown', 'unavailable', ''] %}
+            mdi:timer-lock
+          {% elif states('input_text.front_door_auto_lock_countdown') == 'Waiting' %}
+            mdi:door-open
+          {% else %}
+            mdi:timer-off-outline
+          {% endif %}
+        state: >
+          {{ states('input_text.front_door_auto_lock_countdown') }}
+        attributes:
+          status: >
+            {{ states('input_text.front_door_auto_lock_status') }}
+          target_time: >
+            {{ states('input_datetime.front_door_next_auto_lock_time') }}
+          door_opened_since_unlock: >
+            {{ states('input_text.front_door_auto_lock_status') in ['Door is open - countdown paused', 'Door closed after opening', 'Door closed - night quick-lock'] }}
+  
+      - name: "Security Alarm Active Sensors"
+        unique_id: security_alarm_active_sensors
+        icon: mdi:shield-alert-outline
+        state: >
+          {# Add future Alarmo sensors to this list. #}
+          {% set candidates = [
+            'binary_sensor.contact_sensor_front_door_intrusion',
+            'binary_sensor.garage_contact_sensor_garage_gate_intrusion',
+            'binary_sensor.kitchen_contact_sensor_pantry_intrusion',
+            'binary_sensor.bedroom_contact_sensor_master_closet_intrusion',
+            'binary_sensor.zb_presence_sensor_01_external_occupancy',
+            'binary_sensor.zb_occupancy_sensor_garage_1_occupancy',
+            'binary_sensor.zb_occupancy_sensor_garage_2_occupancy'
+          ] %}
+          {% set ns = namespace(names=[]) %}
+          {% for entity_id in candidates %}
+            {% if is_state(entity_id, 'on') %}
+              {% set friendly = state_attr(entity_id, 'friendly_name') %}
+              {% set ns.names = ns.names + [friendly if friendly else entity_id] %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.names | join(', ') if ns.names | count > 0 else 'Sensor not reported by Alarmo' }}
+
+      - name: "Master Bathroom Humidity Difference"
+        unique_id: master_bathroom_humidity_difference
+        unit_of_measurement: "%"
+        icon: mdi:delta
+        state: >
+          {{
+            (
+              states('sensor.zb_sensor_master_bathroom_humidity') | float(0)
+              -
+              states('sensor.zb_th_sensor_square_04_kitchen_humidity') | float(0)
+            ) | round(1)
+          }}
+          
+      - name: HVAC Active House Mode
+        unique_id: hvac_active_house_mode
+        icon: mdi:home-thermometer-outline
+        state: >
+          {% set thermostats = [
+            'climate.living_room_living_room_thermostat_t6_pro_thermostat',
+            'climate.bedroom_bedroom_thermostat_t6_pro_thermostat',
+            'climate.second_floor_thermostat_t6_pro_thermostat'
+          ] %}
+          {% set modes = namespace(values=[]) %}
+          {% for entity in thermostats %}
+            {% set mode = states(entity) %}
+            {% if mode not in ['off', 'unknown', 'unavailable'] %}
+              {% set modes.values = modes.values + [mode] %}
+            {% endif %}
+          {% endfor %}
+          {% set unique_modes = modes.values | unique | list %}
+          {% if unique_modes | count == 0 %}
+            All Off
+          {% elif unique_modes | count == 1 %}
+            {{ unique_modes[0] }}
+          {% else %}
+            Mode Mismatch
+          {% endif %}
+
+      - name: HVAC Active Thermostat Count
+        unique_id: hvac_active_thermostat_count
+        icon: mdi:counter
+        state: >
+          {% set thermostats = [
+            'climate.living_room_living_room_thermostat_t6_pro_thermostat',
+            'climate.bedroom_bedroom_thermostat_t6_pro_thermostat',
+            'climate.second_floor_thermostat_t6_pro_thermostat'
+          ] %}
+          {% set count = namespace(value=0) %}
+          {% for entity in thermostats %}
+            {% if states(entity) not in ['off', 'unknown', 'unavailable'] %}
+              {% set count.value = count.value + 1 %}
+            {% endif %}
+          {% endfor %}
+          {{ count.value }}
+
+      - name: HVAC Effective Fabricio Presence
+        unique_id: hvac_effective_fabricio_presence
+        icon: mdi:account-check-outline
+        state: >
+          {% if is_state('input_boolean.hvac_presence_test_mode_enabled', 'on') %}
+            {{ states('input_select.hvac_test_fabricio_presence') }}
+          {% else %}
+            {{ 'Home' if is_state('person.fabricio_zambroni', 'home') else 'Away' }}
+          {% endif %}
+
+      - name: HVAC Effective Lucas Presence
+        unique_id: hvac_effective_lucas_presence
+        icon: mdi:account-check-outline
+        state: >
+          {% if is_state('input_boolean.hvac_presence_test_mode_enabled', 'on') %}
+            {{ states('input_select.hvac_test_lucas_presence') }}
+          {% else %}
+            {{ 'Home' if is_state('person.lucas_zambroni', 'home') else 'Away' }}
+          {% endif %}
+
+      - name: HVAC Effective Occupancy
+        unique_id: hvac_effective_occupancy
+        icon: mdi:home-account
+        state: >
+          {% set fabricio = states('sensor.hvac_effective_fabricio_presence') %}
+          {% set lucas = states('sensor.hvac_effective_lucas_presence') %}
+          {% if is_state('timer.hvac_arrival_comfort', 'active') %}
+            Home
+          {% elif fabricio == 'Home' or lucas == 'Home' %}
+            Home
+          {% else %}
+            Away
+          {% endif %}
+
+      - name: HVAC Occupancy Source
+        unique_id: hvac_occupancy_source
+        icon: mdi:home-search-outline
+        state: >
+          {% if is_state('timer.hvac_arrival_comfort', 'active') %}
+            Arrival Comfort
+          {% elif is_state('input_boolean.hvac_presence_test_mode_enabled', 'on') %}
+            Presence Test
+          {% elif is_state('person.fabricio_zambroni', 'home') or is_state('person.lucas_zambroni', 'home') %}
+            Real Presence
+          {% else %}
+            Away
+          {% endif %}
+
+
+      - name: Rain Bird Active Zone
+        unique_id: rainbird_active_zone
+        icon: mdi:sprinkler-variant
+        state: >
+          {% set zones = {
+            'sensor.carnes_crossroads_1_front_curb': '1 - Front Curb',
+            'sensor.carnes_crossroads_2_garage_side': '2 - Garage Side',
+            'sensor.carnes_crossroads_3_sides': '3 - Sides',
+            'sensor.carnes_crossroads_4_front': '4 - Front',
+            'sensor.carnes_crossroads_5_backyard': '5 - Backyard',
+            'sensor.carnes_crossroads_station_006': '6 - Station 006'
+          } %}
+          {% set ns = namespace(active=[]) %}
+          {% for entity, label in zones.items() %}
+            {% if states(entity) not in ['idle', 'unknown', 'unavailable', 'none', ''] %}
+              {% set ns.active = ns.active + [label ~ ' (' ~ states(entity) ~ ')'] %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.active | join(', ') if ns.active | count > 0 else 'No active zone' }}
+
+      - name: Rain Bird Running Zone Count
+        unique_id: rainbird_running_zone_count
+        icon: mdi:counter
+        state: >
+          {% set zones = [
+            'sensor.carnes_crossroads_1_front_curb',
+            'sensor.carnes_crossroads_2_garage_side',
+            'sensor.carnes_crossroads_3_sides',
+            'sensor.carnes_crossroads_4_front',
+            'sensor.carnes_crossroads_5_backyard',
+            'sensor.carnes_crossroads_station_006'
+          ] %}
+          {% set ns = namespace(count=0) %}
+          {% for entity in zones %}
+            {% if states(entity) not in ['idle', 'unknown', 'unavailable', 'none', ''] %}
+              {% set ns.count = ns.count + 1 %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.count }}
+
+      - name: Rain Bird Idle Zone Count
+        unique_id: rainbird_idle_zone_count
+        icon: mdi:sprinkler
+        state: >
+          {% set zones = [
+            'sensor.carnes_crossroads_1_front_curb',
+            'sensor.carnes_crossroads_2_garage_side',
+            'sensor.carnes_crossroads_3_sides',
+            'sensor.carnes_crossroads_4_front',
+            'sensor.carnes_crossroads_5_backyard',
+            'sensor.carnes_crossroads_station_006'
+          ] %}
+          {% set ns = namespace(count=0) %}
+          {% for entity in zones %}
+            {% if states(entity) == 'idle' %}
+              {% set ns.count = ns.count + 1 %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.count }}
+
+      - name: Rain Bird Scheduled Program Count
+        unique_id: rainbird_scheduled_program_count
+        icon: mdi:calendar-check
+        state: >
+          {% set programs = [
+            'sensor.carnes_crossroads_program_a_status',
+            'sensor.carnes_crossroads_program_b_status',
+            'sensor.carnes_crossroads_program_c_status'
+          ] %}
+          {% set ns = namespace(count=0) %}
+          {% for entity in programs %}
+            {% if states(entity) not in ['not scheduled', 'unknown', 'unavailable', 'none', ''] %}
+              {% set ns.count = ns.count + 1 %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.count }}
+
+      - name: Rain Bird System Health
+        unique_id: rainbird_system_health
+        icon: >
+          {% if is_state('binary_sensor.carnes_crossroads_connected', 'off') %}
+            mdi:cloud-alert
+          {% elif states('sensor.carnes_crossroads_rain_bird_iq4_alarms') | int(0) > 0 %}
+            mdi:alert-circle
+          {% elif states('sensor.carnes_crossroads_rain_bird_iq4_warnings') | int(0) > 0 %}
+            mdi:alert
+          {% else %}
+            mdi:check-circle
+          {% endif %}
+        state: >
+          {% if is_state('binary_sensor.carnes_crossroads_connected', 'off') %}
+            Offline
+          {% elif states('sensor.carnes_crossroads_rain_bird_iq4_alarms') | int(0) > 0 %}
+            Alarm
+          {% elif states('sensor.carnes_crossroads_rain_bird_iq4_warnings') | int(0) > 0 %}
+            Warning
+          {% elif states('sensor.rain_bird_running_zone_count') | int(0) > 0 %}
+            Watering
+          {% elif states('sensor.carnes_crossroads_rain_delay') | int(0) > 0 %}
+            Weather Delay
+          {% else %}
+            Ready
+          {% endif %}
+
+      - name: Rain Bird Dashboard Summary
+        unique_id: rainbird_dashboard_summary
+        icon: mdi:clipboard-pulse-outline
+        state: >
+          {% set health = states('sensor.rain_bird_system_health') %}
+          {% set delay = states('sensor.carnes_crossroads_rain_delay') | int(0) %}
+          {% set active = states('sensor.rain_bird_active_zone') %}
+          {% if active != 'No active zone' %}
+            {{ health }} · {{ active }}
+          {% elif delay > 0 %}
+            {{ health }} · Delay {{ delay }} day(s)
+          {% else %}
+            {{ health }} · {{ states('sensor.rain_bird_scheduled_program_count') }} scheduled program(s)
+          {% endif %}
+
+      - name: "Front Porch Presence Window Start"
+        unique_id: front_porch_presence_window_start
+        icon: mdi:weather-sunset-up
+        device_class: timestamp
+        state: >
+          {% set offset = states('input_number.front_porch_presence_sunset_offset_minutes') | int(0) %}
+          {% set next_setting = as_datetime(state_attr('sun.sun', 'next_setting')) %}
+          {% if next_setting %}
+            {% if is_state('sun.sun', 'below_horizon') %}
+              {{ ((next_setting - timedelta(days=1)) + timedelta(minutes=offset)).isoformat() }}
+            {% else %}
+              {{ (next_setting + timedelta(minutes=offset)).isoformat() }}
+            {% endif %}
+          {% else %}
+            {{ none }}
+          {% endif %}
+
+      - name: "Front Porch Presence Window End"
+        unique_id: front_porch_presence_window_end
+        icon: mdi:weather-sunset-down
+        device_class: timestamp
+        state: >
+          {% set offset = states('input_number.front_porch_presence_sunrise_offset_minutes') | int(0) %}
+          {% set next_rising = as_datetime(state_attr('sun.sun', 'next_rising')) %}
+          {% if next_rising %}
+            {{ (next_rising + timedelta(minutes=offset)).isoformat() }}
+          {% else %}
+            {{ none }}
+          {% endif %}
+
+      - name: "Garage Lighting Active Sources"
+        unique_id: garage_lighting_active_sources
+        icon: mdi:source-branch
+        state: >-
+          {% set ns = namespace(items=[]) %}
+          {% if is_state('input_boolean.garage_lighting_gate_enabled', 'on')
+                and is_state('binary_sensor.garage_contact_sensor_garage_gate_intrusion', 'on') %}
+            {% set ns.items = ns.items + ['Garage gate'] %}
+          {% endif %}
+          {% if is_state('input_boolean.garage_lighting_door_enabled', 'on')
+                and is_state('binary_sensor.garage_contact_sensor_garage_door_intrusion', 'on') %}
+            {% set ns.items = ns.items + ['Garage door'] %}
+          {% endif %}
+          {% if is_state('binary_sensor.garage_lighting_monitoring_active', 'on')
+                and is_state('input_boolean.garage_lighting_sensor_1_enabled', 'on')
+                and is_state('binary_sensor.zb_occupancy_sensor_garage_1_occupancy', 'on') %}
+            {% set ns.items = ns.items + ['Motion 1'] %}
+          {% endif %}
+          {% if is_state('binary_sensor.garage_lighting_monitoring_active', 'on')
+                and is_state('input_boolean.garage_lighting_sensor_2_enabled', 'on')
+                and is_state('binary_sensor.zb_occupancy_sensor_garage_2_occupancy', 'on') %}
+            {% set ns.items = ns.items + ['Motion 2'] %}
+          {% endif %}
+          {% if is_state('input_boolean.garage_lighting_cycle_active', 'on') %}
+            {% set ns.items = ns.items + ['Active lighting cycle'] %}
+          {% endif %}
+          {% if is_state('input_boolean.garage_lighting_manual_off_override', 'on') %}
+            {% set ns.items = ns.items + ['Manual pause'] %}
+          {% endif %}
+          {{ ns.items | join(', ') if ns.items | count > 0 else 'No active sources' }}
+
+      - name: "Garage Lighting Status"
+        unique_id: garage_lighting_status
+        icon: >-
+          {% if is_state('input_boolean.garage_lighting_enabled', 'off') %}
+            mdi:lightbulb-off-outline
+          {% elif is_state('input_boolean.garage_lighting_manual_off_override', 'on') %}
+            mdi:hand-back-right-off-outline
+          {% elif is_state('switch.nspanel_garage_relay_1', 'on') %}
+            mdi:lightbulb-on
+          {% elif is_state('timer.garage_lighting_retrigger', 'active') %}
+            mdi:motion-sensor
+          {% elif is_state('binary_sensor.garage_lighting_monitoring_active', 'on') %}
+            mdi:radar
+          {% else %}
+            mdi:lightbulb-auto-outline
+          {% endif %}
+        state: >-
+          {{ states('input_text.garage_lighting_status') }}
+        attributes:
+          active_sources: >-
+            {{ states('sensor.garage_lighting_active_sources') }}
+          last_event: >-
+            {{ states('input_text.garage_lighting_last_event') }}
+          automatic_activation_allowed: >-
+            {{ states('binary_sensor.garage_lighting_activation_allowed') }}
+          low_light_rule: >-
+            {{ states('binary_sensor.garage_lighting_low_light_rule_matched') }}
+          schedule_rule: >-
+            {{ states('binary_sensor.garage_lighting_schedule_active') }}
+          monitoring_active: >-
+            {{ states('binary_sensor.garage_lighting_monitoring_active') }}
+          effective_occupancy: >-
+            {{ states('binary_sensor.garage_lighting_effective_occupancy') }}
+          cycle_active: >-
+            {{ states('input_boolean.garage_lighting_cycle_active') }}
+          off_timer: >-
+            {{ states('timer.garage_lighting_hold') }}
+          retrigger_timer: >-
+            {{ states('timer.garage_lighting_retrigger') }}
+
+      - name: "Environment Monitor Alert Count"
+        unique_id: environment_monitor_alert_count
+        icon: mdi:home-alert-outline
+        state: >-
+          {% set temp_min = states('input_number.environment_monitor_temperature_minimum') | float(60) %}
+          {% set temp_max = states('input_number.environment_monitor_temperature_maximum') | float(80) %}
+          {% set humidity_min = states('input_number.environment_monitor_humidity_minimum') | float(30) %}
+          {% set humidity_max = states('input_number.environment_monitor_humidity_maximum') | float(60) %}
+          {% set excluded_text = states('input_text.environment_monitor_excluded_entities') %}
+          {% set excluded = (excluded_text | replace(' ', '')).split(',')
+             if excluded_text not in ['unknown', 'unavailable', 'none', ''] else [] %}
+          {% set include_external = is_state('input_boolean.environment_monitor_include_external_sensors', 'on') %}
+          {% set automatic_keywords = [
+            'outdoor', 'backyard', 'porch', 'weather', 'forecast',
+            'freezer', 'refrigerator', 'fridge', 'cpu', 'processor', 'blink'
+          ] %}
+          {% set ns = namespace(alerts=0, temperatures=0, humidities=0, monitored=0) %}
+          {% for s in states.sensor %}
+            {% set device_class = s.attributes.device_class | default('', true) %}
+            {% if device_class in ['temperature', 'humidity'] and is_number(s.state) %}
+              {% set label = (s.entity_id ~ ' ' ~ s.name) | lower %}
+              {% set keyword_match = namespace(value=false) %}
+              {% for keyword in automatic_keywords %}
+                {% if keyword in label %}
+                  {% set keyword_match.value = true %}
+                {% endif %}
+              {% endfor %}
+              {% set excluded_by_policy = (not include_external) and keyword_match.value %}
+              {% set excluded_manually = s.entity_id in excluded %}
+              {% if not excluded_by_policy and not excluded_manually %}
+                {% set ns.monitored = ns.monitored + 1 %}
+                {% if device_class == 'temperature' %}
+                  {% set ns.temperatures = ns.temperatures + 1 %}
+                  {% if s.state | float < temp_min or s.state | float > temp_max %}
+                    {% set ns.alerts = ns.alerts + 1 %}
+                  {% endif %}
+                {% else %}
+                  {% set ns.humidities = ns.humidities + 1 %}
+                  {% if s.state | float < humidity_min or s.state | float > humidity_max %}
+                    {% set ns.alerts = ns.alerts + 1 %}
+                  {% endif %}
+                {% endif %}
+              {% endif %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.alerts }}
+        attributes:
+          monitored_temperature_sensors: >-
+            {% set excluded_text = states('input_text.environment_monitor_excluded_entities') %}
+            {% set excluded = (excluded_text | replace(' ', '')).split(',')
+               if excluded_text not in ['unknown', 'unavailable', 'none', ''] else [] %}
+            {% set include_external = is_state('input_boolean.environment_monitor_include_external_sensors', 'on') %}
+            {% set keywords = ['outdoor', 'backyard', 'porch', 'weather', 'forecast', 'freezer', 'refrigerator', 'fridge', 'cpu', 'processor', 'blink'] %}
+            {% set ns = namespace(count=0) %}
+            {% for s in states.sensor | selectattr('attributes.device_class', 'eq', 'temperature') %}
+              {% set label = (s.entity_id ~ ' ' ~ s.name) | lower %}
+              {% set match = namespace(value=false) %}
+              {% for keyword in keywords %}{% if keyword in label %}{% set match.value = true %}{% endif %}{% endfor %}
+              {% if is_number(s.state) and s.entity_id not in excluded and (include_external or not match.value) %}
+                {% set ns.count = ns.count + 1 %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.count }}
+          monitored_humidity_sensors: >-
+            {% set excluded_text = states('input_text.environment_monitor_excluded_entities') %}
+            {% set excluded = (excluded_text | replace(' ', '')).split(',')
+               if excluded_text not in ['unknown', 'unavailable', 'none', ''] else [] %}
+            {% set include_external = is_state('input_boolean.environment_monitor_include_external_sensors', 'on') %}
+            {% set keywords = ['outdoor', 'backyard', 'porch', 'weather', 'forecast', 'freezer', 'refrigerator', 'fridge', 'cpu', 'processor', 'blink'] %}
+            {% set ns = namespace(count=0) %}
+            {% for s in states.sensor | selectattr('attributes.device_class', 'eq', 'humidity') %}
+              {% set label = (s.entity_id ~ ' ' ~ s.name) | lower %}
+              {% set match = namespace(value=false) %}
+              {% for keyword in keywords %}{% if keyword in label %}{% set match.value = true %}{% endif %}{% endfor %}
+              {% if is_number(s.state) and s.entity_id not in excluded and (include_external or not match.value) %}
+                {% set ns.count = ns.count + 1 %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.count }}
+          temperature_range: >-
+            {{ states('input_number.environment_monitor_temperature_minimum') }}–{{ states('input_number.environment_monitor_temperature_maximum') }} °F
+          humidity_range: >-
+            {{ states('input_number.environment_monitor_humidity_minimum') }}–{{ states('input_number.environment_monitor_humidity_maximum') }} %
+
+  - binary_sensor:
+
+      - name: "Environment Monitor Alert"
+        unique_id: environment_monitor_alert
+        icon: >-
+          {{ 'mdi:home-alert'
+             if is_state('input_boolean.environment_monitor_alerts_enabled', 'on')
+                and states('sensor.environment_monitor_alert_count') | int(0) > 0
+             else 'mdi:home-check-outline' }}
+        device_class: problem
+        state: >-
+          {% set enabled = is_state('input_boolean.environment_monitor_alerts_enabled', 'on') %}
+          {% set invalid_temperature_range =
+            states('input_number.environment_monitor_temperature_minimum') | float(60)
+            >= states('input_number.environment_monitor_temperature_maximum') | float(80) %}
+          {% set invalid_humidity_range =
+            states('input_number.environment_monitor_humidity_minimum') | float(30)
+            >= states('input_number.environment_monitor_humidity_maximum') | float(60) %}
+          {{ enabled and (
+            states('sensor.environment_monitor_alert_count') | int(0) > 0
+            or invalid_temperature_range
+            or invalid_humidity_range
+          ) }}
+        attributes:
+          alert_count: >-
+            {{ states('sensor.environment_monitor_alert_count') | int(0) }}
+          alerts_enabled: >-
+            {{ states('input_boolean.environment_monitor_alerts_enabled') }}
+          configuration_valid: >-
+            {{
+              states('input_number.environment_monitor_temperature_minimum') | float(60)
+              < states('input_number.environment_monitor_temperature_maximum') | float(80)
+              and
+              states('input_number.environment_monitor_humidity_minimum') | float(30)
+              < states('input_number.environment_monitor_humidity_maximum') | float(60)
+            }}
+
+      - name: HVAC Mode Mismatch
+        unique_id: hvac_mode_mismatch
+        icon: mdi:alert-circle-outline
+        state: >
+          {% set thermostats = [
+            'climate.living_room_living_room_thermostat_t6_pro_thermostat',
+            'climate.bedroom_bedroom_thermostat_t6_pro_thermostat',
+            'climate.second_floor_thermostat_t6_pro_thermostat'
+          ] %}
+          {% set modes = namespace(values=[]) %}
+          {% for entity in thermostats %}
+            {% set mode = states(entity) %}
+            {% if mode not in ['off', 'unknown', 'unavailable'] %}
+              {% set modes.values = modes.values + [mode] %}
+            {% endif %}
+          {% endfor %}
+          {{ (modes.values | unique | list | count) > 1 }}
+          
+
+      - name: Rain Bird Needs Attention
+        unique_id: rainbird_needs_attention
+        icon: mdi:alert-decagram
+        state: >
+          {{
+            is_state('binary_sensor.carnes_crossroads_connected', 'off')
+            or states('sensor.carnes_crossroads_rain_bird_iq4_alarms') | int(0) > 0
+            or states('sensor.carnes_crossroads_rain_bird_iq4_warnings') | int(0) > 0
+          }}
+
+      - name: "Front Porch Presence Window Active"
+        unique_id: front_porch_presence_window_active
+        icon: >
+          {% if is_state('binary_sensor.front_porch_presence_window_active', 'on') %}
+            mdi:weather-night
+          {% else %}
+            mdi:weather-sunset
+          {% endif %}
+        state: >
+          {% set enabled = is_state('input_boolean.front_porch_presence_light_enabled', 'on') %}
+          {% set sunset_offset = states('input_number.front_porch_presence_sunset_offset_minutes') | int(0) %}
+          {% set sunrise_offset = states('input_number.front_porch_presence_sunrise_offset_minutes') | int(0) %}
+          {% set next_setting = as_datetime(state_attr('sun.sun', 'next_setting')) %}
+          {% set next_rising = as_datetime(state_attr('sun.sun', 'next_rising')) %}
+          {% if not enabled or not next_setting or not next_rising %}
+            false
+          {% else %}
+            {% if is_state('sun.sun', 'below_horizon') %}
+              {% set window_start = (next_setting - timedelta(days=1)) + timedelta(minutes=sunset_offset) %}
+            {% else %}
+              {% set window_start = next_setting + timedelta(minutes=sunset_offset) %}
+            {% endif %}
+            {% set window_end = next_rising + timedelta(minutes=sunrise_offset) %}
+            {{ now() >= window_start and now() <= window_end }}
+          {% endif %}
+        attributes:
+          window_start: >
+            {% set sunset_offset = states('input_number.front_porch_presence_sunset_offset_minutes') | int(0) %}
+            {% set next_setting = as_datetime(state_attr('sun.sun', 'next_setting')) %}
+            {% if next_setting %}
+              {% if is_state('sun.sun', 'below_horizon') %}
+                {{ ((next_setting - timedelta(days=1)) + timedelta(minutes=sunset_offset)).isoformat() }}
+              {% else %}
+                {{ (next_setting + timedelta(minutes=sunset_offset)).isoformat() }}
+              {% endif %}
+            {% else %}
+              unavailable
+            {% endif %}
+          window_end: >
+            {% set sunrise_offset = states('input_number.front_porch_presence_sunrise_offset_minutes') | int(0) %}
+            {% set next_rising = as_datetime(state_attr('sun.sun', 'next_rising')) %}
+            {% if next_rising %}
+              {{ (next_rising + timedelta(minutes=sunrise_offset)).isoformat() }}
+            {% else %}
+              unavailable
+            {% endif %}
+
+      - name: "Garage Lighting Schedule Active"
+        unique_id: garage_lighting_schedule_active
+        icon: mdi:clock-check-outline
+        state: >-
+          {% set enabled = is_state('input_boolean.garage_lighting_use_schedule', 'on') %}
+          {% set start = states('input_datetime.garage_lighting_schedule_start')[0:5] %}
+          {% set end = states('input_datetime.garage_lighting_schedule_end')[0:5] %}
+          {% set current = now().strftime('%H:%M') %}
+          {% if not enabled or start in ['unkno', 'unava', 'none', ''] or end in ['unkno', 'unava', 'none', ''] %}
+            false
+          {% elif start == end %}
+            true
+          {% elif start < end %}
+            {{ start <= current < end }}
+          {% else %}
+            {{ current >= start or current < end }}
+          {% endif %}
+        attributes:
+          start: >-
+            {{ states('input_datetime.garage_lighting_schedule_start') }}
+          end: >-
+            {{ states('input_datetime.garage_lighting_schedule_end') }}
+          enabled: >-
+            {{ states('input_boolean.garage_lighting_use_schedule') }}
+
+      - name: "Garage Lighting Low-Light Rule Matched"
+        unique_id: garage_lighting_low_light_rule_matched
+        icon: mdi:brightness-4
+        state: >-
+          {% set lux = states('sensor.zb_light_sensor_02_illuminance') %}
+          {{ is_state('input_boolean.garage_lighting_use_illuminance', 'on')
+             and lux not in ['unknown', 'unavailable', 'none', '']
+             and lux | float(100000)
+                 <= states('input_number.garage_lighting_illuminance_threshold') | float(250) }}
+        attributes:
+          current_illuminance: >-
+            {{ states('sensor.zb_light_sensor_02_illuminance') }}
+          threshold: >-
+            {{ states('input_number.garage_lighting_illuminance_threshold') }}
+          enabled: >-
+            {{ states('input_boolean.garage_lighting_use_illuminance') }}
+
+      - name: "Garage Lighting Activation Allowed"
+        unique_id: garage_lighting_activation_allowed
+        icon: >-
+          {{ 'mdi:check-circle-outline'
+             if is_state('binary_sensor.garage_lighting_low_light_rule_matched', 'on')
+                or is_state('binary_sensor.garage_lighting_schedule_active', 'on')
+             else 'mdi:cancel' }}
+        state: >-
+          {{ is_state('binary_sensor.garage_lighting_low_light_rule_matched', 'on')
+             or is_state('binary_sensor.garage_lighting_schedule_active', 'on') }}
+        attributes:
+          logic: Low-light rule OR schedule rule
+          low_light_rule: >-
+            {{ states('binary_sensor.garage_lighting_low_light_rule_matched') }}
+          schedule_rule: >-
+            {{ states('binary_sensor.garage_lighting_schedule_active') }}
+
+      - name: "Garage Lighting Monitoring Active"
+        unique_id: garage_lighting_monitoring_active
+        icon: mdi:radar
+        state: >-
+          {% set gate_open = is_state('input_boolean.garage_lighting_gate_enabled', 'on')
+             and is_state('binary_sensor.garage_contact_sensor_garage_gate_intrusion', 'on') %}
+          {% set door_open = is_state('input_boolean.garage_lighting_door_enabled', 'on')
+             and is_state('binary_sensor.garage_contact_sensor_garage_door_intrusion', 'on') %}
+          {{ is_state('input_boolean.garage_lighting_enabled', 'on')
+             and is_state('input_boolean.garage_lighting_manual_off_override', 'off')
+             and (
+               is_state('input_boolean.garage_lighting_cycle_active', 'on')
+               or gate_open
+               or door_open
+               or is_state('switch.nspanel_garage_relay_1', 'on')
+               or is_state('timer.garage_lighting_retrigger', 'active')
+             ) }}
+        attributes:
+          reason: >-
+            {% if is_state('input_boolean.garage_lighting_enabled', 'off') %}
+              Automation disabled
+            {% elif is_state('input_boolean.garage_lighting_manual_off_override', 'on') %}
+              Paused after a manual OFF command
+            {% elif is_state('input_boolean.garage_lighting_cycle_active', 'on') %}
+              Lighting cycle is active
+            {% elif is_state('timer.garage_lighting_retrigger', 'active') %}
+              Post-off retrigger window is active
+            {% elif is_state('binary_sensor.garage_contact_sensor_garage_gate_intrusion', 'on')
+                  or is_state('binary_sensor.garage_contact_sensor_garage_door_intrusion', 'on') %}
+              A configured garage contact is open
+            {% else %}
+              Waiting for a door, gate, or manual light activation
+            {% endif %}
+
+      - name: "Garage Lighting Effective Occupancy"
+        unique_id: garage_lighting_effective_occupancy
+        icon: mdi:motion-sensor
+        device_class: occupancy
+        state: >-
+          {{ is_state('binary_sensor.garage_lighting_monitoring_active', 'on')
+             and (
+               (is_state('input_boolean.garage_lighting_sensor_1_enabled', 'on')
+                and is_state('binary_sensor.zb_occupancy_sensor_garage_1_occupancy', 'on'))
+               or
+               (is_state('input_boolean.garage_lighting_sensor_2_enabled', 'on')
+                and is_state('binary_sensor.zb_occupancy_sensor_garage_2_occupancy', 'on'))
+             ) }}
+        attributes:
+          raw_sensor_1: >-
+            {{ states('binary_sensor.zb_occupancy_sensor_garage_1_occupancy') }}
+          raw_sensor_2: >-
+            {{ states('binary_sensor.zb_occupancy_sensor_garage_2_occupancy') }}
+          monitoring_active: >-
+            {{ states('binary_sensor.garage_lighting_monitoring_active') }}
+
+      - name: "Garage Lighting Activity Active"
+        unique_id: garage_lighting_activity_active
+        icon: mdi:home-lightbulb-outline
+        device_class: occupancy
+        state: >-
+          {{ is_state('switch.nspanel_garage_relay_1', 'on')
+             or is_state('binary_sensor.garage_lighting_effective_occupancy', 'on')
+             or (is_state('input_boolean.garage_lighting_gate_enabled', 'on')
+                 and is_state('binary_sensor.garage_contact_sensor_garage_gate_intrusion', 'on'))
+             or (is_state('input_boolean.garage_lighting_door_enabled', 'on')
+                 and is_state('binary_sensor.garage_contact_sensor_garage_door_intrusion', 'on')) }}
+
+
+
+  - sensor:
+      - name: "HVAC Arrival Comfort Remaining"
+        unique_id: hvac_arrival_comfort_remaining
+        icon: mdi:timer-sand
+        state: >-
+          {% if is_state('timer.hvac_arrival_comfort', 'active') %}
+            {% set finish = state_attr('timer.hvac_arrival_comfort', 'finishes_at') %}
+            {% if finish %}
+              {% set seconds = [0, (as_datetime(finish) - now()).total_seconds() | int] | max %}
+              {% set hours = seconds // 3600 %}
+              {% set minutes = (seconds % 3600) // 60 %}
+              {{ '%02d:%02d' | format(hours, minutes) }}
+            {% else %}
+              Active
+            {% endif %}
+          {% else %}
+            Inactive
+          {% endif %}
+
+  - binary_sensor:
+      - name: "HVAC Arrival Comfort Active"
+        unique_id: hvac_arrival_comfort_active
+        icon: mdi:home-clock-outline
+        state: "{{ is_state('timer.hvac_arrival_comfort', 'active') }}"
+
+
+  ###########################################################################
+  # Routine: Smart Garage Gate Cover
+  # Converts the momentary pulse switch plus delayed contact sensor into a
+  # single cover entity for dashboards, CarPlay, iOS widgets, and automations.
+  ###########################################################################
+
+  - cover:
+      - name: "Garage Gate"
+        unique_id: smart_garage_gate_cover
+        device_class: garage
+        availability: >-
+          {{ states('switch.garage_gate') not in ['unknown', 'unavailable']
+             and states('binary_sensor.garage_contact_sensor_garage_gate_intrusion')
+               not in ['unknown', 'unavailable'] }}
+        state: >-
+          {% set motion = states('input_select.garage_gate_motion_state') %}
+          {% set warning = is_state('script.garage_gate_close_with_warning', 'on') %}
+          {% if warning %}
+            closing
+          {% elif motion == 'opening' %}
+            opening
+          {% elif motion == 'closing' %}
+            closing
+          {% elif is_state('binary_sensor.garage_contact_sensor_garage_gate_intrusion', 'on') %}
+            open
+          {% elif is_state('binary_sensor.garage_contact_sensor_garage_gate_intrusion', 'off') %}
+            closed
+          {% else %}
+            {{ none }}
+          {% endif %}
+        icon: >-
+          {% set state = states('cover.garage_gate') %}
+          {% if state == 'opening' %}
+            mdi:garage-open-variant
+          {% elif state == 'closing' %}
+            mdi:garage-alert-variant
+          {% elif state == 'open' %}
+            mdi:garage-open
+          {% else %}
+            mdi:garage
+          {% endif %}
+        open_cover:
+          # Cancel a pending warning/close sequence before opening. This avoids
+          # a delayed close pulse after someone changes their mind.
+          - action: script.turn_off
+            target:
+              entity_id: script.garage_gate_close_with_warning
+          - action: script.garage_gate_warning_stop
+          - action: script.garage_gate_command
+            data:
+              command: open
+        close_cover:
+          # The package runs both buzzers together and sends only one protected
+          # close command after the configurable warning period.
+          - action: script.garage_gate_close_with_warning
+
+###############################################################################
+# Input Text Helpers
+###############################################################################
+
+input_text:
+
+
+  ###########################################################################
+  # Routine: Whole-Home Temperature and Humidity Monitor
+  # Enter exact entity IDs separated by commas to exclude specific sensors
+  # from alert evaluation. Excluded sensors still appear on the dashboard.
+  ###########################################################################
+
+  environment_monitor_excluded_entities:
+    name: Environment Monitor Excluded Entities
+    icon: mdi:playlist-remove
+    max: 255
+
+  ###########################################################################
+  # Routine: Security Alarm Control and Audit (owned by Node-RED)
+  ###########################################################################
+
+  security_alarm_action_source:
+    name: Security Alarm Action Source
+    icon: mdi:source-branch
+    max: 255
+
+  security_alarm_last_event:
+    name: Security Alarm Last Event
+    icon: mdi:history
+    max: 255
+
+  security_alarm_last_actor:
+    name: Security Alarm Last Actor
+    icon: mdi:account-check-outline
+    max: 255
+
+  security_alarm_last_trigger_sensor:
+    name: Security Alarm Last Trigger Sensor
+    icon: mdi:alarm-light-outline
+    max: 255
+
+  ###########################################################################
+  # Routine: Rain Bird Irrigation Center
+  ###########################################################################
+
+  rainbird_last_dashboard_action:
+    name: Rain Bird Last Dashboard Action
+    icon: mdi:clipboard-text-clock-outline
+    max: 255
+
+  rainbird_last_zone_event:
+    name: Rain Bird Last Zone Event
+    icon: mdi:sprinkler-variant
+    max: 255
+
+  ###########################################################################
+  # Routine: Master Bathroom Smart Ventilation
+  # Used by: Node-RED bathroom ventilation flow and dashboard status card.
+  ###########################################################################
+
+  # Stores the current human-readable ventilation status.
+  master_bathroom_ventilation_status:
+    name: Master Bathroom Ventilation Status
+    icon: mdi:clipboard-pulse-outline
+    max: 255
+
+
+  ###########################################################################
+  # Routine: Backyard Porch Fan Smart Climate Control (owned by Node-RED)
+  # Human-readable operating state and audit information for the dashboard.
+  ###########################################################################
+
+  porch_fan_status:
+    name: Porch Fan Control Status
+    icon: mdi:fan-auto
+    max: 255
+
+  porch_fan_last_action:
+    name: Porch Fan Last Action
+    icon: mdi:history
+    max: 255
+
+  ###########################################################################
+  # Routine: Front Door Smart Lock
+  # Used by: Node-RED to publish the live countdown shown on the dashboard.
+  ###########################################################################
+
+  # Human-readable remaining time until the next automatic lock.
+  front_door_auto_lock_countdown:
+    name: Front Door Auto-Lock Countdown
+    icon: mdi:timer-lock-outline
+    max: 255
+
+  # Explains why the countdown is running, paused, or idle.
+  front_door_auto_lock_status:
+    name: Front Door Auto-Lock Status
+    icon: mdi:information-outline
+    max: 255
+
+
+  ###########################################################################
+  # Routine: Garage Lighting (owned by Node-RED)
+  ###########################################################################
+
+  garage_lighting_status:
+    name: Garage Lighting Status
+    icon: mdi:lightbulb-auto-outline
+    max: 255
+
+  garage_lighting_last_event:
+    name: Garage Lighting Last Event
+    icon: mdi:history
+    max: 255
+
+  garage_lighting_config_version:
+    name: Garage Lighting Configuration Version
+    icon: mdi:cog-check-outline
+    max: 20
+
+
+  ###########################################################################
+  # Routine: Door Lighting (owned by Node-RED)
+  # Central status and per-door operating state for the dedicated dashboard.
+  ###########################################################################
+
+  door_lighting_status:
+    name: Door Lighting Status
+    icon: mdi:door-open
+    max: 255
+
+  door_lighting_last_event:
+    name: Door Lighting Last Event
+    icon: mdi:history
+    max: 255
+
+  door_lighting_config_version:
+    name: Door Lighting Configuration Version
+    icon: mdi:cog-check-outline
+    max: 20
+
+  door_lighting_pantry_status:
+    name: Pantry Door Light Status
+    icon: mdi:food-outline
+    max: 255
+
+  door_lighting_master_closet_status:
+    name: Master Closet Door Light Status
+    icon: mdi:hanger
+    max: 255
+
+  door_lighting_under_stairs_status:
+    name: Under Stairs Door Light Status
+    icon: mdi:stairs-box
+    max: 255
+
+  door_lighting_laundry_status:
+    name: Laundry Door Light Status
+    icon: mdi:washing-machine
+    max: 255
+
+  smoke_co_last_event:
+    name: Smoke and CO Last Event
+    icon: mdi:history
+    max: 255
+
+  # Existing entity ID retained for backward compatibility.
+  water_leak_fridge_last_event:
+    name: Water Leak Last Event
+    icon: mdi:water-alert
+    max: 255
+
+
+###############################################################################
+# Input Boolean Helpers
+###############################################################################
+
+input_boolean:
+
+
+  critical_entity_monitor_enabled:
+    name: Critical Entity Monitor
+    icon: mdi:shield-check
+
+  ###########################################################################
+  # Routine: Door Lighting (owned by Node-RED)
+  # Master control plus independent enable/disable for every managed door.
+  ###########################################################################
+
+  door_lighting_enabled:
+    name: Door Lighting Automation
+    icon: mdi:door-open
+
+  door_lighting_pantry_enabled:
+    name: Pantry Door Light Automation
+    icon: mdi:food-outline
+
+  door_lighting_master_closet_enabled:
+    name: Master Closet Door Light Automation
+    icon: mdi:hanger
+
+  door_lighting_under_stairs_enabled:
+    name: Under Stairs Door Light Automation
+    icon: mdi:stairs-box
+
+  door_lighting_laundry_enabled:
+    name: Laundry Door Light Automation
+    icon: mdi:washing-machine
+
+
+  ###########################################################################
+  # Routine: Whole-Home Temperature and Humidity Monitor
+  ###########################################################################
+
+  environment_monitor_alerts_enabled:
+    name: Environment Monitor Alerts Enabled
+    icon: mdi:bell-check-outline
+
+  environment_monitor_include_external_sensors:
+    name: Include External and Technical Sensors in Alerts
+    icon: mdi:home-plus-outline
+
+  # Internal flag used only to apply the recommended thresholds once.
+  environment_monitor_defaults_initialized:
+    name: Environment Monitor Defaults Initialized
+    icon: mdi:check-decagram-outline
+
+
+  ###########################################################################
+  # Routine: Security Alarm Control (owned by Node-RED)
+  ###########################################################################
+
+  security_alarm_guest_mode:
+    name: Security Alarm Guest / Manual Mode
+    icon: mdi:account-group
+
+  # Independent recipients for alarm status notifications.
+  # With no "initial" value, Home Assistant restores the last selected state.
+  security_alarm_notify_fabricio:
+    name: Alarm Notifications - Fabricio
+    icon: mdi:account-alert-outline
+
+  security_alarm_notify_lucas:
+    name: Alarm Notifications - Lucas
+    icon: mdi:account-alert-outline
+
+
+  ###########################################################################
+  # Routine: Rain Bird Irrigation Center
+  # Used by: Rain Bird dashboard, scripts, and optional monitor automations.
+  ###########################################################################
+
+  rainbird_dashboard_advanced_mode:
+    name: Rain Bird Advanced Mode
+    icon: mdi:tune-variant
+
+  rainbird_show_help:
+    name: Rain Bird Show Help
+    icon: mdi:help-circle-outline
+
+  rainbird_offline_alert_enabled:
+    name: Rain Bird Offline Alert Enabled
+    icon: mdi:cloud-alert
+
+  rainbird_notify_watering_events:
+    name: Rain Bird Watering Event Logging
+    icon: mdi:sprinkler-fire
+
+  master_bathroom_ventilation_auto:
+    name: Master Bathroom Ventilation Auto
+    icon: mdi:fan-auto
+
+  # Enables rapid humidity rise detection.
+  master_bathroom_ventilation_rapid_rise_enabled:
+    name: Master Bathroom Ventilation Rapid Rise Detection
+    icon: mdi:trending-up
+
+  # Enables quieter nighttime ventilation behavior.
+  master_bathroom_ventilation_night_mode_enabled:
+    name: Master Bathroom Ventilation Night Quiet Mode
+    icon: mdi:weather-night
+
+  # Enables bathroom ventilation notifications.
+  master_bathroom_ventilation_notifications_enabled:
+    name: Master Bathroom Ventilation Notifications
+    icon: mdi:bell-outline
+
+  ###########################################################################
+  # Routine: Front Porch Presence Light
+  # Used by: Node-RED front porch presence-only lighting flow and dashboard.
+  ###########################################################################
+
+  # Master enable/disable switch for presence-based front porch lighting.
+  front_porch_presence_light_enabled:
+    name: Front Porch Presence Light Enabled
+    icon: mdi:motion-sensor
+
+
+
+  ###########################################################################
+  # Routine: Backyard Porch Fan Smart Climate Control (owned by Node-RED)
+  ###########################################################################
+
+  porch_fan_automation_enabled:
+    name: Porch Fan Automatic Climate Control
+    icon: mdi:fan-auto
+
+  porch_fan_temperature_enabled:
+    name: Use Temperature Trigger
+    icon: mdi:thermometer-auto
+
+  porch_fan_humidity_enabled:
+    name: Use Humidity Trigger
+    icon: mdi:water-percent
+
+  porch_fan_daily_quiet_hours_enabled:
+    name: Porch Fan Daily Quiet Hours
+    icon: mdi:weather-night
+
+  # Internal/manual mode flag maintained by Node-RED.
+  # Turning this off from the dashboard immediately resumes automatic control.
+  porch_fan_manual_override:
+    name: Porch Fan Manual Hold
+    icon: mdi:hand-back-right
+
+  ###########################################################################
+  # Routine: Garage Lighting (owned by Node-RED)
+  # Persistent controls for sources, outputs, and operating policy.
+  ###########################################################################
+
+  garage_lighting_enabled:
+    name: Garage Lighting Automation
+    icon: mdi:lightbulb-auto-outline
+
+  garage_lighting_sensor_1_enabled:
+    name: Use Garage Motion Sensor 1
+    icon: mdi:motion-sensor
+
+  garage_lighting_sensor_2_enabled:
+    name: Use Garage Motion Sensor 2
+    icon: mdi:motion-sensor
+
+  garage_lighting_gate_enabled:
+    name: Use Garage Gate
+    icon: mdi:garage-open-variant
+
+  garage_lighting_door_enabled:
+    name: Use Garage Entry Door
+    icon: mdi:door-open
+
+  garage_lighting_workbench_light_enabled:
+    name: Workbench Follows Garage Light
+    icon: mdi:desk-lamp-on
+
+  garage_lighting_use_illuminance:
+    name: Use Low-Light Activation
+    icon: mdi:brightness-6
+
+  garage_lighting_use_schedule:
+    name: Use Scheduled Activation
+    icon: mdi:clock-outline
+
+  # Internal state maintained by Node-RED. Exposed for diagnostics only.
+  garage_lighting_cycle_active:
+    name: Garage Lighting Cycle Active
+    icon: mdi:state-machine
+
+  garage_lighting_manual_off_override:
+    name: Garage Lighting Manual Pause
+    icon: mdi:hand-back-right-off-outline
+
+  # Routine: Garage Gate Monitor
+  # Used by: Node-RED garage gate monitoring flow and garage dashboard.
+  ###########################################################################
+
+  # Enables synchronized warnings on nspanel-garage and fingerprint before closing.
+  # With no initial value, Home Assistant restores the last dashboard choice.
+  garage_gate_closing_beep_enabled:
+    name: Garage Gate Closing Warning Beep
+    icon: mdi:volume-high
+
+  # Master enable/disable switch for garage gate monitoring.
+  garage_gate_monitor_enabled:
+    name: Garage Gate Monitor Enabled
+    icon: mdi:gate
+
+  # Enables departure alerts when the gate is open.
+  garage_gate_departure_alert_enabled:
+    name: Garage Gate Departure Alert Enabled
+    icon: mdi:account-arrow-right
+
+  # Enables alerts when the gate stays open too long.
+  garage_gate_left_open_alert_enabled:
+    name: Garage Gate Left Open Alert Enabled
+    icon: mdi:timer-alert
+
+  # Enables repeated garage gate alerts.
+  garage_gate_repeat_alerts_enabled:
+    name: Garage Gate Repeat Alerts Enabled
+    icon: mdi:bell-ring
+
+  # Sends garage gate notifications to Fabricio.
+  garage_gate_notify_fabricio:
+    name: Garage Gate Notify Fabricio
+    icon: mdi:cellphone
+
+  # Sends garage gate notifications to Lucas.
+  garage_gate_notify_lucas:
+    name: Garage Gate Notify Lucas
+    icon: mdi:cellphone
+
+  ###########################################################################
+  # Routine: Front Door Smart Lock
+  # Used by: Node-RED front door lock flow and front door lock dashboard.
+  # They must restore the last dashboard value after Home Assistant restarts.
+  ###########################################################################
+
+  # Master enable/disable switch for the front door auto-lock routine.
+  front_door_auto_lock_enabled:
+    name: Front Door Auto-Lock Routine
+    icon: mdi:lock-smart
+
+  # Enables safety lock during Home Assistant startup.
+  front_door_startup_lock_enabled:
+    name: Front Door Startup Safety Lock
+    icon: mdi:shield-lock
+
+  # Enables unlocked-door alerts for Fabricio.
+  front_door_fabricio_alert_enabled:
+    name: Front Door Alert - Fabricio
+    icon: mdi:cellphone-message
+
+  # Enables unlocked-door alerts for Lucas.
+  front_door_lucas_alert_enabled:
+    name: Front Door Alert - Lucas
+    icon: mdi:cellphone-message
+
+  # Enables repeated alerts while the door remains unlocked.
+  front_door_repeat_alerts_enabled:
+    name: Front Door Repeat Alerts
+    icon: mdi:bell-repeat
+
+  # Enables shorter lock delay during nighttime.
+  front_door_night_quick_lock_enabled:
+    name: Front Door Night Quick-Lock
+    icon: mdi:weather-night
+    
+    ###############################################################################
+    # HVAC COORDINATOR HELPERS
+    # Purpose:
+    # - Keep all active thermostats using the same HVAC mode.
+    # - Supported HVAC modes: heat, cool, off.
+    # - Allow individual thermostats to remain off.
+    # - Keep independent temperature targets per thermostat.
+    # - Provide Smart Away, Guest Mode, and dashboard controls.
+    #
+    # Important:
+    # - No "initial" values are used.
+    # - Home Assistant will restore helper states after restart.
+    ###############################################################################
+
+    
+  hvac_mode_sync_enabled:
+    name: HVAC Mode Sync Enabled
+    icon: mdi:sync
+
+  hvac_preserve_individual_off_zones:
+    name: HVAC Preserve Individual Off Zones
+    icon: mdi:power-plug-off-outline
+
+  hvac_smart_away_enabled:
+    name: HVAC Smart Away Enabled
+    icon: mdi:home-export-outline
+
+  hvac_guest_mode:
+    name: HVAC Guest Mode
+    icon: mdi:account-group
+
+  hvac_restore_on_return:
+    name: HVAC Restore On Return
+    icon: mdi:home-import-outline
+
+  hvac_notifications_enabled:
+    name: HVAC Notifications Enabled
+    icon: mdi:bell-outline
+
+  hvac_smart_away_active:
+    name: HVAC Smart Away Active
+    icon: mdi:leaf-circle
+
+  # Enables dashboard-only simulated home/away testing for the HVAC coordinator.
+  # When this is on, Smart Away and Restore On Return use the simulated states
+  # below instead of the real person entities.
+  hvac_presence_test_mode_enabled:
+    name: HVAC Presence Test Mode Enabled
+    icon: mdi:test-tube
+
+  ###########################################################################
+  # Routine: Smoke and Carbon Monoxide Alerts (owned by Node-RED)
+  ###########################################################################
+
+  smoke_co_alerts_enabled:
+    name: Smoke and CO Alerts Enabled
+    icon: mdi:smoke-detector-variant-alert
+
+  smoke_co_notify_fabricio:
+    name: Notify Fabricio - Smoke and CO
+    icon: mdi:account-alert
+
+  smoke_co_notify_lucas:
+    name: Notify Lucas - Smoke and CO
+    icon: mdi:account-alert
+
+  smoke_co_notify_detector_tests:
+    name: Notify Physical Detector Tests
+    icon: mdi:test-tube
+
+  ###########################################################################
+  # Routine: Garage CO2 Safety Alert
+  # Used by the Home Assistant safety automation and dashboard controls.
+  # The feature is enabled after every restart; the temporary inhibit is reset
+  # so a forgotten override cannot silently disable future protection.
+  ###########################################################################
+
+  garage_co2_alerts_enabled:
+    name: Garage CO2 Safety Alert
+    icon: mdi:molecule-co2
+    initial: true
+
+  garage_co2_alerts_inhibited:
+    name: Inhibit Active Garage CO2 Alert
+    icon: mdi:alert-octagon-outline
+    initial: false
+
+  # Independent recipients for automatic garage-gate opening notifications.
+  # With no initial value, Home Assistant restores each dashboard selection.
+  garage_co2_notify_fabricio:
+    name: Notify Fabricio - Automatic Garage CO2 Gate Opening
+    icon: mdi:account-alert
+
+  garage_co2_notify_lucas:
+    name: Notify Lucas - Automatic Garage CO2 Gate Opening
+    icon: mdi:account-alert
+
+  # Internal latch used to send only one notification per high-CO2 event.
+  garage_co2_gate_opened_automatically:
+    name: Garage CO2 Gate Opened Automatically
+    icon: mdi:garage-alert
+    initial: false
+
+
+  ###########################################################################
+  # Routine: Water Leak Alert and Containment (Home Assistant automation)
+  # Existing entity IDs are intentionally retained for backward compatibility.
+  # Recipient choices and automatic shutoff restore their last state.
+  ###########################################################################
+
+  water_leak_fridge_notify_fabricio:
+    name: Notify Fabricio - Water Leak
+    icon: mdi:account-alert
+
+  water_leak_fridge_notify_lucas:
+    name: Notify Lucas - Water Leak
+    icon: mdi:account-alert
+
+  water_leak_fridge_auto_shutoff:
+    name: Automatically Close Master Water on Leak
+    icon: mdi:pipe-valve
+
+  # Internal one-time setup flag. It establishes safe defaults only once and
+  # preserves every later dashboard choice across restarts.
+  water_leak_fridge_defaults_initialized:
+    name: Water Leak Defaults Initialized
+    icon: mdi:check-decagram-outline
+
+
+###############################################################################
+# Input Number Helpers
+###############################################################################
+
+input_number:
+
+
+  ###########################################################################
+  # Routine: Door Lighting (owned by Node-RED)
+  # Maximum continuous ON time. Closing the door or turning the light off
+  # cancels and resets the corresponding timer.
+  ###########################################################################
+
+  door_lighting_pantry_max_on_minutes:
+    name: Pantry Maximum Light-On Time
+    icon: mdi:timer-outline
+    min: 0.5
+    max: 120
+    step: 0.5
+    mode: box
+    unit_of_measurement: min
+
+  door_lighting_master_closet_max_on_minutes:
+    name: Master Closet Maximum Light-On Time
+    icon: mdi:timer-outline
+    min: 0.5
+    max: 120
+    step: 0.5
+    mode: box
+    unit_of_measurement: min
+
+  door_lighting_under_stairs_max_on_minutes:
+    name: Under Stairs Maximum Light-On Time
+    icon: mdi:timer-outline
+    min: 0.5
+    max: 120
+    step: 0.5
+    mode: box
+    unit_of_measurement: min
+
+  door_lighting_laundry_max_on_minutes:
+    name: Laundry Maximum Light-On Time
+    icon: mdi:timer-outline
+    min: 0.5
+    max: 120
+    step: 0.5
+    mode: box
+    unit_of_measurement: min
+
+
+  ###########################################################################
+  # Routine: Berkeley Electric Billing Projection
+  # Set this to the first day of the utility billing cycle. The projection
+  # period and elapsed days are calculated automatically from this value.
+  ###########################################################################
+
+  berkeley_electric_billing_cycle_start_day:
+    name: Berkeley Electric Billing Cycle Start Day
+    min: 1
+    max: 31
+    step: 1
+    mode: box
+    unit_of_measurement: day
+    icon: mdi:calendar-start
+
+  ###########################################################################
+  # Routine: Whole-Home Temperature and Humidity Monitor
+  # Values are initialized once by automation, then restored after restarts.
+  ###########################################################################
+
+  environment_monitor_temperature_minimum:
+    name: Minimum Acceptable Temperature
+    min: 40
+    max: 85
+    step: 1
+    mode: box
+    unit_of_measurement: "°F"
+    icon: mdi:thermometer-low
+
+  environment_monitor_temperature_maximum:
+    name: Maximum Acceptable Temperature
+    min: 55
+    max: 100
+    step: 1
+    mode: box
+    unit_of_measurement: "°F"
+    icon: mdi:thermometer-high
+
+  environment_monitor_humidity_minimum:
+    name: Minimum Acceptable Humidity
+    min: 10
+    max: 70
+    step: 1
+    mode: box
+    unit_of_measurement: "%"
+    icon: mdi:water-percent-alert
+
+  environment_monitor_humidity_maximum:
+    name: Maximum Acceptable Humidity
+    min: 30
+    max: 95
+    step: 1
+    mode: box
+    unit_of_measurement: "%"
+    icon: mdi:water-percent-alert
+
+  ###########################################################################
+  # Routine: Rain Bird Irrigation Center
+  ###########################################################################
+
+  rainbird_weather_delay_days:
+    name: Rain Bird Weather Delay Days
+    min: 0
+    max: 14
+    step: 1
+    mode: box
+    unit_of_measurement: days
+    icon: mdi:weather-rainy
+
+  rainbird_manual_zone_duration:
+    name: Rain Bird Manual Zone Duration
+    min: 1
+    max: 30
+    step: 1
+    mode: slider
+    unit_of_measurement: min
+    icon: mdi:timer-outline
+
+  rainbird_offline_alert_delay_minutes:
+    name: Rain Bird Offline Alert Delay
+    min: 1
+    max: 120
+    step: 1
+    mode: slider
+    unit_of_measurement: min
+    icon: mdi:timer-alert-outline
+
+  master_bathroom_ventilation_delta_threshold:
+    name: Master Bathroom Humidity Difference Threshold
+    min: 1
+    max: 40
+    step: 1
+    unit_of_measurement: "%"
+    icon: mdi:delta
+
+  # Rapid humidity rise threshold used as an additional trigger.
+  master_bathroom_ventilation_rise_threshold:
+    name: Master Bathroom Humidity Rapid Rise Threshold
+    icon: mdi:chart-line-variant
+    min: 1
+    max: 20
+    step: 0.5
+    unit_of_measurement: "%"
+
+  # Time window used to evaluate rapid humidity increase.
+  master_bathroom_ventilation_rise_window_minutes:
+    name: Master Bathroom Humidity Rapid Rise Window
+    icon: mdi:timer-outline
+    min: 2
+    max: 30
+    step: 1
+    unit_of_measurement: min
+
+  # Manual override hold time before automatic control resumes.
+  master_bathroom_ventilation_manual_hold_minutes:
+    name: Master Bathroom Ventilation Manual Override Hold
+    icon: mdi:hand-back-right-outline
+    min: 0
+    max: 120
+    step: 5
+    unit_of_measurement: min
+
+  # Maximum ventilation runtime during night mode.
+  master_bathroom_ventilation_night_max_run_minutes:
+    name: Master Bathroom Ventilation Night Maximum Runtime
+    icon: mdi:timer-stop-outline
+    min: 1
+    max: 60
+    step: 1
+    unit_of_measurement: min
+
+  # Cooldown after a nighttime ventilation cycle.
+  master_bathroom_ventilation_night_cooldown_minutes:
+    name: Master Bathroom Ventilation Night Cooldown
+    icon: mdi:timer-sand
+    min: 1
+    max: 120
+    step: 1
+    unit_of_measurement: min
+
+  # Delay before sending a still-high humidity alert.
+  master_bathroom_ventilation_still_high_alert_minutes:
+    name: Master Bathroom Ventilation Still High Alert Delay
+    icon: mdi:alert-circle-outline
+    min: 5
+    max: 120
+    step: 5
+    unit_of_measurement: min
+
+  # Absolute high humidity threshold.
+  master_bathroom_ventilation_high_humidity_threshold:
+    name: Master Bathroom High Humidity Threshold
+    min: 50
+    max: 100
+    step: 1
+    unit_of_measurement: "%"
+    icon: mdi:water-percent-alert
+
+  # General cooldown between ventilation cycles.
+  master_bathroom_ventilation_cooldown_minutes:
+    name: Master Bathroom Ventilation Cooldown
+    min: 1
+    max: 60
+    step: 1
+    unit_of_measurement: min
+    icon: mdi:timer-sand
+
+  # Humidity hysteresis used to avoid rapid fan toggling.
+  master_bathroom_ventilation_hysteresis:
+    name: Master Bathroom Ventilation Hysteresis
+    min: 1
+    max: 10
+    step: 1
+    unit_of_measurement: "%"
+    icon: mdi:swap-vertical
+
+  # Minimum fan runtime once ventilation starts.
+  master_bathroom_ventilation_min_run_minutes:
+    name: Master Bathroom Ventilation Minimum Runtime
+    min: 1
+    max: 60
+    step: 1
+    unit_of_measurement: min
+    icon: mdi:fan-clock
+
+  # Maximum fan runtime to prevent continuous operation.
+  master_bathroom_ventilation_max_run_minutes:
+    name: Master Bathroom Ventilation Maximum Runtime
+    min: 1
+    max: 120
+    step: 1
+    unit_of_measurement: min
+    icon: mdi:timer-off
+
+  ###########################################################################
+  # Routine: Front Porch Presence Light
+  # Used by: Node-RED front porch presence-only lighting flow and dashboard.
+  ###########################################################################
+
+  # Defines when the presence sensor becomes active relative to sunset.
+  # Negative values start before sunset. Positive values start after sunset.
+  front_porch_presence_sunset_offset_minutes:
+    name: Front Porch Presence Sunset Offset
+    min: -120
+    max: 240
+    step: 5
+    unit_of_measurement: min
+    mode: box
+    icon: mdi:weather-sunset
+
+  # Defines when the presence sensor stops working relative to sunrise.
+  # Negative values stop before sunrise. Positive values stop after sunrise.
+  front_porch_presence_sunrise_offset_minutes:
+    name: Front Porch Presence Sunrise Cutoff Offset
+    min: -120
+    max: 240
+    step: 5
+    unit_of_measurement: min
+    mode: box
+    icon: mdi:weather-sunset-down
+
+  # Defines how long the front porch light stays on after presence is detected.
+  front_porch_presence_light_duration_minutes:
+    name: Front Porch Presence Light Duration
+    min: 1
+    max: 60
+    step: 1
+    unit_of_measurement: min
+    mode: box
+    icon: mdi:timer-outline
+
+
+
+  ###########################################################################
+  # Routine: Backyard Porch Fan Smart Climate Control (owned by Node-RED)
+  ###########################################################################
+
+  porch_fan_temperature_threshold:
+    name: Porch Fan Temperature Start Threshold
+    min: 60
+    max: 110
+    step: 1
+    mode: box
+    unit_of_measurement: °F
+    icon: mdi:thermometer-chevron-up
+
+  porch_fan_temperature_hysteresis:
+    name: Porch Fan Temperature Hysteresis
+    min: 1
+    max: 15
+    step: 1
+    mode: box
+    unit_of_measurement: °F
+    icon: mdi:thermometer-chevron-down
+
+  porch_fan_humidity_threshold:
+    name: Porch Fan Humidity Start Threshold
+    min: 30
+    max: 100
+    step: 1
+    mode: box
+    unit_of_measurement: "%"
+    icon: mdi:water-percent-alert
+
+  porch_fan_humidity_hysteresis:
+    name: Porch Fan Humidity Hysteresis
+    min: 1
+    max: 25
+    step: 1
+    mode: box
+    unit_of_measurement: "%"
+    icon: mdi:water-minus
+
+  porch_fan_auto_speed:
+    name: Porch Fan Automatic Speed
+    min: 10
+    max: 100
+    step: 5
+    mode: slider
+    unit_of_measurement: "%"
+    icon: mdi:fan-speed-3
+
+  # Minimum restart delay after an automatic stop. Prevents short cycling
+  # and gives the fan motor time to cool before automatic control can restart it.
+  porch_fan_cooldown_minutes:
+    name: Porch Fan Cooldown After Automatic Stop
+    min: 1
+    max: 60
+    step: 1
+    mode: slider
+    unit_of_measurement: min
+    icon: mdi:timer-sand
+
+  # Zero disables the manual timer; quiet hours still remain authoritative.
+  porch_fan_manual_off_minutes:
+    name: Porch Fan Manual Auto-Off
+    min: 0
+    max: 480
+    step: 15
+    mode: slider
+    unit_of_measurement: min
+    icon: mdi:timer-cog-outline
+
+  ###########################################################################
+  # Routine: Garage Lighting (owned by Node-RED)
+  ###########################################################################
+
+  garage_lighting_off_delay_minutes:
+    name: No-Motion Light Off Delay
+    icon: mdi:timer-outline
+    min: 0.5
+    max: 60
+    step: 0.5
+    mode: box
+    unit_of_measurement: min
+
+  garage_lighting_retrigger_minutes:
+    name: Post-Off Motion Monitoring Window
+    icon: mdi:motion-sensor
+    min: 0
+    max: 60
+    step: 0.5
+    mode: box
+    unit_of_measurement: min
+
+  garage_lighting_illuminance_threshold:
+    name: Low-Light Activation Threshold
+    icon: mdi:brightness-5
+    min: 0
+    max: 10000
+    step: 10
+    mode: box
+    unit_of_measurement: lx
+
+  # Routine: Garage Gate Monitor
+  # Used by: Node-RED garage gate monitoring flow and garage dashboard.
+  ###########################################################################
+
+  # Duration of the two-tone warning before the gate starts closing.
+  # The value is restored by Home Assistant after restarts.
+  garage_gate_closing_beep_seconds:
+    name: Garage Gate Closing Warning Duration
+    icon: mdi:timer-sand
+    min: 1
+    max: 30
+    step: 1
+    mode: slider
+    unit_of_measurement: s
+
+  # Delay before alerting that the garage gate is open.
+  garage_gate_open_alert_delay_minutes:
+    name: Garage Gate Open Alert Delay
+    icon: mdi:timer-outline
+    min: 1
+    max: 240
+    step: 1
+    mode: box
+    unit_of_measurement: min
+
+  # Interval between repeated garage gate alerts.
+  garage_gate_repeat_alert_interval_minutes:
+    name: Garage Gate Repeat Alert Interval
+    icon: mdi:timer-refresh-outline
+    min: 1
+    max: 240
+    step: 1
+    mode: box
+    unit_of_measurement: min
+
+  ###########################################################################
+  # Routine: Front Door Smart Lock
+  # Used by: Node-RED front door lock flow and front door lock dashboard.
+  # They must restore the last dashboard value after Home Assistant restarts.
+  ###########################################################################
+
+  # Relock delay when the lock is unlocked but the door is not opened.
+  front_door_relock_if_not_opened_minutes:
+    name: Front Door Relock If Not Opened
+    icon: mdi:timer-lock
+    min: 1
+    max: 30
+    step: 1
+    mode: slider
+    unit_of_measurement: min
+
+  # Delay before locking after the door has been opened and closed.
+  front_door_lock_after_close_minutes:
+    name: Front Door Lock After Close Delay
+    icon: mdi:door-closed-lock
+    min: 1
+    max: 30
+    step: 1
+    mode: slider
+    unit_of_measurement: min
+
+  # Delay before notifying Fabricio that the door is still unlocked.
+  front_door_fabricio_alert_minutes:
+    name: Front Door Fabricio Alert Delay
+    icon: mdi:timer-alert
+    min: 1
+    max: 60
+    step: 1
+    mode: slider
+    unit_of_measurement: min
+
+  # Delay before notifying Lucas that the door is still unlocked.
+  front_door_lucas_alert_minutes:
+    name: Front Door Lucas Alert Delay
+    icon: mdi:timer-alert
+    min: 1
+    max: 60
+    step: 1
+    mode: slider
+    unit_of_measurement: min
+
+  # Interval used for repeated unlocked-door alerts.
+  front_door_repeat_alert_minutes:
+    name: Front Door Repeat Alert Interval
+    icon: mdi:timer-sync
+    min: 5
+    max: 120
+    step: 5
+    mode: slider
+    unit_of_measurement: min
+
+  # Shorter lock delay used during the night quick-lock window.
+  front_door_night_lock_after_close_minutes:
+    name: Front Door Night Lock After Close Delay
+    icon: mdi:timer-lock-open
+    min: 1
+    max: 15
+    step: 1
+    mode: slider
+    unit_of_measurement: min
+    
+  hvac_away_delay_minutes:
+    name: HVAC Away Delay Minutes
+    icon: mdi:timer-outline
+    min: 0
+    max: 180
+    step: 5
+    mode: box
+    unit_of_measurement: min
+
+  hvac_return_restore_delay_minutes:
+    name: HVAC Return Restore Delay Minutes
+    icon: mdi:timer-sand
+    min: 0
+    max: 60
+    step: 1
+    mode: box
+    unit_of_measurement: min
+
+  hvac_away_cool_temperature:
+    name: HVAC Away Cool Temperature
+    icon: mdi:snowflake-thermometer
+    min: 70
+    max: 85
+    step: 1
+    mode: box
+    unit_of_measurement: °F
+
+  hvac_away_heat_temperature:
+    name: HVAC Away Heat Temperature
+    icon: mdi:fire-thermometer
+    min: 50
+    max: 72
+    step: 1
+    mode: box
+    unit_of_measurement: °F
+
+  ###############################################################################
+  # HVAC COORDINATOR - RESTORE MEMORY HELPERS
+  # Purpose:
+  # - Store thermostat target temperatures before Smart Away starts.
+  # - These helpers are persistent because no initial values are configured.
+  ###############################################################################
+
+  hvac_restore_living_room_temperature:
+    name: HVAC Restore Living Room Temperature
+    icon: mdi:thermometer
+    min: 40
+    max: 90
+    step: 1
+    mode: box
+    unit_of_measurement: °F
+
+  hvac_restore_bedroom_temperature:
+    name: HVAC Restore Bedroom Temperature
+    icon: mdi:thermometer
+    min: 40
+    max: 90
+    step: 1
+    mode: box
+    unit_of_measurement: °F
+
+  hvac_restore_second_floor_temperature:
+    name: HVAC Restore Second Floor Temperature
+    icon: mdi:thermometer
+    min: 40
+    max: 90
+    step: 1
+    mode: box
+    unit_of_measurement: °F
+
+###############################################################################
+# Input Date/Time Helpers
+###############################################################################
+
+input_datetime:
+  ###########################################################################
+  # Routine: Master Bathroom Smart Ventilation
+  # Used by: Node-RED bathroom ventilation flow and ventilation dashboard.
+  ###########################################################################
+
+  # Start of the bathroom ventilation night quiet window.
+  master_bathroom_ventilation_night_start:
+    name: Master Bathroom Ventilation Night Start
+    icon: mdi:clock-start
+    has_date: false
+    has_time: true
+
+  # End of the bathroom ventilation night quiet window.
+  master_bathroom_ventilation_night_end:
+    name: Master Bathroom Ventilation Night End
+    icon: mdi:clock-end
+    has_date: false
+    has_time: true
+
+  # Routine: Front Door Smart Lock
+  # Used by: Node-RED front door lock flow and front door lock dashboard.
+  # They must restore the last dashboard value after Home Assistant restarts.
+  ###########################################################################
+
+  # Start of the front door night quick-lock window.
+  front_door_night_start:
+    name: Front Door Night Quick-Lock Start
+    icon: mdi:clock-start
+    has_date: false
+    has_time: true
+
+  # End of the front door night quick-lock window.
+  front_door_night_end:
+    name: Front Door Night Quick-Lock End
+    icon: mdi:clock-end
+    has_date: false
+    has_time: true
+
+  # Target date/time for the next front door automatic lock.
+  # Node-RED updates this whenever the countdown starts or changes.
+  front_door_next_auto_lock_time:
+    name: Front Door Next Auto-Lock Time
+    icon: mdi:timer-lock-outline
+    has_date: true
+    has_time: true
+    
+
+
+  ###########################################################################
+  # Routine: Backyard Porch Fan Smart Climate Control (owned by Node-RED)
+  ###########################################################################
+
+  porch_fan_daily_off_time:
+    name: Porch Fan Daily Off Time
+    icon: mdi:fan-off
+    has_date: false
+    has_time: true
+
+  porch_fan_daily_resume_time:
+    name: Porch Fan Daily Resume Time
+    icon: mdi:fan-auto
+    has_date: false
+    has_time: true
+
+  ###########################################################################
+  # Routine: Garage Lighting (owned by Node-RED)
+  ###########################################################################
+
+  garage_lighting_schedule_start:
+    name: Garage Lighting Schedule Start
+    icon: mdi:clock-start
+    has_date: false
+    has_time: true
+
+  garage_lighting_schedule_end:
+    name: Garage Lighting Schedule End
+    icon: mdi:clock-end
+    has_date: false
+    has_time: true
+
+###############################################################################
+# Timer Helpers
+###############################################################################
+
+timer:
+
+  door_lighting_pantry:
+    name: Pantry Door Light Timer
+    icon: mdi:timer-sand
+    duration: "00:05:00"
+    restore: true
+
+  door_lighting_master_closet:
+    name: Master Closet Door Light Timer
+    icon: mdi:timer-sand
+    duration: "00:10:00"
+    restore: true
+
+  door_lighting_under_stairs:
+    name: Under Stairs Door Light Timer
+    icon: mdi:timer-sand
+    duration: "00:05:00"
+    restore: true
+
+  door_lighting_laundry:
+    name: Laundry Door Light Timer
+    icon: mdi:timer-sand
+    duration: "00:10:00"
+    restore: true
+
+  garage_lighting_hold:
+    name: Garage Lighting No-Motion Timer
+    icon: mdi:timer-sand
+    duration: "00:03:00"
+    restore: true
+
+  garage_lighting_retrigger:
+    name: Garage Lighting Retrigger Window
+    icon: mdi:motion-sensor
+    duration: "00:10:00"
+    restore: true
+
+
+
+  porch_fan_manual_off:
+    name: Porch Fan Manual Auto-Off Timer
+    icon: mdi:fan-clock
+    duration: "04:00:00"
+    restore: true
+
+  porch_fan_cooldown:
+    name: Porch Fan Automatic Restart Cooldown
+    icon: mdi:timer-sand
+    duration: "00:10:00"
+    restore: true
+
+  hvac_arrival_comfort:
+    name: HVAC Arrival Comfort
+    icon: mdi:home-clock-outline
+    duration: "02:00:00"
+    restore: true
+
+input_select:
+  # Sound played simultaneously by nspanel-garage and the fingerprint buzzer.
+  # The selected option is restored after Home Assistant restarts.
+  garage_gate_closing_tone:
+    name: Garage Gate Closing Warning Tone
+    icon: mdi:music-note
+    options:
+      - Urgent Two-Tone
+      - Fast High-Low
+      - Triple Alert
+      - Pulsed Siren
+      - Sharp Chirps
+      - Rising Alarm
+
+
+
+
+  ###########################################################################
+  # Routine: Smart Garage Gate Cover
+  # "idle" means the physical contact sensor owns the displayed state.
+  # Opening/closing are temporary command states while sensor feedback catches up.
+  ###########################################################################
+
+  garage_gate_motion_state:
+    name: Garage Gate Motion State
+    icon: mdi:garage-clock
+    options:
+      - idle
+      - opening
+      - closing
+
+
+  ###########################################################################
+  # Routine: Whole-Home Environment Monitor
+  # Dynamic options are maintained by Node-RED. No initial values are used so
+  # user selections survive Home Assistant restarts.
+  ###########################################################################
+
+  environment_monitor_exclusion_1:
+    name: Environment Monitor Exclusion 1
+    icon: mdi:thermometer-minus
+    options:
+      - None
+
+  environment_monitor_exclusion_2:
+    name: Environment Monitor Exclusion 2
+    icon: mdi:thermometer-minus
+    options:
+      - None
+
+  environment_monitor_exclusion_3:
+    name: Environment Monitor Exclusion 3
+    icon: mdi:thermometer-minus
+    options:
+      - None
+
+  environment_monitor_exclusion_4:
+    name: Environment Monitor Exclusion 4
+    icon: mdi:thermometer-minus
+    options:
+      - None
+
+  environment_monitor_exclusion_5:
+    name: Environment Monitor Exclusion 5
+    icon: mdi:thermometer-minus
+    options:
+      - None
+
+  environment_monitor_exclusion_6:
+    name: Environment Monitor Exclusion 6
+    icon: mdi:thermometer-minus
+    options:
+      - None
+
+  environment_monitor_exclusion_7:
+    name: Environment Monitor Exclusion 7
+    icon: mdi:thermometer-minus
+    options:
+      - None
+
+  environment_monitor_exclusion_8:
+    name: Environment Monitor Exclusion 8
+    icon: mdi:thermometer-minus
+    options:
+      - None
+
+
+  ###########################################################################
+  # Routine: Security Alarm Manual Operator (used by Node-RED dashboard commands)
+  ###########################################################################
+
+  security_alarm_operator:
+    name: Security Alarm Operator
+    icon: mdi:account-key-outline
+    options:
+      - Fabricio
+      - Lucas
+      - Guest / Other
+
+  ###########################################################################
+  # Routine: Rain Bird Irrigation Center
+  ###########################################################################
+
+  rainbird_selected_zone:
+    name: Rain Bird Selected Zone
+    icon: mdi:sprinkler
+    options:
+      - 1 - Front Curb
+      - 2 - Garage Side
+      - 3 - Sides
+      - 4 - Front
+      - 5 - Backyard
+      - 6 - Station 006
+
+  hvac_house_mode:
+    name: HVAC House Mode
+    icon: mdi:home-thermometer
+    options:
+      - Follow thermostat
+      - Heat
+      - Cool
+      - Off
+      
+  hvac_startup_sync_policy:
+    name: HVAC Startup Sync Policy
+    icon: mdi:restart
+    options:
+      - Use first active thermostat
+      - Force Heat
+      - Force Cool
+      - Do nothing
+
+  ###############################################################################
+  # HVAC COORDINATOR - PRESENCE TEST HELPERS
+  # Purpose:
+  # - Simulate Fabricio and Lucas as Home/Away from the dashboard.
+  # - These only affect the HVAC Coordinator while HVAC Presence Test Mode is on.
+  ###############################################################################
+
+  hvac_test_fabricio_presence:
+    name: HVAC Test Fabricio Presence
+    icon: mdi:account-arrow-right-outline
+    options:
+      - Home
+      - Away
+
+  hvac_test_lucas_presence:
+    name: HVAC Test Lucas Presence
+    icon: mdi:account-arrow-right-outline
+    options:
+      - Home
+      - Away
+
+  ###############################################################################
+  # HVAC COORDINATOR - RESTORE MODE HELPERS
+  # Purpose:
+  # - Store thermostat HVAC modes before Smart Away starts.
+  # - Supported modes: heat, cool, off, unknown.
+  # - These helpers are persistent because no initial values are configured.
+  ###############################################################################
+
+  hvac_restore_living_room_mode:
+    name: HVAC Restore Living Room Mode
+    icon: mdi:restore
+    options:
+      - heat
+      - cool
+      - off
+      - unknown
+
+  hvac_restore_bedroom_mode:
+    name: HVAC Restore Bedroom Mode
+    icon: mdi:restore
+    options:
+      - heat
+      - cool
+      - off
+      - unknown
+
+  hvac_restore_second_floor_mode:
+    name: HVAC Restore Second Floor Mode
+    icon: mdi:restore
+    options:
+      - heat
+      - cool
+      - off
+      - unknown
+
+###############################################################################
+# Input Button Helpers
+###############################################################################
+
+input_button:
+
+
+  ###########################################################################
+  # Routine: Whole-Home Environment Monitor
+  # Used by Node-RED to manually rebuild the temperature/humidity sensor list.
+  ###########################################################################
+
+  environment_monitor_refresh_exclusion_list:
+    name: Refresh Environment Sensor Choices
+    icon: mdi:refresh
+
+
+  ###########################################################################
+  # Routine: Security Alarm Combined Manual Controls (handled by Node-RED)
+  ###########################################################################
+
+  security_alarm_arm_home:
+    name: Arm Home - Alarmo and Blink
+    icon: mdi:shield-home
+
+  security_alarm_arm_away:
+    name: Arm Away - Alarmo and Blink
+    icon: mdi:shield-lock
+
+  security_alarm_disarm:
+    name: Disarm - Alarmo and Blink
+    icon: mdi:shield-off-outline
+
+
+  ###########################################################################
+  # Routine: Garage Lighting
+  ###########################################################################
+
+  garage_lighting_test_selected_lights:
+    name: Test Garage Lighting
+    icon: mdi:lightbulb-on-50
+
+  garage_lighting_clear_manual_override:
+    name: Resume Automatic Garage Lighting
+    icon: mdi:play-circle-outline
+
+
+  ###########################################################################
+  # Routine: Backyard Porch Fan Smart Climate Control
+  ###########################################################################
+
+  porch_fan_resume_automatic:
+    name: Resume Automatic Porch Fan Control
+    icon: mdi:play-circle-outline
+
+  ###############################################################################
+  # HVAC COORDINATOR - PRESENCE TEST BUTTONS
+  # Purpose:
+  # - Run dashboard test actions without changing real person entities.
+  # - These buttons are handled by the HVAC Coordinator - Presence Test Buttons
+  #   automation.
+  ###############################################################################
+
+  hvac_test_start_new_away_cycle:
+    name: HVAC Test Start New Away Cycle
+    icon: mdi:play-circle-outline
+
+  hvac_test_simulate_both_away:
+    name: HVAC Test Simulate Both Away
+    icon: mdi:home-export-outline
+
+  hvac_test_simulate_both_home:
+    name: HVAC Test Simulate Both Home
+    icon: mdi:home-import-outline
+
+  hvac_test_simulate_fabricio_home:
+    name: HVAC Test Simulate Fabricio Home
+    icon: mdi:account-arrow-left-outline
+
+  hvac_test_simulate_lucas_home:
+    name: HVAC Test Simulate Lucas Home
+    icon: mdi:account-arrow-left-outline
+
+  hvac_test_disable_presence_simulation:
+    name: HVAC Test Disable Presence Simulation
+    icon: mdi:test-tube-off
+
+  ###########################################################################
+  # HVAC COORDINATOR - ARRIVAL COMFORT CONTROLS
+  # Starts or cancels the temporary two-hour occupied-home override.
+  ###########################################################################
+
+  hvac_start_arrival_comfort:
+    name: Start Arrival Comfort
+    icon: mdi:home-thermometer-outline
+
+  hvac_cancel_arrival_comfort:
+    name: Cancel Arrival Comfort
+    icon: mdi:home-remove-outline
+    
+    
+  ###########################################################################
+  # Routine: Smoke and Carbon Monoxide Alert Tests (handled by Node-RED)
+  ###########################################################################
+
+  smoke_co_test_smoke_alert:
+    name: Test Smoke Alert
+    icon: mdi:smoke-detector-alert
+
+  smoke_co_test_co_alert:
+    name: Test Carbon Monoxide Alert
+    icon: mdi:molecule-co
+
+  smoke_co_test_all_clear:
+    name: Test All Clear Notification
+    icon: mdi:check-decagram
+
+  smoke_co_reset_ring_keypad:
+    name: Safe Reset Ring Keypad Indicators
+    icon: mdi:restart-alert
+
+  water_leak_fridge_test_alert:
+    name: Test Fridge Water Leak Alert
+    icon: mdi:water-alert-outline
+
+  water_leak_laundry_test_alert:
+    name: Test Laundry Water Leak Alert
+    icon: mdi:water-alert-outline
+
+  water_leak_kitchen_sink_test_alert:
+    name: Test Kitchen Sink Water Leak Alert
+    icon: mdi:water-alert-outline
+
+  water_leak_filtration_center_test_alert:
+    name: Test Filtration Center Water Leak Alert
+    icon: mdi:water-alert-outline

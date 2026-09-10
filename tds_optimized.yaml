@@ -1,0 +1,164 @@
+substitutions:
+  # Ajuste depois da calibracao com uma solucao de referencia:
+  # fator = TDS conhecido / TDS medido
+  tds_calibration_factor: "1.0000"
+
+esphome:
+  name: tds
+  friendly_name: TDS
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+logger:
+
+api:
+  encryption:
+    key: !secret tds_api_key
+
+ota:
+  - platform: esphome
+    password: !secret tds_ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  ap:
+    ssid: "TDS Fallback Hotspot"
+    password: !secret tds_fallback_password
+
+captive_portal:
+
+sensor:
+  # Temperatura ambiente recebida do Home Assistant. Ela serve apenas
+  # como aproximacao ate que uma sonda de temperatura da agua seja instalada.
+  - platform: homeassistant
+    id: ambient_temperature
+    entity_id: sensor.zb_th_sensor_square_04_kitchen_temperature
+    internal: true
+
+  # Entrada analogica do sensor TDS atualmente em uso (OUT).
+  - platform: adc
+    pin: GPIO34
+    id: tds_voltage_out
+    name: "TDS OUT Voltage"
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 3
+    attenuation: 12db
+    samples: 32
+    sampling_mode: avg
+    update_interval: 2s
+    filters:
+      - median:
+          window_size: 7
+          send_every: 1
+          send_first_at: 1
+      - exponential_moving_average:
+          alpha: 0.20
+          send_every: 1
+    internal: true
+
+  # Temperatura realmente utilizada na compensacao. Usa 25 C quando a
+  # entidade do Home Assistant ainda nao chegou ou fornece valor invalido.
+  - platform: template
+    id: tds_compensation_temperature
+    name: "TDS Compensation Temperature"
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 1
+    update_interval: 10s
+    lambda: |-
+      const float ambient = id(ambient_temperature).state;
+
+      if (!isnan(ambient) && ambient >= 0.0f && ambient <= 50.0f) {
+        return ambient;
+      }
+
+      return 25.0f;
+
+  # TDS corrigido para a temperatura de referencia de 25 C.
+  - platform: template
+    id: hydro_tds_out
+    name: "TDS OUT"
+    icon: "mdi:water-opacity"
+    unit_of_measurement: "ppm"
+    state_class: measurement
+    accuracy_decimals: 0
+    update_interval: 10s
+    lambda: |-
+      const float voltage = id(tds_voltage_out).state;
+      const float temperature = id(tds_compensation_temperature).state;
+
+      if (isnan(voltage) || isnan(temperature)) {
+        return NAN;
+      }
+
+      // Faixa util aproximada do ADC do ESP32 com atenuacao de 12 dB.
+      // Valores fora dela geralmente indicam desconexao ou saturacao.
+      if (voltage < 0.075f || voltage > 3.10f) {
+        return NAN;
+      }
+
+      const float compensation_coefficient =
+          1.0f + 0.02f * (temperature - 25.0f);
+
+      if (compensation_coefficient <= 0.0f) {
+        return NAN;
+      }
+
+      const float compensated_voltage =
+          voltage / compensation_coefficient;
+      const float voltage_squared =
+          compensated_voltage * compensated_voltage;
+      const float voltage_cubed =
+          voltage_squared * compensated_voltage;
+
+      float ppm =
+          (133.42f * voltage_cubed
+           - 255.86f * voltage_squared
+           + 857.39f * compensated_voltage) * 0.5f;
+
+      ppm *= ${tds_calibration_factor};
+
+      if (ppm < 0.0f || ppm > 3000.0f) {
+        return NAN;
+      }
+
+      return ppm;
+
+  # Condutividade equivalente na escala TDS 0,5.
+  - platform: template
+    id: ec_out
+    name: "EC OUT"
+    icon: "mdi:current-ac"
+    unit_of_measurement: "mS/cm"
+    state_class: measurement
+    accuracy_decimals: 3
+    update_interval: 10s
+    lambda: |-
+      const float ppm = id(hydro_tds_out).state;
+
+      if (isnan(ppm)) {
+        return NAN;
+      }
+
+      return ppm * 0.002f;
+
+binary_sensor:
+  - platform: status
+    name: "TDS Status"
+
+button:
+  - platform: restart
+    name: "TDS Restart"
+
+text_sensor:
+  - platform: wifi_info
+    ip_address:
+      name: "TDS IP Address"

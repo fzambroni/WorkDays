@@ -3,7 +3,7 @@
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Icon=CalendarSync.ico
 #AutoIt3Wrapper_Res_Description=Work Day Sync Agent
-#AutoIt3Wrapper_Res_Fileversion=1.0.2.2
+#AutoIt3Wrapper_Res_Fileversion=1.0.2.3
 #AutoIt3Wrapper_Res_ProductName=Work Day Sync Agent
 #AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
 #AutoIt3Wrapper_Res_LegalCopyright=Copyright © 2026 Fabricio Zambroni
@@ -2199,7 +2199,6 @@ Func _CurrentQuarterStats()
 
 	Local $iEstmOnSite = Ceiling(($iWorkDays / 5) * 3)
 	Local $iRemaining = $iEstmOnSite - $iRealOnSite
-	If $iRemaining < 0 Then $iRemaining = 0
 
 	Local $a[10]
 	$a[0] = "Q" & $iQuarter
