@@ -3,7 +3,7 @@
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Icon=xcalendar4.ico
 #AutoIt3Wrapper_Res_Description=Work Day management
-#AutoIt3Wrapper_Res_Fileversion=2.1.5.3
+#AutoIt3Wrapper_Res_Fileversion=2.1.5.4
 #AutoIt3Wrapper_Res_ProductVersion=2.1.0.0
 #AutoIt3Wrapper_Res_ProductName=Work Days
 #AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
@@ -1934,11 +1934,12 @@ Func _BKColorPallet()
 	GUICtrlCreateLabel("Invalid date:", 10, 345)
 	GUICtrlCreateLabel("Graphic line:", 10, 375)
 	GUICtrlCreateLabel("Quarter line:", 10, 405)
-	GUICtrlCreateLabel("Border size:", 10, 435)
-	$Slider_Border_Size = GUICtrlCreateSlider(65, 430, 140, 20, BitOR($GUI_SS_DEFAULT_SLIDER, $TBS_FIXEDLENGTH))
+;~ 	GUICtrlCreateLabel("Quarter Line:", 10, 435)
+;~ 	$Slider_Border_Size = GUICtrlCreateSlider(65, 430, 140, 20, BitOR($GUI_SS_DEFAULT_SLIDER, $TBS_FIXEDLENGTH))
+	$Slider_Border_Size = GUICtrlCreateSlider(130, 400, 70, 20, BitOR($GUI_SS_DEFAULT_SLIDER, $TBS_FIXEDLENGTH))
 	GUICtrlSetLimit($Slider_Border_Size, 5, 0)
 	GUICtrlSetData($Slider_Border_Size, $g_iQuarterBorderSize)
-	$Label_Border_Size = GUICtrlCreateLabel(GUICtrlRead($Slider_Border_Size), 205, 433)
+	$Label_Border_Size = GUICtrlCreateLabel(GUICtrlRead($Slider_Border_Size), 205, 405)
 
 	GUICtrlCreateLabel("Font size:", 10, 465)
 	$Slider_Font_Size = GUICtrlCreateSlider(65, 460, 140, 20, BitOR($GUI_SS_DEFAULT_SLIDER, $TBS_FIXEDLENGTH))

@@ -3,3 +3,7 @@
 /Backups
 autosave.db
 /Reports
+/HA-Updated
+/.ha-validation-libs
+build_ha_update.py
+validate_ha_update.py
