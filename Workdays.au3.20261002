@@ -3,7 +3,7 @@
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Icon=xcalendar4.ico
 #AutoIt3Wrapper_Res_Description=Work Day management
-#AutoIt3Wrapper_Res_Fileversion=2.1.5.5
+#AutoIt3Wrapper_Res_Fileversion=2.1.5.4
 #AutoIt3Wrapper_Res_ProductVersion=2.1.0.0
 #AutoIt3Wrapper_Res_ProductName=Work Days
 #AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
@@ -193,8 +193,6 @@ Global $g_sOutlookAgentLastGuardStatus = ""
 Global $g_hOutlookAgentSettingsWindow = 0
 Global $g_bOutlookAgentSyncButtonBusy = False
 Global $g_sOutlookAgentSyncButtonLastStatus = ""
-Global $Label_OutlookSyncStatus = 0
-Global $g_sOutlookAgentLastSyncLabelText = ""
 Global $g_bWorkDaysUpdaterAvailable = False
 Global $ResetPosition = 0
 Global $Progress_Splash, $Form_Splash, $Label_Percentage, $Splash, $Button_Close_Splash
@@ -597,10 +595,6 @@ GUICtrlSetTip($Button_OutlookSync, "Force an immediate Outlook Agent sync.")
 GUICtrlSetBkColor($Button_OutlookSync, 0xD9ECFF)
 GUICtrlSetColor($Button_OutlookSync, 0x0B4F8A)
 GUICtrlSetFont($Button_OutlookSync, 9, 700)
-$Label_OutlookSyncStatus = GUICtrlCreateLabel("Outlook: -", 552, 148, 185, 18)
-GUICtrlSetColor($Label_OutlookSyncStatus, 0x577590)
-GUICtrlSetFont($Label_OutlookSyncStatus, 8, 400, 0, "Segoe UI")
-GUICtrlSetTip($Label_OutlookSyncStatus, "Last Outlook Agent synchronization result.")
 
 ;~ $Button_PTO = GUICtrlCreateButton("&PTO", 384, 114, 75, 25)
 $Button_PTO = GUICtrlCreateButton("&PTO", 296, 114, 75, 25)
@@ -6719,7 +6713,6 @@ Func _OutlookAgent_EnsureDefaults()
 	_OA_EnsureDefault("Sync", "SyncWeekend", "0")
 	_OA_EnsureDefault("Sync", "SyncTaggedBlankOrWeekend", "1")
 	_OA_EnsureDefault("Sync", "RunAtWindowsStartup", "0")
-	_OA_EnsureDefault("Sync", "OnDemandOnly", "0")
 
 	_OA_EnsureDefault("Outlook", "SubjectPrefix", "WorkDays -")
 	_OA_EnsureDefault("Outlook", "CategoryPrefix", "WorkDays -")
@@ -6776,11 +6769,7 @@ Func _OutlookAgent_StatusText()
 	Local $sRunning = "Stopped"
 	If _OutlookAgent_IsRunning() Then $sRunning = "Running"
 
-	Local $sMode = "Resident / scheduled"
-	If _OA_Read("Sync", "OnDemandOnly", "0") = "1" Then $sMode = "On demand only"
-
-	Local $sLast = _OutlookAgent_LastSyncSummaryText()
-	Return "Status: " & $sInstalled & " / " & $sRunning & " / " & $sMode & " | Last sync: " & $sLast & @CRLF & "Location: " & $g_sOutlookAgentExe
+	Return "Status: " & $sInstalled & " / " & $sRunning & @CRLF & "Location: " & $g_sOutlookAgentExe
 EndFunc   ;==>_OutlookAgent_StatusText
 
 Func _OutlookAgent_RunCommand()
@@ -6788,17 +6777,11 @@ Func _OutlookAgent_RunCommand()
 EndFunc   ;==>_OutlookAgent_RunCommand
 
 Func _OutlookAgent_UpdateStartupRunKey()
-	If _OA_Read("Sync", "OnDemandOnly", "0") = "1" Then
-		RegDelete("HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run", "WorkDays Outlook Agent")
-		Return 1
-	EndIf
-
 	If _OA_Read("Sync", "RunAtWindowsStartup", "0") = "1" And FileExists($g_sOutlookAgentExe) Then
 		RegWrite("HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run", "WorkDays Outlook Agent", "REG_SZ", _OutlookAgent_RunCommand())
 	Else
 		RegDelete("HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run", "WorkDays Outlook Agent")
 	EndIf
-	Return 1
 EndFunc   ;==>_OutlookAgent_UpdateStartupRunKey
 
 Func _OutlookAgent_Install()
@@ -6829,12 +6812,6 @@ Func _OutlookAgent_Install()
 EndFunc   ;==>_OutlookAgent_Install
 
 Func _OutlookAgent_Start()
-	If _OA_Read("Sync", "OnDemandOnly", "0") = "1" Then
-		MsgBox(BitOR($MB_ICONINFORMATION, $MB_TOPMOST), "WorkDays Outlook Agent", "On-demand only mode is enabled." & @CRLF & @CRLF & "The resident Outlook Agent will not stay running. Use the main Sync button to run a one-time synchronization worker.", 0, $Form_WorkDays)
-		_OutlookAgent_UpdateStartupRunKey()
-		Return 1
-	EndIf
-
 	If Not _OutlookAgent_IsInstalled() Then
 		Local $iInstall = MsgBox(BitOR($MB_ICONQUESTION, $MB_YESNO, $MB_TOPMOST), "WorkDays Outlook Agent", "The Outlook Agent is not installed yet." & @CRLF & @CRLF & "Install it now?", 0, $Form_WorkDays)
 		If $iInstall <> $IDYES Then Return 0
@@ -6944,7 +6921,7 @@ Func _OutlookAgent_Uninstall()
 	Return 1
 EndFunc   ;==>_OutlookAgent_Uninstall
 
-Func _OutlookAgent_SaveSettings($idInterval, $idPast, $idFuture, $idConflictOutlook, $idDeleteOutlookClears, $idSyncBlank, $idSyncWeekend, $idSyncTaggedBlankWeekend, $idStartup, $idOnDemandOnly, $idSubjectPrefix, $idCategoryPrefix, $idReminderSet, $idManagedOnly, $idIncludeQuarterStatsBody, $idShowMarkerSubject, $idMarkerSuffix, $idSeparateMarkerCategory, $idMarkerCategoryName, $idReminderMarker, $idReminderMinutes, $idCleanupEnabled, $idCleanupPastYears, $idCleanupFutureYears, $idCleanupPrefixOnly, $idPauseAfterCleanup, $idVerboseMode, $idBackupBeforeOutlookChanges, $idBlockMassChanges, $idMaxChanges, $idMaxPercent, $idMaxClears, $idBlockIncompleteRead)
+Func _OutlookAgent_SaveSettings($idInterval, $idPast, $idFuture, $idConflictOutlook, $idDeleteOutlookClears, $idSyncBlank, $idSyncWeekend, $idSyncTaggedBlankWeekend, $idStartup, $idSubjectPrefix, $idCategoryPrefix, $idReminderSet, $idManagedOnly, $idIncludeQuarterStatsBody, $idShowMarkerSubject, $idMarkerSuffix, $idSeparateMarkerCategory, $idMarkerCategoryName, $idReminderMarker, $idReminderMinutes, $idCleanupEnabled, $idCleanupPastYears, $idCleanupFutureYears, $idCleanupPrefixOnly, $idPauseAfterCleanup, $idVerboseMode, $idBackupBeforeOutlookChanges, $idBlockMassChanges, $idMaxChanges, $idMaxPercent, $idMaxClears, $idBlockIncompleteRead)
 	Local $iInterval = Number(GUICtrlRead($idInterval))
 	If $iInterval < 1 Then $iInterval = 15
 	Local $iPast = Number(GUICtrlRead($idPast))
@@ -6972,13 +6949,7 @@ Func _OutlookAgent_SaveSettings($idInterval, $idPast, $idFuture, $idConflictOutl
 	_OA_Write("Sync", "SyncBlank", _OA_CheckTo01(GUICtrlRead($idSyncBlank)))
 	_OA_Write("Sync", "SyncWeekend", _OA_CheckTo01(GUICtrlRead($idSyncWeekend)))
 	_OA_Write("Sync", "SyncTaggedBlankOrWeekend", _OA_CheckTo01(GUICtrlRead($idSyncTaggedBlankWeekend)))
-	Local $sOnDemandOnly = _OA_CheckTo01(GUICtrlRead($idOnDemandOnly))
-	_OA_Write("Sync", "OnDemandOnly", $sOnDemandOnly)
-	If $sOnDemandOnly = "1" Then
-		_OA_Write("Sync", "RunAtWindowsStartup", "0")
-	Else
-		_OA_Write("Sync", "RunAtWindowsStartup", _OA_CheckTo01(GUICtrlRead($idStartup)))
-	EndIf
+	_OA_Write("Sync", "RunAtWindowsStartup", _OA_CheckTo01(GUICtrlRead($idStartup)))
 
 	_OA_Write("Outlook", "SubjectPrefix", GUICtrlRead($idSubjectPrefix))
 	_OA_Write("Outlook", "CategoryPrefix", GUICtrlRead($idCategoryPrefix))
@@ -7014,82 +6985,8 @@ Func _OutlookAgent_SaveSettings($idInterval, $idPast, $idFuture, $idConflictOutl
 
 	RegWrite($g_sOutlookAgentDB, "LastSettingsSavedByWorkDays", "REG_SZ", StringFormat("%04d-%02d-%02d %02d:%02d:%02d", @YEAR, @MON, @MDAY, @HOUR, @MIN, @SEC))
 	_OutlookAgent_UpdateStartupRunKey()
-	If $sOnDemandOnly = "1" Then
-		Local $sWorkerStatus = _OutlookAgent_ReadWorkerStatus()
-		Switch $sWorkerStatus
-			Case "PENDING", "RUNNING", "SYNCING", "CLEANING"
-				; Do not stop an active worker.
-			Case Else
-				If _OutlookAgent_IsRunning() Then _OutlookAgent_Stop(False)
-		EndSwitch
-	EndIf
 	Return 1
 EndFunc   ;==>_OutlookAgent_SaveSettings
-
-
-Func _OutlookAgent_IsOnDemandOnly()
-	Return _OA_Read("Sync", "OnDemandOnly", "0") = "1"
-EndFunc   ;==>_OutlookAgent_IsOnDemandOnly
-
-Func _OutlookAgent_LastSyncSummaryText()
-	Local $sResult = RegRead($g_sOutlookAgentDB, "LastSyncResult")
-	If @error Or $sResult = "" Then Return "Never"
-	Local $sAt = RegRead($g_sOutlookAgentDB, "LastSyncResultAt")
-	If @error Then $sAt = ""
-	Local $sChanges = RegRead($g_sOutlookAgentDB, "LastSyncResultChanges")
-	If @error Then $sChanges = ""
-	Local $sText = StringUpper(StringStripWS($sResult, 3))
-	If $sAt <> "" Then $sText &= " at " & $sAt
-	If $sChanges <> "" Then $sText &= " | Changes: " & $sChanges
-	Return $sText
-EndFunc   ;==>_OutlookAgent_LastSyncSummaryText
-
-Func _OutlookAgent_LastSyncLabelText()
-	Local $sWorker = _OutlookAgent_ReadWorkerStatus()
-	Switch $sWorker
-		Case "PENDING", "RUNNING", "SYNCING"
-			Return "Outlook: Sync..."
-		Case "CLEANING"
-			Return "Outlook: Cleaning..."
-	EndSwitch
-
-	Local $sResult = RegRead($g_sOutlookAgentDB, "LastSyncResult")
-	If @error Or $sResult = "" Then Return "Outlook: Never synced"
-	Local $sAt = RegRead($g_sOutlookAgentDB, "LastSyncResultAt")
-	If @error Then $sAt = ""
-	Local $sChanges = RegRead($g_sOutlookAgentDB, "LastSyncResultChanges")
-	If @error Then $sChanges = ""
-
-	Local $sLabel = "Outlook: "
-	Switch StringUpper(StringStripWS($sResult, 3))
-		Case "SUCCESS"
-			$sLabel &= "Success"
-		Case Else
-			$sLabel &= "Fail"
-	EndSwitch
-	If $sAt <> "" Then $sLabel &= " " & StringMid($sAt, 12, 5)
-	If $sChanges <> "" And StringUpper(StringStripWS($sResult, 3)) = "SUCCESS" Then $sLabel &= " (" & $sChanges & ")"
-	Return $sLabel
-EndFunc   ;==>_OutlookAgent_LastSyncLabelText
-
-Func _OutlookAgent_UpdateLastSyncLabel()
-	If $Label_OutlookSyncStatus = 0 Then Return 0
-	Local $sText = _OutlookAgent_LastSyncLabelText()
-	If $sText = $g_sOutlookAgentLastSyncLabelText Then Return 0
-	$g_sOutlookAgentLastSyncLabelText = $sText
-	GUICtrlSetData($Label_OutlookSyncStatus, $sText)
-	If StringInStr($sText, "Success") Then
-		GUICtrlSetColor($Label_OutlookSyncStatus, 0x008000)
-	ElseIf StringInStr($sText, "Fail") Then
-		GUICtrlSetColor($Label_OutlookSyncStatus, 0xCC0000)
-	Else
-		GUICtrlSetColor($Label_OutlookSyncStatus, 0x577590)
-	EndIf
-	Local $sMsg = RegRead($g_sOutlookAgentDB, "LastSyncResultMessage")
-	If @error Or $sMsg = "" Then $sMsg = "Last Outlook Agent synchronization result."
-	GUICtrlSetTip($Label_OutlookSyncStatus, $sMsg)
-	Return 1
-EndFunc   ;==>_OutlookAgent_UpdateLastSyncLabel
 
 
 Func _OutlookAgent_StatusCodeToLabel($sStatus)
@@ -7125,11 +7022,7 @@ Func _OutlookAgent_SetSyncButtonBusy($bBusy, $sText = "Sync...")
 	Else
 		GUICtrlSetData($Button_OutlookSync, "Sync")
 		GUICtrlSetState($Button_OutlookSync, $GUI_ENABLE)
-		If _OutlookAgent_IsOnDemandOnly() Then
-			GUICtrlSetTip($Button_OutlookSync, "Run one Outlook sync now. On-demand mode closes the agent after the sync.")
-		Else
-			GUICtrlSetTip($Button_OutlookSync, "Force an immediate Outlook Agent sync.")
-		EndIf
+		GUICtrlSetTip($Button_OutlookSync, "Force an immediate Outlook Agent sync.")
 		$g_bOutlookAgentSyncButtonBusy = False
 	EndIf
 EndFunc   ;==>_OutlookAgent_SetSyncButtonBusy
@@ -7141,7 +7034,6 @@ Func _OutlookAgent_ReadWorkerStatus()
 EndFunc   ;==>_OutlookAgent_ReadWorkerStatus
 
 Func _OutlookAgent_UpdateSyncButtonState()
-	_OutlookAgent_UpdateLastSyncLabel()
 	Local $sStatus = _OutlookAgent_ReadWorkerStatus()
 	If $sStatus = $g_sOutlookAgentSyncButtonLastStatus And Not $g_bOutlookAgentSyncButtonBusy Then Return
 	$g_sOutlookAgentSyncButtonLastStatus = $sStatus
@@ -7173,44 +7065,17 @@ Func _OutlookAgent_RequestSyncNow()
 	RegWrite($g_sOutlookAgentDB, "Sync_ForceNowRequest", "REG_SZ", $sNow)
 	RegWrite($g_sOutlookAgentDB, "Sync_ForceNowRequestedBy", "REG_SZ", "WorkDays")
 
-	If _OutlookAgent_IsOnDemandOnly() Then
-		; On-demand mode does not start or keep the resident tray agent alive.
-		; It launches the short-lived sync worker directly and the worker exits when done.
-		_OutlookAgent_UpdateStartupRunKey()
-		If _OutlookAgent_IsRunning() Then _OutlookAgent_Stop(False)
-		Local $sWorkerCmd = _OutlookAgent_RunCommand() & " /syncworker /ondemand"
-		Local $iPid = Run($sWorkerCmd, $g_sOutlookAgentDir, @SW_HIDE)
-		If $iPid = 0 Then
-			RegWrite($g_sOutlookAgentDB, "Worker_Status", "REG_SZ", "START_FAILED")
-			RegWrite($g_sOutlookAgentDB, "Worker_Message", "REG_SZ", "WorkDays requested an on-demand sync, but the sync worker did not start.")
-			RegWrite($g_sOutlookAgentDB, "Worker_UpdatedAt", "REG_SZ", $sNow)
-			RegWrite($g_sOutlookAgentDB, "LastSyncResult", "REG_SZ", "FAIL")
-			RegWrite($g_sOutlookAgentDB, "LastSyncResultAt", "REG_SZ", StringLeft($sNow, 19))
-			RegWrite($g_sOutlookAgentDB, "LastSyncResultMessage", "REG_SZ", "The on-demand sync worker did not start.")
-			RegWrite($g_sOutlookAgentDB, "LastSyncResultChanges", "REG_SZ", "0")
-			_OutlookAgent_SetSyncButtonBusy(False)
-			_OutlookAgent_UpdateLastSyncLabel()
-			MsgBox(BitOR($MB_ICONWARNING, $MB_TOPMOST), "WorkDays Outlook Agent", "WorkDays could not start the on-demand Outlook sync worker." & @CRLF & @CRLF & "Check the agent installation or open the log file for details.", 0, $Form_WorkDays)
-			Return 0
-		EndIf
-		Return 1
-	EndIf
-
 	If _OutlookAgent_IsRunning() Then Return 1
 
-	; Resident mode: start the tray agent. It keeps the request queued and waits until Outlook is ready.
+	; Start the resident agent instead of a one-time COM sync. The agent keeps the request queued
+	; and waits until a visible Outlook session is fully initialized.
 	Run(_OutlookAgent_RunCommand(), $g_sOutlookAgentDir)
 	Sleep(500)
 	If Not _OutlookAgent_IsRunning() Then
 		RegWrite($g_sOutlookAgentDB, "Worker_Status", "REG_SZ", "START_FAILED")
 		RegWrite($g_sOutlookAgentDB, "Worker_Message", "REG_SZ", "WorkDays requested a sync, but the Outlook Agent did not start.")
 		RegWrite($g_sOutlookAgentDB, "Worker_UpdatedAt", "REG_SZ", $sNow)
-		RegWrite($g_sOutlookAgentDB, "LastSyncResult", "REG_SZ", "FAIL")
-		RegWrite($g_sOutlookAgentDB, "LastSyncResultAt", "REG_SZ", StringLeft($sNow, 19))
-		RegWrite($g_sOutlookAgentDB, "LastSyncResultMessage", "REG_SZ", "The resident Outlook Agent did not start.")
-		RegWrite($g_sOutlookAgentDB, "LastSyncResultChanges", "REG_SZ", "0")
 		_OutlookAgent_SetSyncButtonBusy(False)
-		_OutlookAgent_UpdateLastSyncLabel()
 		MsgBox(BitOR($MB_ICONWARNING, $MB_TOPMOST), "WorkDays Outlook Agent", "WorkDays requested a sync, but the Outlook Agent does not appear to be running." & @CRLF & @CRLF & "Check the agent installation or open the log file for details.", 0, $Form_WorkDays)
 		Return 0
 	EndIf
@@ -7358,7 +7223,7 @@ Func _OutlookAgent_SettingsWindow()
 	Local $btnUninstall = GUICtrlCreateButton("Uninstall", 818, 88, 120, 28)
 
 	; Left column: sync behavior.
-	GUICtrlCreateGroup("Sync behavior", 18, 128, 460, 178)
+	GUICtrlCreateGroup("Sync behavior", 18, 128, 460, 168)
 	GUICtrlCreateLabel("Sync every", 34, 154, 70, 20)
 	Local $inpInterval = GUICtrlCreateInput(_OA_Read("Sync", "IntervalMinutes", "15"), 104, 150, 46, 22, $ES_NUMBER)
 	GUICtrlCreateLabel("minutes", 156, 154, 60, 20)
@@ -7373,8 +7238,6 @@ Func _OutlookAgent_SettingsWindow()
 	Local $chkSyncWeekend = GUICtrlCreateCheckbox("Sync Weekend days", 178, 234, 145, 20)
 	Local $chkSyncTaggedBlankWeekend = GUICtrlCreateCheckbox("Blank/Weekend only with marker", 34, 260, 235, 20)
 	Local $chkStartup = GUICtrlCreateCheckbox("Start Outlook Agent with Windows", 258, 260, 200, 20)
-	Local $chkOnDemandOnly = GUICtrlCreateCheckbox("On-demand only; close agent after Sync", 34, 282, 285, 20)
-	GUICtrlSetTip($chkOnDemandOnly, "When enabled, the Outlook Agent will not start with Windows or stay resident. The main Sync button launches one temporary sync worker, then the agent exits.")
 
 	; Right column: Outlook display.
 	GUICtrlCreateGroup("Outlook display", 488, 128, 450, 118)
@@ -7437,7 +7300,6 @@ Func _OutlookAgent_SettingsWindow()
 	_OA_SetCheck($chkSyncWeekend, _OA_Read("Sync", "SyncWeekend", "0"))
 	_OA_SetCheck($chkSyncTaggedBlankWeekend, _OA_Read("Sync", "SyncTaggedBlankOrWeekend", "1"))
 	_OA_SetCheck($chkStartup, _OA_Read("Sync", "RunAtWindowsStartup", "0"))
-	_OA_SetCheck($chkOnDemandOnly, _OA_Read("Sync", "OnDemandOnly", "0"))
 	_OA_SetCheck($chkReminderSet, _OA_Read("Outlook", "ReminderSet", "0"))
 	_OA_SetCheck($chkManagedOnly, _OA_Read("Outlook", "ManagedOnly", "0"))
 	_OA_SetCheck($chkIncludeQuarterStatsBody, _OA_Read("Outlook", "IncludeCurrentQuarterStatsInTodayBody", "0"))
@@ -7498,7 +7360,7 @@ Func _OutlookAgent_SettingsWindow()
 				EndIf
 
 			Case $btnClean
-				_OutlookAgent_SaveSettings($inpInterval, $inpPast, $inpFuture, $chkConflictOutlook, $chkDeleteOutlookClears, $chkSyncBlank, $chkSyncWeekend, $chkSyncTaggedBlankWeekend, $chkStartup, $chkOnDemandOnly, $inpSubjectPrefix, $inpCategoryPrefix, $chkReminderSet, $chkManagedOnly, $chkIncludeQuarterStatsBody, $chkShowMarkerSubject, $inpMarkerSuffix, $chkSeparateMarkerCategory, $inpMarkerCategory, $chkReminderMarker, $inpReminderMinutes, $chkCleanupEnabled, $inpCleanupPast, $inpCleanupFuture, $chkCleanupPrefixOnly, $chkPauseAfterCleanup, $chkVerboseMode, $chkBackupBeforeOutlookChanges, $chkBlockMassChanges, $inpMaxChanges, $inpMaxPercent, $inpMaxClears, $chkBlockIncompleteRead)
+				_OutlookAgent_SaveSettings($inpInterval, $inpPast, $inpFuture, $chkConflictOutlook, $chkDeleteOutlookClears, $chkSyncBlank, $chkSyncWeekend, $chkSyncTaggedBlankWeekend, $chkStartup, $inpSubjectPrefix, $inpCategoryPrefix, $chkReminderSet, $chkManagedOnly, $chkIncludeQuarterStatsBody, $chkShowMarkerSubject, $inpMarkerSuffix, $chkSeparateMarkerCategory, $inpMarkerCategory, $chkReminderMarker, $inpReminderMinutes, $chkCleanupEnabled, $inpCleanupPast, $inpCleanupFuture, $chkCleanupPrefixOnly, $chkPauseAfterCleanup, $chkVerboseMode, $chkBackupBeforeOutlookChanges, $chkBlockMassChanges, $inpMaxChanges, $inpMaxPercent, $inpMaxClears, $chkBlockIncompleteRead)
 				If _OutlookAgent_ConfirmCleanup($hAgent) Then
 					GUICtrlSetData($lblStatus, "Cleaning Outlook WorkDays items... Please wait.")
 					GUISetState(@SW_DISABLE, $hAgent)
@@ -7509,7 +7371,7 @@ Func _OutlookAgent_SettingsWindow()
 				EndIf
 
 			Case $btnSave
-				_OutlookAgent_SaveSettings($inpInterval, $inpPast, $inpFuture, $chkConflictOutlook, $chkDeleteOutlookClears, $chkSyncBlank, $chkSyncWeekend, $chkSyncTaggedBlankWeekend, $chkStartup, $chkOnDemandOnly, $inpSubjectPrefix, $inpCategoryPrefix, $chkReminderSet, $chkManagedOnly, $chkIncludeQuarterStatsBody, $chkShowMarkerSubject, $inpMarkerSuffix, $chkSeparateMarkerCategory, $inpMarkerCategory, $chkReminderMarker, $inpReminderMinutes, $chkCleanupEnabled, $inpCleanupPast, $inpCleanupFuture, $chkCleanupPrefixOnly, $chkPauseAfterCleanup, $chkVerboseMode, $chkBackupBeforeOutlookChanges, $chkBlockMassChanges, $inpMaxChanges, $inpMaxPercent, $inpMaxClears, $chkBlockIncompleteRead)
+				_OutlookAgent_SaveSettings($inpInterval, $inpPast, $inpFuture, $chkConflictOutlook, $chkDeleteOutlookClears, $chkSyncBlank, $chkSyncWeekend, $chkSyncTaggedBlankWeekend, $chkStartup, $inpSubjectPrefix, $inpCategoryPrefix, $chkReminderSet, $chkManagedOnly, $chkIncludeQuarterStatsBody, $chkShowMarkerSubject, $inpMarkerSuffix, $chkSeparateMarkerCategory, $inpMarkerCategory, $chkReminderMarker, $inpReminderMinutes, $chkCleanupEnabled, $inpCleanupPast, $inpCleanupFuture, $chkCleanupPrefixOnly, $chkPauseAfterCleanup, $chkVerboseMode, $chkBackupBeforeOutlookChanges, $chkBlockMassChanges, $inpMaxChanges, $inpMaxPercent, $inpMaxClears, $chkBlockIncompleteRead)
 				GUIDelete($hAgent)
 				$g_hOutlookAgentSettingsWindow = 0
 				WinActivate("Work Days")

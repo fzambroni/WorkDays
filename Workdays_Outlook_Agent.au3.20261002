@@ -3,7 +3,7 @@
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Icon=CalendarSync.ico
 #AutoIt3Wrapper_Res_Description=Work Day Sync Agent
-#AutoIt3Wrapper_Res_Fileversion=1.0.2.4
+#AutoIt3Wrapper_Res_Fileversion=1.0.2.3
 #AutoIt3Wrapper_Res_ProductName=Work Day Sync Agent
 #AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
 #AutoIt3Wrapper_Res_LegalCopyright=Copyright © 2026 Fabricio Zambroni
@@ -79,13 +79,6 @@ _EnsureConfig()
 $g_sLastForceSyncRequest = RegRead($g_sAgentDB, "Sync_ForceNowRequest")
 If @error Then $g_sLastForceSyncRequest = ""
 _HandleCommandLine()
-
-If _Cfg("Sync", "OnDemandOnly", "0") = "1" Then
-	_ApplyStartupSetting()
-	_SetWorkerStatus("IDLE", "On-demand only mode is enabled. Resident agent exited without starting.", 0, 0, 0)
-	_Log("On-demand only mode is enabled. Resident tray agent will not stay running. Use /syncworker for one-time synchronization.")
-	Exit
-EndIf
 
 If _Singleton($g_sAppTitle, 1) = 0 Then
 	MsgBox(BitOR($MB_ICONINFORMATION, $MB_TOPMOST), $g_sAppTitle, "WorkDays Outlook Agent is already running.")
@@ -217,21 +210,10 @@ Func _SetWorkerStatus($sStatus, $sMessage = "", $iExitCode = 0, $iChanges = 0, $
 	Return 1
 EndFunc
 
-Func _SetLastSyncResult($sResult, $sMessage = "", $iExitCode = 0, $iChanges = 0)
-	Local $sNow = StringFormat("%04d-%02d-%02d %02d:%02d:%02d", @YEAR, @MON, @MDAY, @HOUR, @MIN, @SEC)
-	RegWrite($g_sAgentDB, "LastSyncResult", "REG_SZ", StringUpper($sResult))
-	RegWrite($g_sAgentDB, "LastSyncResultAt", "REG_SZ", $sNow)
-	RegWrite($g_sAgentDB, "LastSyncResultMessage", "REG_SZ", $sMessage)
-	RegWrite($g_sAgentDB, "LastSyncResultExitCode", "REG_SZ", String($iExitCode))
-	RegWrite($g_sAgentDB, "LastSyncResultChanges", "REG_SZ", String($iChanges))
-	Return 1
-EndFunc
-
 Func _RunSyncWorker($bDeferredStartup = False)
 	If _Singleton($g_sAppTitle & " - Sync Worker", 1) = 0 Then
 		_Log("Another Outlook sync worker is already running. New sync request ignored by worker lock.")
 		_SetWorkerStatus("RUNNING", "Another Outlook sync worker is already running.", 90, 0, 0)
-		_SetLastSyncResult("FAIL", "Another Outlook sync worker is already running.", 90, 0)
 		Return SetError(90, 0, 0)
 	EndIf
 
@@ -244,14 +226,12 @@ Func _RunSyncWorker($bDeferredStartup = False)
 
 	If $iSyncErr Then
 		_SetWorkerStatus("WAITING", "Sync worker did not complete safely. Error code=" & $iSyncErr & ". " & $g_sLastSyncGuardReason, $iSyncErr, 0, 0)
-		_SetLastSyncResult("FAIL", "Sync worker did not complete safely. Error code=" & $iSyncErr & ". " & $g_sLastSyncGuardReason, $iSyncErr, 0)
 		_Log("Sync worker exiting with error. Error code=" & $iSyncErr & " Reason=" & $g_sLastSyncGuardReason)
 		Return SetError($iSyncErr, 0, 0)
 	EndIf
 
 	IniWrite($g_sState, "Global", "LastSync", $sNow)
 	_SetWorkerStatus("COMPLETED", "Sync worker completed successfully.", 0, $iChanges, 0)
-	_SetLastSyncResult("SUCCESS", "Sync worker completed successfully.", 0, $iChanges)
 	_Log("Sync worker completed. Changes: " & $iChanges)
 	Return $iChanges
 EndFunc
@@ -328,7 +308,6 @@ Func _EnsureConfig()
 	_EnsureRegDefault("Sync", "SyncWeekend", "0")
 	_EnsureRegDefault("Sync", "SyncTaggedBlankOrWeekend", "1")
 	_EnsureRegDefault("Sync", "RunAtWindowsStartup", "0")
-	_EnsureRegDefault("Sync", "OnDemandOnly", "0")
 
 	_EnsureRegDefault("Outlook", "SubjectPrefix", "WorkDays -")
 	_EnsureRegDefault("Outlook", "CategoryPrefix", "WorkDays -")
@@ -436,17 +415,11 @@ EndFunc
 Func _ApplyStartupSetting()
 	; Startup is configured only by the main WorkDays application.
 	; The agent only applies the registry value it receives from WorkDays.
-	If _Cfg("Sync", "OnDemandOnly", "0") = "1" Then
-		RegDelete("HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run", "WorkDays Outlook Agent")
-		Return 1
-	EndIf
-
 	If _Cfg("Sync", "RunAtWindowsStartup", "0") = "1" Then
 		RegWrite("HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run", "WorkDays Outlook Agent", "REG_SZ", _AgentRunCommand())
 	Else
 		RegDelete("HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run", "WorkDays Outlook Agent")
 	EndIf
-	Return 1
 EndFunc
 
 Func _AgentRunCommand()
@@ -2455,7 +2428,7 @@ Func _VLogConfigSnapshot()
 	_VLog("Runtime: compiled=" & _BoolText(@Compiled) & " scriptFullPath='" & @ScriptFullPath & "' scriptDir='" & @ScriptDir & "' autoItExe='" & @AutoItExe & "' os=" & @OSVersion & " arch=" & @OSArch & " osLang=" & @OSLang)
 	_VLog("Paths: registryRoot='" & $g_sDB & "' agentRegistry='" & $g_sAgentDB & "' state='" & $g_sState & "' log='" & $g_sLog & "'")
 	_VLog("Settings snapshot: IntervalMinutes=" & _Cfg("Sync", "IntervalMinutes", "15") & " PastDays=" & _Cfg("Sync", "PastDays", "60") & " FutureDays=" & _Cfg("Sync", "FutureDays", "370") & " OutlookWinsOnConflict=" & _Cfg("Sync", "OutlookWinsOnConflict", "1") & " DeleteInOutlookClearsWorkDays=" & _Cfg("Sync", "DeleteInOutlookClearsWorkDays", "0"))
-	_VLog("Settings snapshot: SyncBlank=" & _Cfg("Sync", "SyncBlank", "0") & " SyncWeekend=" & _Cfg("Sync", "SyncWeekend", "0") & " SyncTaggedBlankOrWeekend=" & _Cfg("Sync", "SyncTaggedBlankOrWeekend", "1") & " RunAtWindowsStartup=" & _Cfg("Sync", "RunAtWindowsStartup", "0") & " OnDemandOnly=" & _Cfg("Sync", "OnDemandOnly", "0"))
+	_VLog("Settings snapshot: SyncBlank=" & _Cfg("Sync", "SyncBlank", "0") & " SyncWeekend=" & _Cfg("Sync", "SyncWeekend", "0") & " SyncTaggedBlankOrWeekend=" & _Cfg("Sync", "SyncTaggedBlankOrWeekend", "1") & " RunAtWindowsStartup=" & _Cfg("Sync", "RunAtWindowsStartup", "0"))
 	_VLog("Settings snapshot: SubjectPrefix='" & _Cfg("Outlook", "SubjectPrefix", "WorkDays -") & "' CategoryPrefix='" & _Cfg("Outlook", "CategoryPrefix", "WorkDays -") & "' ManagedOnly=" & _Cfg("Outlook", "ManagedOnly", "0") & " DateOrder=" & _Cfg("Outlook", "DateOrder", "Auto") & " IncludeCurrentQuarterStatsInTodayBody=" & _Cfg("Outlook", "IncludeCurrentQuarterStatsInTodayBody", "0") & " VerboseMode=" & _Cfg("Logging", "VerboseMode", "0") & " LogLevel=" & _Cfg("Advanced", "LogLevel", "Normal"))
 	_VLog("Safety snapshot: CreateBackupBeforeOutlookChanges=" & _Cfg("Safety", "CreateBackupBeforeOutlookChanges", "1") & " BlockMassChanges=" & _Cfg("Safety", "BlockMassChanges", "1") & " MaxWorkDaysChangesPerSync=" & _Cfg("Safety", "MaxWorkDaysChangesPerSync", "20") & " MaxChangePercentPerSync=" & _Cfg("Safety", "MaxChangePercentPerSync", "15") & " MaxClearsPerSync=" & _Cfg("Safety", "MaxClearsPerSync", "0") & " BlockIncompleteOutlookRead=" & _Cfg("Safety", "BlockIncompleteOutlookRead", "1") & " AbortBeforePlanWhenOutlookReadIncomplete=" & _Cfg("Safety", "AbortBeforePlanWhenOutlookReadIncomplete", "1") & " BlockOnOutlookComError=" & _Cfg("Safety", "BlockOnOutlookComError", "1") & " AllowOutlookDeleteClearWorkDays=" & _Cfg("Safety", "AllowOutlookDeleteClearWorkDays", "0") & " RequireVisibleOutlookSession=" & _Cfg("Safety", "RequireVisibleOutlookSession", "1") & " StartupGraceSeconds=" & _Cfg("Safety", "OutlookStartupGraceSeconds", "30") & " IncompleteReadRetries=" & _Cfg("Safety", "IncompleteReadRetries", "3") & " RecoverMissingItemsFromState=" & _Cfg("Safety", "RecoverMissingItemsFromState", "1") & " StartupIncompleteReadIsWaiting=" & _Cfg("Safety", "StartupIncompleteReadIsWaiting", "1"))
 EndFunc
