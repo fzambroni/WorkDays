@@ -1,11 +1,9 @@
 ﻿#Region ;**** Directives created by AutoIt3Wrapper_GUI ****
-#AutoIt3Wrapper_UseX64=n
-#AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Icon=xcalendar4.ico
 #AutoIt3Wrapper_Res_Description=Work Day management
-#AutoIt3Wrapper_Res_Fileversion=2.1.5.5
-#AutoIt3Wrapper_Res_ProductVersion=2.1.0.0
+#AutoIt3Wrapper_Res_Fileversion=2.1.5.6
 #AutoIt3Wrapper_Res_ProductName=Work Days
+#AutoIt3Wrapper_Res_ProductVersion=2.1.0.0
 #AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
 #AutoIt3Wrapper_Res_LegalCopyright=Copyright © 2026 Fabricio Zambroni
 #AutoIt3Wrapper_Res_File_Add=E:\GitHub\WorkDays\splash.jpg
@@ -575,45 +573,47 @@ GUICtrlSetBkColor($Button_Update, 0xFF0000)
 GUICtrlSetFont($Button_Update, 9, 900)
 GUICtrlSetState($Button_Update, $GUI_HIDE)
 
+$Label_OutlookSyncStatus = GUICtrlCreateLabel("Outlook: -", 296, 80, 245, 18);,$SS_BLACKFRAME)
+GUICtrlSetColor($Label_OutlookSyncStatus, 0x577590)
+GUICtrlSetFont($Label_OutlookSyncStatus, 8, 400, 0, "Segoe UI")
+GUICtrlSetTip($Label_OutlookSyncStatus, "Last Outlook Agent synchronization result.")
+
 
 ;~ $Button_OnSite = GUICtrlCreateButton("&On Site", 296, 84, 75, 25)
-$Button_OnSite = GUICtrlCreateButton("&On Site", 384, 84, 75, 25)
+$Button_OnSite = GUICtrlCreateButton("&On Site", 384, 102, 75, 25)
 GUICtrlSetBkColor($Button_OnSite, $Color_bk_OnSite)
 GUICtrlSetColor($Button_OnSite, $Font_OnSite)
 
 
 ;~ $Button_Remote = GUICtrlCreateButton("&Remote", 384, 84, 75, 25)
-$Button_Remote = GUICtrlCreateButton("&Remote", 296, 84, 75, 25)
+$Button_Remote = GUICtrlCreateButton("&Remote", 296, 102, 75, 25)
 GUICtrlSetBkColor($Button_Remote, $Color_bk_Remote)
 GUICtrlSetColor($Button_Remote, $Font_Remote)
 
 ;~ $Button_holiday = GUICtrlCreateButton("&Holiday", 296, 114, 75, 25)
-$Button_holiday = GUICtrlCreateButton("&Holiday", 384, 144, 75, 25)
+$Button_holiday = GUICtrlCreateButton("&Holiday", 384, 150, 75, 25)
 GUICtrlSetBkColor($Button_holiday, $Color_bk_holiday)
 GUICtrlSetColor($Button_holiday, $Font_Holiday)
 
-$Button_OutlookSync = GUICtrlCreateButton("Sync", 472, 144, 75, 25)
+$Button_OutlookSync = GUICtrlCreateButton("Sync", 472, 150, 75, 25)
 GUICtrlSetTip($Button_OutlookSync, "Force an immediate Outlook Agent sync.")
 GUICtrlSetBkColor($Button_OutlookSync, 0xD9ECFF)
 GUICtrlSetColor($Button_OutlookSync, 0x0B4F8A)
 GUICtrlSetFont($Button_OutlookSync, 9, 700)
-$Label_OutlookSyncStatus = GUICtrlCreateLabel("Outlook: -", 552, 148, 185, 18)
-GUICtrlSetColor($Label_OutlookSyncStatus, 0x577590)
-GUICtrlSetFont($Label_OutlookSyncStatus, 8, 400, 0, "Segoe UI")
-GUICtrlSetTip($Label_OutlookSyncStatus, "Last Outlook Agent synchronization result.")
+
 
 ;~ $Button_PTO = GUICtrlCreateButton("&PTO", 384, 114, 75, 25)
-$Button_PTO = GUICtrlCreateButton("&PTO", 296, 114, 75, 25)
+$Button_PTO = GUICtrlCreateButton("&PTO", 296, 126, 75, 25)
 GUICtrlSetBkColor($Button_PTO, $Color_bk_PTO)
 GUICtrlSetColor($Button_PTO, $Font_PTO)
 
 ;~ $Button_Travel = GUICtrlCreateButton("&Travel", 296, 144, 75, 25)
-$Button_Travel = GUICtrlCreateButton("&Travel", 384, 114, 75, 25)
+$Button_Travel = GUICtrlCreateButton("&Travel", 384, 126, 75, 25)
 GUICtrlSetBkColor($Button_Travel, $Color_bk_Travel)
 GUICtrlSetColor($Button_Travel, $Font_Travel)
 
 ;~ $Button_Sick = GUICtrlCreateButton("&Sick", 384, 144, 75, 25)
-$Button_Sick = GUICtrlCreateButton("&Sick", 296, 144, 75, 25)
+$Button_Sick = GUICtrlCreateButton("&Sick", 296, 150, 75, 25)
 GUICtrlSetBkColor($Button_Sick, $Color_bk_Sick)
 GUICtrlSetColor($Button_Sick, $Font_Sick)
 
@@ -629,15 +629,15 @@ GUICtrlSetState($Button_Weekend, $gui_hide)
 GUICtrlCreateLabel("Use Blank button for Weekends." & @CRLF & "Left-click on the grid for the menu.", 384, 175, 170, 30)
 
 
-$SelectLabel_1 = GUICtrlCreateLabel("", 494, 87, 46, 21) ;,$SS_BLACKFRAME)
-$SelectLabel_2 = GUICtrlCreateLabel("", 496, 89, 42, 17) ;,$SS_BLACKFRAME)
+$SelectLabel_1 = GUICtrlCreateLabel("", 494, 102, 46, 21) ;,$SS_BLACKFRAME)
+;~ $SelectLabel_2 = GUICtrlCreateLabel("", 496, 89, 42, 17) ;,$SS_BLACKFRAME)
 GUICtrlSetBkColor($SelectLabel_1, $Color_bk_Today)
-GUICtrlCreateLabel("Today", 497, 90, 40, 15, $SS_CENTER)
+GUICtrlCreateLabel("Today", 497, 105, 40, 15, $SS_CENTER)
 
-$TodayLabel_1 = GUICtrlCreateLabel("", 494, 116, 46, 21) ;,$SS_BLACKFRAME)
-$TodayLabel_2 = GUICtrlCreateLabel("", 496, 118, 42, 17) ;,$SS_BLACKFRAME)
+$TodayLabel_1 = GUICtrlCreateLabel("", 494, 126, 46, 21) ;,$SS_BLACKFRAME)
+;~ $TodayLabel_2 = GUICtrlCreateLabel("", 496, 118, 42, 17) ;,$SS_BLACKFRAME)
 GUICtrlSetBkColor($TodayLabel_1, $Color_bk_Selected)
-GUICtrlCreateLabel("Selected", 497, 119, 40, 15, $SS_CENTER)
+GUICtrlCreateLabel("Selected", 497, 129, 40, 15, $SS_CENTER)
 
 $Button_Reload = GUICtrlCreateButton("Reload Data", 472, 22, 75, 25)
 
@@ -1160,7 +1160,7 @@ If FileExists(@ScriptDir & "\WorkDays.tmp") Then
 	GUICtrlSetState($Button_Update, $GUI_SHOW)
 Else
 	$g_bWorkDaysUpdaterAvailable = False
-	GUICtrlSetState($Button_Update, $GUI_HIDE)
+GUICtrlSetState($Button_Update, $GUI_HIDE)
 EndIf
 
 
@@ -7371,7 +7371,7 @@ Func _OutlookAgent_SettingsWindow()
 	Local $chkDeleteOutlookClears = GUICtrlCreateCheckbox("Deleting the Outlook item clears WorkDays", 34, 208, 330, 20)
 	Local $chkSyncBlank = GUICtrlCreateCheckbox("Sync Blank days", 34, 234, 135, 20)
 	Local $chkSyncWeekend = GUICtrlCreateCheckbox("Sync Weekend days", 178, 234, 145, 20)
-	Local $chkSyncTaggedBlankWeekend = GUICtrlCreateCheckbox("Blank/Weekend only with marker", 34, 260, 235, 20)
+	Local $chkSyncTaggedBlankWeekend = GUICtrlCreateCheckbox("Blank/Weekend only with marker", 34, 260, 220, 20)
 	Local $chkStartup = GUICtrlCreateCheckbox("Start Outlook Agent with Windows", 258, 260, 200, 20)
 	Local $chkOnDemandOnly = GUICtrlCreateCheckbox("On-demand only; close agent after Sync", 34, 282, 285, 20)
 	GUICtrlSetTip($chkOnDemandOnly, "When enabled, the Outlook Agent will not start with Windows or stay resident. The main Sync button launches one temporary sync worker, then the agent exits.")
@@ -7401,7 +7401,7 @@ Func _OutlookAgent_SettingsWindow()
 
 	; Left column: cleanup safety.
 	GUICtrlCreateGroup("Safety", 18, 462, 460, 88)
-	Local $chkCleanupEnabled = GUICtrlCreateCheckbox("Allow Outlook cleanup from WorkDays", 34, 488, 250, 20)
+	Local $chkCleanupEnabled = GUICtrlCreateCheckbox("Allow Outlook cleanup from WorkDays", 34, 488, 235, 20)
 	Local $chkCleanupPrefixOnly = GUICtrlCreateCheckbox("Cleanup old prefix-only items", 272, 488, 185, 20)
 	Local $chkPauseAfterCleanup = GUICtrlCreateCheckbox("Keep agent stopped after cleanup", 34, 518, 230, 20)
 	GUICtrlCreateLabel("Cleanup range", 266, 522, 85, 18)
